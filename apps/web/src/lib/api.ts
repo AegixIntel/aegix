@@ -70,6 +70,16 @@ export interface WalletXRay {
     parserSuccessRate?: number;
     transactionsAnalyzed?: number;
     historyCoverageDays?: number | null;
+    dataQualityScore?: number | null;
+    grade?: "HIGH" | "MEDIUM" | "LOW" | null;
+    components?: {
+      historyCoverage?: number;
+      transactionCoverage?: number;
+      parserSuccess?: number;
+      rpcCompleteness?: number;
+      knownProgramRatio?: number;
+      sampleAdequacy?: number;
+    };
   };
   score: {
     overall: number;

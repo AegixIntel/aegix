@@ -6,3 +6,8 @@ export {
   type ScoreDimensionInput,
   type ScoreResult
 } from "./scoring.js";
+export {
+  computeDataQuality,
+  type DataQualityInput,
+  type DataQualityResult
+} from "./data-quality.js";

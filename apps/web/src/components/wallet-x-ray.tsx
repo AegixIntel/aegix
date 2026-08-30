@@ -113,6 +113,54 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
         </a>
       </header>
 
+      {/* Data coverage (D2 §76) */}
+      <section className="mt-8 rounded-xl border border-slate-700 bg-slate-900 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Data Coverage</p>
+            <div className="mt-2 flex items-end gap-3">
+              <span className="text-5xl font-bold">{coverage.dataQualityScore ?? "—"}</span>
+              <span className="pb-1 text-xl text-slate-500">/ 100</span>
+              {coverage.grade && (
+                <span
+                  className={`mb-1 rounded px-2 py-0.5 text-xs font-bold ${
+                    coverage.grade === "HIGH"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : coverage.grade === "MEDIUM"
+                        ? "bg-amber-500/10 text-amber-400"
+                        : "bg-red-500/10 text-red-400"
+                  }`}
+                >
+                  {coverage.grade}
+                </span>
+              )}
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-slate-500">Transactions analyzed</dt>
+              <dd className="font-semibold text-slate-200">{coverage.transactionsAnalyzed ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">History</dt>
+              <dd className="font-semibold text-slate-200">
+                {coverage.historyCoverageDays != null ? `${coverage.historyCoverageDays} days` : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Parser success</dt>
+              <dd className="font-semibold text-slate-200">
+                {coverage.parserSuccessRate != null ? `${coverage.parserSuccessRate}%` : "—"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Data quality measures how much confidence AEGIX can place in this dataset — it is separate from the exposure
+          score.
+        </p>
+      </section>
+
       {/* Primary score */}
       {score && (
         <section className="mt-8 grid gap-6 md:grid-cols-2">

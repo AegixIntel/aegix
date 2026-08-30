@@ -252,6 +252,8 @@ function buildXRayResponse(input: {
     wallet: { address },
     coverage: {
       ...dataQuality,
+      dataQualityScore: typeof dataQuality.dataQualityScore === "number" ? dataQuality.dataQualityScore : null,
+      grade: typeof dataQuality.grade === "string" ? dataQuality.grade : null,
       transactionsAnalyzed: dataQuality.transactionsParsed ?? 0,
       historyCoverageDays: coverageDays(dataQuality)
     },

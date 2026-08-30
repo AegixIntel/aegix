@@ -18,6 +18,14 @@ export interface ScoreDimensionInput {
   parserFailures: number;
   transactionsRequested: number;
   transactionsReceived: number;
+  /** 0-1 ratio of interactions with unknown programs */
+  unknownProgramRatio?: number;
+  /** 0-1 ratio of RPC requests that failed */
+  rpcFailureRatio?: number;
+  /** how many independent engines support the exposure hypothesis (0-5) */
+  supportingEngines?: number;
+  /** 0-1 entity label certainty of matched entities (avg) */
+  entityCertainty?: number;
 }
 
 export interface ScoreResult {
@@ -126,8 +134,12 @@ export function scoreWallet(input: ScoreDimensionInput, config: ScoringConfig = 
 }
 
 /**
- * Confidence calculation, see architecture.md §28.
- * Considers sample size, history depth, data completeness and parser reliability.
+ * Confidence calculation, see architecture.md §28 and milestone D2 §17-§20.
+ *
+ * Confidence and exposure are independent. Confidence combines sample size,
+ * history depth, data completeness, parser reliability with penalties for
+ * unknown programs / RPC failures, a cap per evidence class, and a small
+ * bonus when multiple independent engines agree.
  */
 export function computeConfidence(input: ScoreDimensionInput): Confidence {
   const sampleFactor = Math.min(1, input.transactionCount / 500);
@@ -135,11 +147,29 @@ export function computeConfidence(input: ScoreDimensionInput): Confidence {
   const completeness = input.transactionsRequested > 0 ? input.transactionsReceived / input.transactionsRequested : 0;
   const parserReliability = input.transactionsReceived > 0 ? 1 - input.parserFailures / input.transactionsReceived : 0;
 
-  const confidence =
+  let confidence =
     0.4 * sampleFactor +
     0.2 * historyFactor +
     0.25 * clamp(completeness, 0, 1) +
     0.15 * clamp(parserReliability, 0, 1);
+
+  // Penalties, see D2 §18
+  const unknownProgramRatio = input.unknownProgramRatio ?? 0;
+  if (unknownProgramRatio > 0.5) confidence -= 0.15 * (unknownProgramRatio - 0.5);
+  const rpcFailureRatio = input.rpcFailureRatio ?? 0;
+  if (rpcFailureRatio > 0.1) confidence -= 0.2 * (rpcFailureRatio - 0.1);
+
+  // Engine agreement bonus, see D2 §20 — modest, never dominates
+  const supportingEngines = input.supportingEngines ?? 0;
+  if (supportingEngines >= 3) confidence += 0.05;
+
+  // Evidence-class cap, see D2 §19: behavioral-only evidence must never reach near-certainty
+  const evidenceIsBehavioralOnly =
+    input.repeatedFunding === 0 &&
+    input.repeatedCounterparty === 0 &&
+    input.knownEntityInteractions === 0 &&
+    input.behavioralSignals > 0;
+  if (evidenceIsBehavioralOnly) confidence = Math.min(confidence, 0.6);
 
   return clamp(confidence, 0.05, 0.98);
 }

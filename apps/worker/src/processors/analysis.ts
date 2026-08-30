@@ -22,7 +22,7 @@ import {
   analyzeFunding,
   type EntityRegistry
 } from "@aegix/intelligence";
-import { scoreWallet, type ScoreResult } from "@aegix/scoring";
+import { computeDataQuality, scoreWallet, type ScoreResult } from "@aegix/scoring";
 import { annotateEntities, buildGraph, findExposurePaths } from "@aegix/graph";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import type { AnalysisJobData } from "@aegix/queue";
@@ -211,7 +211,32 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       historyDays,
       parserFailures: stats.parserFailures,
       transactionsRequested: stats.transactionsReceived,
-      transactionsReceived: stats.transactionsParsed
+      transactionsReceived: stats.transactionsParsed,
+      // D2 §17-§20: calibrated confidence inputs
+      unknownProgramRatio:
+        allInteractions.length > 0 ? stats.unknownProgramCount / allInteractions.length : 0,
+      rpcFailureRatio:
+        stats.signaturesFetched > 0 ? stats.rpcFailures / stats.signaturesFetched : 0,
+      supportingEngines: [funding, counterparty, behavior, entities, clusters].filter((e) => e.signals.length > 0).length,
+      entityCertainty:
+        entities.matches.length > 0
+          ? entities.matches.reduce((sum, m) => sum + m.confidence, 0) / entities.matches.length
+          : 0
+    });
+
+    // D2 §15-§16: formal data quality model — measures the dataset, not the wallet
+    const dataQualityResult = computeDataQuality({
+      transactionsRequested: stats.transactionsReceived,
+      transactionsReceived: stats.transactionsReceived,
+      transactionsParsed: stats.transactionsParsed,
+      parserFailures: stats.parserFailures,
+      rpcFailures: stats.rpcFailures,
+      unknownProgramCount: stats.unknownProgramCount,
+      programInteractionCount: allInteractions.length,
+      historyStart,
+      historyEnd,
+      maxHistoryDays: config.ANALYSIS_MAX_HISTORY_DAYS,
+      maxTransactions: config.ANALYSIS_MAX_TRANSACTIONS
     });
 
     await jobRepo.updateStatus(analysisId, "GRAPH_ANALYSIS", 85);
@@ -278,6 +303,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     const chainDataUntil = new Date().toISOString();
     const poolStats = provider instanceof ProviderPool ? provider.getStats() : null;
     const dataQuality = {
+      ...dataQualityResult,
       transactionsRequested: stats.transactionsReceived,
       transactionsReceived: stats.transactionsReceived,
       transactionsParsed: stats.transactionsParsed,
