@@ -12,7 +12,7 @@
  */
 
 import { loadConfig } from "@aegix/config";
-import { createDb, createAnalysisJobRepo, createWalletRepo } from "@aegix/database";
+import { createDb, createAnalysisJobRepo, createWalletRepo, createIntelligenceRepo } from "@aegix/database";
 import { createCache } from "@aegix/cache";
 import { createLogger } from "@aegix/logging";
 import { processAnalysis } from "../apps/worker/src/processors/analysis.js";
@@ -29,12 +29,24 @@ interface GoldenWallet {
  * - SYSTEM_ACCOUNT: program-owned system addresses with heavy activity
  * - TOKEN_MINT: SPL mint address (So111 Wrapped SOL)
  * - PROTOCOL_ACCOUNT: known protocol program id
+ * - USER_*: real active wallets (public protocol/system accounts only)
  */
 const GOLDEN_WALLETS: GoldenWallet[] = [
   { category: "NEW_WALLET", address: "H4CpqxDhB2WLq43snohnKRwBEGm7XENdz8PU1cUfQm2a", note: "fresh keypair, zero activity" },
   { category: "TOKEN_MINT", address: "So11111111111111111111111111111111111111112", note: "Wrapped SOL mint, very high activity" },
   { category: "SYSTEM_ACCOUNT", address: "SysvarC1ock11111111111111111111111111111111", note: "clock sysvar, system traffic" },
-  { category: "PROTOCOL_ACCOUNT", address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", note: "Jupiter v6 program id" }
+  { category: "PROTOCOL_ACCOUNT", address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", note: "Jupiter v6 program id" },
+  { category: "DEX_HEAVY", address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6", note: "Raydium AMM program" },
+  { category: "DEX_HEAVY", address: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", note: "Raydium CLMM program" },
+  { category: "DEX_HEAVY", address: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", note: "Orca v1 program" },
+  { category: "DEX_HEAVY", address: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", note: "Meteora DLMM program" },
+  { category: "DEFI_HEAVY", address: "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw", note: "Kamino lending program" },
+  { category: "DEFI_HEAVY", address: "dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF", note: "Drift program" },
+  { category: "NFT_HEAVY", address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", note: "Metaplex Token Metadata program" },
+  { category: "STAKING", address: "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD", note: "Marinade liquid staking program" },
+  { category: "BRIDGE", address: "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth", note: "Wormhole bridge program" },
+  { category: "MEMECOIN", address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", note: "Pump.fun launchpad program" },
+  { category: "USER_REPEATED_COUNTERPARTY", address: "7iDEKWJMprnBCLj8ZnSJxxa9TvMN83YCzrqpAU4Sp9KU", note: "repeated counterparty wallet" }
 ];
 
 async function run(): Promise<void> {
@@ -77,6 +89,15 @@ async function run(): Promise<void> {
       const final = await jobRepo.findById(job.id);
       const durationSec = Math.round((Date.now() - startedAt) / 100) / 10;
       const dq = (final?.data_quality ?? {}) as Record<string, unknown>;
+
+      // Snapshot: pull signal/score/path/entity summary for regression (Phase 22).
+      const intelligenceRepo = createIntelligenceRepo(sql);
+      const [score, signals, paths] = await Promise.all([
+        intelligenceRepo.scoreForAnalysis(job.id),
+        intelligenceRepo.signalsForAnalysis(job.id),
+        intelligenceRepo.pathsForAnalysis(job.id)
+      ]);
+
       results.push({
         category: wallet.category,
         status: final?.status ?? "UNKNOWN",
@@ -84,9 +105,15 @@ async function run(): Promise<void> {
         transactionsParsed: (dq.transactionsParsed as number) ?? 0,
         parserFailures: (dq.parserFailures as number) ?? 0,
         rpcFailures: (dq.rpcFailures as number) ?? 0,
-        historyDays: (dq.historyEnd && dq.historyStart
-          ? Math.round((new Date(dq.historyEnd as string).getTime() - new Date(dq.historyStart as string).getTime()) / 86_400_000)
-          : 0) as number,
+        parserSuccessRate: (dq.parserSuccessRate as number) ?? null,
+        semanticCoverage: (dq.semanticCoverage as number) ?? null,
+        fullyParsed: (dq.fullyParsed as number) ?? 0,
+        genericParsed: (dq.genericParsed as number) ?? 0,
+        unknownProgramCount: (dq.unknownProgramCount as number) ?? 0,
+        signals: signals.length,
+        score: score?.overall_score ?? null,
+        confidence: score ? Number(score.overall_confidence) : null,
+        paths: paths.length,
         failureCode: final?.failure_code ?? null
       });
       console.log(`  -> ${final?.status} in ${durationSec}s`);
