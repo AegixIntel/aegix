@@ -8,14 +8,17 @@ export interface Cache {
   setJson(key: string, value: unknown, ttlSeconds?: number): Promise<void>;
   acquireLock(key: string, ttlSeconds?: number): Promise<boolean>;
   releaseLock(key: string): Promise<void>;
+  close(): Promise<void>;
 }
 
 /**
  * Redis-backed cache, see architecture.md §42 & §45.
  * Holds ephemeral data only — never core source-of-truth data.
+ * Lazy connection: the API must start even when Redis is down, and cache
+ * failures surface per-request instead of blocking boot.
  */
 export function createCache(redisUrl: string, db = 2): Cache {
-  const redis = new Redis(redisUrl, { db, lazyConnect: false, maxRetriesPerRequest: 2 });
+  const redis = new Redis(redisUrl, { db, lazyConnect: true, maxRetriesPerRequest: 1 });
 
   return {
     async get(key) {
@@ -55,6 +58,10 @@ export function createCache(redisUrl: string, db = 2): Cache {
 
     async releaseLock(key) {
       await redis.del(key);
+    },
+
+    async close() {
+      await redis.quit();
     }
   };
 }

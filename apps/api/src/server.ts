@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import type { AppConfig } from "@aegix/config";
 import { isValidSolanaAddress } from "@aegix/blockchain";
 import { createLogger, walletRef } from "@aegix/logging";
@@ -58,11 +59,27 @@ export async function buildServer(deps: ApiDeps) {
     logger.info("request completed", ctx);
   });
 
-  // Basic security headers, see architecture.md §80.
-  app.addHook("onSend", async (_req, reply) => {
-    reply.header("X-Content-Type-Options", "nosniff");
-    reply.header("X-Frame-Options", "DENY");
-    reply.header("Referrer-Policy", "no-referrer");
+  // Security headers, see architecture.md §80: CSP allows only same-origin
+  // scripts/styles (the Next.js frontend has no inline scripts or external
+  // CDNs), plus nosniff / frame deny / referrer policy.
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: []
+      }
+    },
+    crossOriginEmbedderPolicy: false,
+    xFrameOptions: { action: "deny" }
   });
 
   const sql = createDb(config.DATABASE_URL);
@@ -74,6 +91,7 @@ export async function buildServer(deps: ApiDeps) {
 
   app.addHook("onClose", async () => {
     await queues.close();
+    await cache.close();
     await sql.end();
   });
 

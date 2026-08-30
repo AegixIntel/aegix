@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests\"",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js"
   },
@@ -23,6 +23,7 @@
     "@aegix/queue": "workspace:*",
     "@aegix/types": "workspace:*",
     "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^13.1.1",
     "@fastify/rate-limit": "^10.2.0",
     "fastify": "^5.2.0",
     "zod": "^3.23.8"
