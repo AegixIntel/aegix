@@ -90,41 +90,31 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
 
     async insertTransfers(rows) {
       if (rows.length === 0) return;
-      await sql`
-        insert into transfers (
-          transaction_id, from_address, to_address, asset_type, mint,
-          amount_raw, amount_normalized, transfer_type, block_time
-        ) values ${sql(
-          rows.map((r) => sanitizeRow(r)),
-          "transaction_id",
-          "from_address",
-          "to_address",
-          "asset_type",
-          "mint",
-          "amount_raw",
-          "amount_normalized",
-          "transfer_type",
-          "block_time"
-        )}
-      `;
+      for (const r of sanitizeRows(rows)) {
+        await sql`
+          insert into transfers (
+            transaction_id, from_address, to_address, asset_type, mint,
+            amount_raw, amount_normalized, transfer_type, block_time
+          ) values (
+            ${r.transaction_id}, ${r.from_address}, ${r.to_address}, ${r.asset_type}, ${r.mint},
+            ${r.amount_raw}, ${r.amount_normalized}, ${r.transfer_type}, ${r.block_time}
+          )
+        `;
+      }
     },
 
     async insertProgramInteractions(rows) {
       if (rows.length === 0) return;
-      await sql`
-        insert into program_interactions (
-          wallet_id, transaction_id, program_id, program_label, protocol_category, action_type, block_time
-        ) values ${sql(
-          rows.map((r) => sanitizeRow(r)),
-          "wallet_id",
-          "transaction_id",
-          "program_id",
-          "program_label",
-          "protocol_category",
-          "action_type",
-          "block_time"
-        )}
-      `;
+      for (const r of sanitizeRows(rows)) {
+        await sql`
+          insert into program_interactions (
+            wallet_id, transaction_id, program_id, program_label, protocol_category, action_type, block_time
+          ) values (
+            ${r.wallet_id}, ${r.transaction_id}, ${r.program_id}, ${r.program_label},
+            ${r.protocol_category}, ${r.action_type}, ${r.block_time}
+          )
+        `;
+      }
     },
 
     async transactionsForWallet(walletId, limit = 2000) {
@@ -164,10 +154,12 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
 }
 
 /** postgres.js rejects undefined values; normalize them at the data boundary. */
-function sanitizeRow<T extends Record<string, unknown>>(row: T): T {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) {
-    out[key] = value === undefined ? null : value;
-  }
-  return out as T;
+function sanitizeRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.map((row) => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      out[key] = value === undefined ? null : value;
+    }
+    return out as T;
+  });
 }

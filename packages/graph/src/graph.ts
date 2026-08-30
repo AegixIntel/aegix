@@ -141,7 +141,12 @@ export function findExposurePaths(input: PathFindingInput): PathFindingResult {
       const confidence = Math.min(current.confidence, edge.confidence);
 
       const neighborNode = graph.nodes.get(neighbor);
-      if (neighborNode?.type === "ENTITY" || current.depth === limits.maxDepth - 1) {
+      const isEntityTerminus = neighborNode?.type === "ENTITY";
+      const isDeepPath = current.depth === limits.maxDepth - 1;
+      // Direct strong relationships (1-hop) are observable and worth reporting,
+      // even when the counterparty is not a known entity.
+      const isStrongDirectLink = current.depth === 0 && edge.strength >= 0.3;
+      if (isEntityTerminus || isDeepPath || isStrongDirectLink) {
         paths.push({
           id: `path-${nextPath.join("-")}`,
           analysisId: "",

@@ -91,21 +91,17 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     // 2. Fetch + normalize transactions — one bad tx must not kill the analysis
     const transactions: NormalizedTransaction[] = [];
     const txBudget = config.ANALYSIS_MAX_TRANSACTIONS;
-    const limiter = createRateLimiter(config.ANALYSIS_RPC_CONCURRENCY, config.ANALYSIS_RPC_MIN_INTERVAL_MS);
+    const pool = createPool(config.ANALYSIS_RPC_CONCURRENCY);
 
-    for (const sig of signatures) {
-      if (transactions.length >= txBudget) break;
-      await limiter.acquire();
+    const tasks = signatures.slice(0, txBudget).map((sig) => async () => {
       let raw;
       try {
         raw = await provider.getTransaction(sig.signature);
       } catch {
         stats.rpcFailures += 1;
-        limiter.release();
-        continue;
+        return;
       }
-      limiter.release();
-      if (!raw) continue;
+      if (!raw) return;
       stats.transactionsReceived += 1;
 
       const outcome = normalizeTransaction({
@@ -119,15 +115,14 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       if (outcome.failed || !outcome.result) {
         stats.parserFailures += 1;
         log(`parse failed for ${sig.signature.slice(0, 12)}: ${outcome.failureReason}`);
-        continue;
+        return;
       }
       stats.transactionsParsed += 1;
       transactions.push(outcome.result.transaction);
+    });
 
-      if (transactions.length % 100 === 0) {
-        log(`fetched ${transactions.length} transactions so far (rpc failures ${stats.rpcFailures}, parse failures ${stats.parserFailures})`);
-      }
-    }
+    await pool.runAll(tasks);
+    log(`fetched ${transactions.length} transactions (rpc failures ${stats.rpcFailures}, parse failures ${stats.parserFailures})`);
 
     if (transactions.length === 0) {
       await jobRepo.markFailed(
@@ -138,44 +133,50 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       return;
     }
 
-    // 3. Persist normalized data
+    // 3. Persist normalized data — one failing tx must not fail the analysis
     for (const tx of transactions) {
-      const row = await analyticsRepo.insertTransaction({
-        signature: tx.signature,
-        slot: tx.slot,
-        blockTime: tx.blockTime,
-        walletId: wallet.id,
-        success: tx.success,
-        fee: tx.fee,
-        transactionClass: tx.transactionClass,
-        rawProvider: tx.rawProvider,
-        parserVersion: tx.parserVersion
-      });
-      if (!row.id) continue;
-      await analyticsRepo.insertTransfers(
-        tx.transfers.map((t) => ({
-          transaction_id: row.id,
-          from_address: t.fromAddress,
-          to_address: t.toAddress,
-          asset_type: t.assetType,
-          mint: sanitizeNullable(t.mint),
-          amount_raw: t.amountRaw,
-          amount_normalized: String(t.amountNormalized),
-          transfer_type: t.transferType,
-          block_time: t.timestamp
-        }))
-      );
-      await analyticsRepo.insertProgramInteractions(
-        tx.programInteractions.map((ix) => ({
-          wallet_id: wallet.id,
-          transaction_id: row.id,
-          program_id: ix.programId,
-          program_label: sanitizeNullable(ix.programLabel),
-          protocol_category: ix.protocolCategory,
-          action_type: ix.actionType,
-          block_time: ix.blockTime
-        }))
-      );
+      try {
+        const row = await analyticsRepo.insertTransaction({
+          signature: tx.signature,
+          slot: tx.slot,
+          blockTime: tx.blockTime,
+          walletId: wallet.id,
+          success: tx.success,
+          fee: tx.fee,
+          transactionClass: tx.transactionClass,
+          rawProvider: tx.rawProvider,
+          parserVersion: tx.parserVersion
+        });
+        if (!row.id) continue;
+        await analyticsRepo.insertTransfers(
+          tx.transfers.map((t) => ({
+            transaction_id: row.id,
+            from_address: t.fromAddress,
+            to_address: t.toAddress,
+            asset_type: t.assetType,
+            mint: sanitizeNullable(t.mint),
+            amount_raw: t.amountRaw,
+            amount_normalized: String(t.amountNormalized),
+            transfer_type: t.transferType,
+            block_time: t.timestamp
+          }))
+        );
+        await analyticsRepo.insertProgramInteractions(
+          tx.programInteractions.map((ix) => ({
+            wallet_id: wallet.id,
+            transaction_id: row.id,
+            program_id: ix.programId,
+            program_label: sanitizeNullable(ix.programLabel),
+            protocol_category: ix.protocolCategory,
+            action_type: ix.actionType,
+            block_time: ix.blockTime
+          }))
+        );
+      } catch (err) {
+        stats.parserFailures += 1;
+        console.error(`persist failed for ${tx.signature.slice(0, 12)}: ${err instanceof Error ? err.message : String(err)}`);
+        log(`persist failed for ${tx.signature.slice(0, 12)}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     // 4. Load entity registry and run intelligence engines
@@ -330,29 +331,21 @@ async function fetchSignaturesPaged(provider: BlockchainProvider, address: strin
   return all;
 }
 
-/** Simple concurrency + min-interval limiter for RPC calls, see architecture.md §41. */
-function createRateLimiter(concurrency: number, minIntervalMs: number) {
-  let active = 0;
-  let lastCall = 0;
-  const waiters: Array<() => void> = [];
-
-  async function acquire(): Promise<void> {
-    while (active >= concurrency) {
-      await new Promise<void>((resolve) => waiters.push(resolve));
+/** Bounded parallel pool for RPC fetch tasks, see architecture.md §41. */
+function createPool(concurrency: number) {
+  return {
+    async runAll(tasks: Array<() => Promise<void>>): Promise<void> {
+      let index = 0;
+      const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+        while (index < tasks.length) {
+          const task = tasks[index++];
+          if (!task) break;
+          await task();
+        }
+      });
+      await Promise.all(workers);
     }
-    active += 1;
-    const now = Date.now();
-    const wait = Math.max(0, lastCall + minIntervalMs - now);
-    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-    lastCall = Date.now();
-  }
-
-  function release(): void {
-    active -= 1;
-    waiters.shift()?.();
-  }
-
-  return { acquire, release };
+  };
 }
 
 async function loadEntityRegistry(entityRepo: ReturnType<typeof createEntityRegistryRepo>): Promise<EntityRegistry> {
@@ -398,6 +391,7 @@ function buildRelationshipsFromTransfers(transfers: NormalizedTransaction["trans
       existing.transactionCount += 1;
       existing.totalValue += t.amountNormalized;
       existing.lastSeen = t.timestamp;
+      existing.strengthScore = relationshipStrengthFromCount(existing.transactionCount);
     } else {
       pairs.set(key, {
         id: key,
@@ -410,7 +404,7 @@ function buildRelationshipsFromTransfers(transfers: NormalizedTransaction["trans
         totalValue: t.amountNormalized,
         firstSeen: t.timestamp,
         lastSeen: t.timestamp,
-        strengthScore: Math.min(1, 0.3 + 0.05 * Math.log10(1 + Math.abs(t.amountNormalized))),
+        strengthScore: relationshipStrengthFromCount(1),
         confidenceScore: 0.7,
         evidenceJson: {},
         engineVersion: "relationship-v1.0.0",
@@ -420,6 +414,11 @@ function buildRelationshipsFromTransfers(transfers: NormalizedTransaction["trans
     }
   }
   return [...pairs.values()];
+}
+
+/** Relationship strength from interaction count, see architecture.md §20. */
+function relationshipStrengthFromCount(count: number): number {
+  return Math.min(1, 0.2 + 0.1 * Math.log10(1 + count * 2));
 }
 
 /** postgres.js rejects undefined values; normalize them to null at the data boundary. */

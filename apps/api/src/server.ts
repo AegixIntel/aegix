@@ -39,6 +39,13 @@ export async function buildServer(deps: ApiDeps) {
     timeWindow: "1 minute"
   });
 
+  // Basic security headers, see architecture.md §80.
+  app.addHook("onSend", async (_req, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+  });
+
   const sql = createDb(config.DATABASE_URL);
   const walletRepo = createWalletRepo(sql);
   const jobRepo = createAnalysisJobRepo(sql);
