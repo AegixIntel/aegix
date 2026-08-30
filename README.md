@@ -28,7 +28,7 @@ packages/
   graph/     Relationship graph + Attack My Wallet path engine
   queue/     BullMQ queue setup
   cache/     Redis cache layer
-  observability/ Structured logging + metrics helpers
+  logging/   Structured JSON logging + trace/privacy-safe wallet refs
 infra/       Docker / deployment scaffolding
 docs/        Architecture and design documents
 tests/       Shared test fixtures and integration tests

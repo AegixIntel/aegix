@@ -32,6 +32,9 @@ importers:
       '@aegix/explanation':
         specifier: workspace:^
         version: link:../../packages/explanation
+      '@aegix/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
       '@aegix/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -115,6 +118,9 @@ importers:
       '@aegix/intelligence':
         specifier: workspace:*
         version: link:../../packages/intelligence
+      '@aegix/logging':
+        specifier: workspace:*
+        version: link:../../packages/logging
       '@aegix/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
@@ -255,6 +261,19 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/logging:
+    dependencies:
+      '@aegix/config':
+        specifier: workspace:*
+        version: link:../config
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

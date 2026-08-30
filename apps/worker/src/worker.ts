@@ -2,10 +2,12 @@ import { Worker, type Job } from "bullmq";
 import type { AppConfig } from "@aegix/config";
 import type { AnalysisJobData, QueueName } from "@aegix/queue";
 import type { Sql } from "@aegix/database";
+import type { AegixLogger } from "@aegix/logging";
 
 export interface ProcessorContext {
   config: AppConfig;
   sql: Sql;
+  logger: AegixLogger;
 }
 
 export type JobProcessor<T> = (job: Job<T>, ctx: ProcessorContext) => Promise<void>;

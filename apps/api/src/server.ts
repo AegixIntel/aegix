@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import type { AppConfig } from "@aegix/config";
 import { isValidSolanaAddress } from "@aegix/blockchain";
+import { createLogger, walletRef } from "@aegix/logging";
 import {
   createAnalysisJobRepo,
   createDb,
@@ -32,11 +33,29 @@ function analysisLockKey(address: string, engineVersion: string): string {
 export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
   const app = Fastify({ logger: { level: config.LOG_LEVEL } });
+  const logger = createLogger(config, { service: "api" });
 
   await app.register(cors, { origin: config.CORS_ORIGIN.split(",") });
   await app.register(rateLimit, {
     max: 60,
     timeWindow: "1 minute"
+  });
+
+  // Analysis trace, see D2 §56: every API request carries a request_id that
+  // flows into job records. Full wallet addresses are never logged.
+  app.addHook("onRequest", async (req) => {
+    const requestId = randomUUID();
+    req.headers["x-request-id"] = requestId;
+    const address = (req.params as { address?: string })?.address ?? (req.body as { address?: string } | null)?.address;
+    const ctx = { requestId, method: req.method, path: req.routeOptions?.url ?? req.url, ...(address ? walletRef(address) : {}) };
+    logger.info("request started", ctx);
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? "unknown";
+    const address = (req.params as { address?: string })?.address ?? (req.body as { address?: string } | null)?.address;
+    const ctx = { requestId, method: req.method, statusCode: reply.statusCode, durationMs: reply.elapsedTime, ...(address ? walletRef(address) : {}) };
+    logger.info("request completed", ctx);
   });
 
   // Basic security headers, see architecture.md §80.
@@ -134,7 +153,8 @@ export async function buildServer(deps: ApiDeps) {
         reply.code(202).send({
           analysisId: job.id,
           status: job.status,
-          walletAddress: address
+          walletAddress: address,
+          requestId: req.headers["x-request-id"]
         });
       } finally {
         await cache.releaseLock(lockKey);

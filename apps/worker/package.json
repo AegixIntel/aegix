@@ -20,6 +20,7 @@
     "@aegix/explanation": "workspace:^",
     "@aegix/graph": "workspace:*",
     "@aegix/intelligence": "workspace:*",
+    "@aegix/logging": "workspace:*",
     "@aegix/normalizer": "workspace:*",
     "@aegix/queue": "workspace:*",
     "@aegix/scoring": "workspace:*",

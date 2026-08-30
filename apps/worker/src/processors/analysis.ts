@@ -22,9 +22,10 @@ import {
   analyzeFunding,
   type EntityRegistry
 } from "@aegix/intelligence";
-import { computeDataQuality, scoreWallet, type ScoreResult } from "@aegix/scoring";
+import { scoreWallet, computeDataQuality, type ScoreResult } from "@aegix/scoring";
 import { annotateEntities, buildGraph, findExposurePaths } from "@aegix/graph";
 import { explainPath, explainSignal } from "@aegix/explanation";
+import { walletRef } from "@aegix/logging";
 import type { AnalysisJobData } from "@aegix/queue";
 import type { ProcessorContext } from "../worker.js";
 
@@ -47,9 +48,12 @@ interface FetchStats {
  * engines -> score -> paths -> persist signals/scores/paths + report.
  */
 export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorContext): Promise<void> {
-  const { config } = ctx;
+  const { config, logger: baseLogger } = ctx;
   const { analysisId, walletAddress, chain } = job.data;
+  const ref = walletRef(walletAddress);
+  const logger = baseLogger.child({ analysisId, jobId: job.id, ...ref });
   const log = (msg: string) => safeLog(job, msg);
+  const startedAt = Date.now();
 
   const sql = ctx.sql;
   const jobRepo = createAnalysisJobRepo(sql);
@@ -77,12 +81,16 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     };
 
     // 1. Fetch signatures with pagination (bounded pages) and rate limiting
+    const fetchStarted = Date.now();
     const signatures = await fetchSignaturesPaged(provider, walletAddress, config);
+    const fetchMs = Date.now() - fetchStarted;
     stats.signaturesFetched = signatures.length;
     if (signatures.length === 0) {
+      logger.warn("no activity found for wallet", { stage: "fetch", durationMs: fetchMs });
       await jobRepo.markFailed(analysisId, "INSUFFICIENT_HISTORY", "No activity found for wallet");
       return;
     }
+    logger.info("signatures fetched", { stage: "fetch", durationMs: fetchMs, signatures: signatures.length });
     await jobRepo.updateStatus(analysisId, "NORMALIZING", 30);
 
     // 2. Fetch + normalize transactions — one bad tx must not kill the analysis
@@ -118,8 +126,16 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       transactions.push(outcome.result.transaction);
     });
 
+    const normalizeStarted = Date.now();
     await pool.runAll(tasks);
-    log(`fetched ${transactions.length} transactions (rpc failures ${stats.rpcFailures}, parse failures ${stats.parserFailures})`);
+    const normalizeMs = Date.now() - normalizeStarted;
+    logger.info("transactions fetched and normalized", {
+      stage: "normalize",
+      durationMs: normalizeMs,
+      parsed: transactions.length,
+      rpcFailures: stats.rpcFailures,
+      parseFailures: stats.parserFailures
+    });
 
     if (transactions.length === 0) {
       await jobRepo.markFailed(
@@ -131,6 +147,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     }
 
     // 3. Persist normalized data — one failing tx must not fail the analysis
+    const persistStarted = Date.now();
     for (const tx of transactions) {
       try {
         const row = await analyticsRepo.insertTransaction({
@@ -171,22 +188,32 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         );
       } catch (err) {
         stats.parserFailures += 1;
-        console.error(`persist failed for ${tx.signature.slice(0, 12)}: ${err instanceof Error ? err.message : String(err)}`);
-        log(`persist failed for ${tx.signature.slice(0, 12)}: ${err instanceof Error ? err.message : String(err)}`);
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error("persist failed", { signature: tx.signature.slice(0, 12), error: message });
+        log(`persist failed for ${tx.signature.slice(0, 12)}: ${message}`);
       }
     }
+    const persistMs = Date.now() - persistStarted;
+    logger.info("transactions persisted", { stage: "persist", durationMs: persistMs });
 
     // 4. Load entity registry and run intelligence engines
     const registry = await loadEntityRegistry(entityRepo);
     const allTransfers = transactions.flatMap((t) => t.transfers);
     const allInteractions = transactions.flatMap((t) => t.programInteractions);
 
+    const enginesStarted = Date.now();
     await jobRepo.updateStatus(analysisId, "ENTITY_ANALYSIS", 45);
     const funding = analyzeFunding({ walletAddress, transfers: allTransfers });
     const counterparty = analyzeCounterparties({ walletAddress, transfers: allTransfers });
     const behavior = analyzeBehavior({ walletAddress, transactions, interactions: allInteractions });
     const entities = analyzeEntities({ walletAddress, transfers: allTransfers, interactions: allInteractions, registry });
     const clusters = analyzeClusters({ walletAddress, transfers: allTransfers, sharedCounterparties: new Map() });
+    const enginesMs = Date.now() - enginesStarted;
+    logger.info("intelligence engines complete", {
+      stage: "engines",
+      durationMs: enginesMs,
+      signals: [funding, counterparty, behavior, entities, clusters].reduce((sum, e) => sum + e.signals.length, 0)
+    });
 
     await jobRepo.updateStatus(analysisId, "SCORING", 70);
 
@@ -198,6 +225,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       ? Math.max(1, (Date.now() - new Date(historyStart).getTime()) / 86_400_000)
       : 0;
 
+    const scoringStarted = Date.now();
     const score = scoreWallet({
       repeatedFunding: funding.repeatedFunders.length > 0 ? 70 : 0,
       repeatedCounterparty: counterparty.signals.some((s) => s.type === "REPEATED_COUNTERPARTY") ? 65 : 0,
@@ -223,6 +251,8 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
           ? entities.matches.reduce((sum, m) => sum + m.confidence, 0) / entities.matches.length
           : 0
     });
+    const scoringMs = Date.now() - scoringStarted;
+    logger.info("scoring complete", { stage: "scoring", durationMs: scoringMs, score: score.overallScore, confidence: score.overallConfidence });
 
     // D2 §15-§16: formal data quality model — measures the dataset, not the wallet
     const dataQualityResult = computeDataQuality({
@@ -242,6 +272,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     await jobRepo.updateStatus(analysisId, "GRAPH_ANALYSIS", 85);
 
     // 6. Attack paths
+    const graphStarted = Date.now();
     const relationships = buildRelationshipsFromTransfers(allTransfers, walletAddress);
     const graph = buildGraph(relationships);
     annotateEntities(
@@ -249,6 +280,8 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       entities.matches.map((m) => ({ address: m.address, entityName: m.entity.name }))
     );
     const pathResult = findExposurePaths({ targetAddress: walletAddress, graph });
+    const graphMs = Date.now() - graphStarted;
+    logger.info("attack graph complete", { stage: "graph", durationMs: graphMs, paths: pathResult.paths.length, nodes: graph.nodes.size, edges: graph.edges.size });
 
     await jobRepo.updateStatus(analysisId, "EXPLANATION", 92);
 
@@ -333,12 +366,22 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       dataQuality
     );
 
-    log(
-      `analysis ${analysisId} complete: ${transactions.length} tx parsed, score ${score.overallScore}/${score.overallConfidence}, ` +
-        `${allSignals.length} signals, ${pathResult.paths.length} paths, parser failures ${stats.parserFailures}`
-    );
+    const totalMs = Date.now() - startedAt;
+    logger.info("analysis complete", {
+      stage: "total",
+      durationMs: totalMs,
+      transactionsParsed: transactions.length,
+      score: score.overallScore,
+      confidence: score.overallConfidence,
+      signals: allSignals.length,
+      paths: pathResult.paths.length,
+      parserFailures: stats.parserFailures,
+      rpcFailures: stats.rpcFailures,
+      dataQualityScore: dataQualityResult.dataQualityScore
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    logger.error("analysis failed", { stage: "pipeline", error: message, durationMs: Date.now() - startedAt });
     await jobRepo.markFailed(analysisId, "INTERNAL_ERROR", message.slice(0, 500));
     throw err;
   }

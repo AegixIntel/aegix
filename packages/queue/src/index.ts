@@ -1,6 +1,42 @@
 import { Queue } from "bullmq";
 import type { AppConfig } from "@aegix/config";
 
+/**
+ * Standardized error taxonomy, see milestone D2 §62.
+ * Workers and API map failures to these codes so downstream consumers
+ * (UI, DLQ records, monitoring) can reason about failure classes.
+ */
+export type ErrorCode =
+  | "INVALID_WALLET"
+  | "INSUFFICIENT_HISTORY"
+  | "CHAIN_DATA_UNAVAILABLE"
+  | "RPC_RATE_LIMITED"
+  | "RPC_TIMEOUT"
+  | "RPC_UNAVAILABLE"
+  | "FETCH_INCOMPLETE"
+  | "PARSER_FAILURE"
+  | "DATA_QUALITY_LOW"
+  | "ANALYSIS_TIMEOUT"
+  | "ENGINE_FAILURE"
+  | "GRAPH_BUDGET_EXCEEDED"
+  | "DATABASE_FAILURE"
+  | "QUEUE_FAILURE"
+  | "INTERNAL_ERROR";
+
+/** Maps an unknown error to the closest taxonomy code. */
+export function classifyError(err: unknown): ErrorCode {
+  const message = err instanceof Error ? err.message : String(err);
+  const m = message.toLowerCase();
+  if (m.includes("429") || m.includes("rate limit") || m.includes("too many requests")) return "RPC_RATE_LIMITED";
+  if (m.includes("timeout") || m.includes("timed out") || m.includes("etimedout")) return "RPC_TIMEOUT";
+  if (m.includes("unavailable") || m.includes("econnrefused") || m.includes("socket hang up") || m.includes("network")) return "RPC_UNAVAILABLE";
+  if (m.includes("invalid wallet") || m.includes("invalid address")) return "INVALID_WALLET";
+  if (m.includes("parser") || m.includes("normalize")) return "PARSER_FAILURE";
+  if (m.includes("database") || m.includes("db ") || m.includes("postgres") || m.includes("connection refused")) return "DATABASE_FAILURE";
+  if (m.includes("queue") || m.includes("redis")) return "QUEUE_FAILURE";
+  return "INTERNAL_ERROR";
+}
+
 export type QueueName = "analysis.high" | "analysis.standard" | "analysis.free" | "refresh" | "monitoring" | "entity-refresh" | "report-generation" | "maintenance" | "dead-letter";
 
 export interface AnalysisJobData {
@@ -29,8 +65,22 @@ export type QueueDataMap = {
   "entity-refresh": never;
   "report-generation": { analysisId: string };
   maintenance: never;
-  "dead-letter": { originalQueue: string; payload: unknown; error: string; attempts: number };
+  "dead-letter": {
+    jobId: string;
+    analysisId: string | null;
+    walletShort: string | null;
+    walletHash: string | null;
+    originalQueue: string;
+    stage: string;
+    errorCode: ErrorCode;
+    error: string;
+    attempts: number;
+    provider: string | null;
+    timestamp: string;
+  };
 };
+
+export type DeadLetterRecord = QueueDataMap["dead-letter"];
 
 export interface AegixQueues {
   analysisHigh: Queue<AnalysisJobData>;
@@ -85,5 +135,22 @@ export function queueForPriority(priority: string, queues: AegixQueues): Queue<A
       return queues.analysisFree;
     default:
       return queues.analysisStandard;
+  }
+}
+
+/**
+ * Publishes a DLQ record, see milestone D2 §59.
+ * A job that exhausts its retries must produce a dead-letter record so no
+ * failure is silently lost. Never throws — DLQ publishing is best-effort.
+ */
+export async function publishToDeadLetter(queues: AegixQueues, record: DeadLetterRecord): Promise<void> {
+  try {
+    await queues.deadLetter.add("dead-letter", record, {
+      attempts: 1,
+      removeOnComplete: false,
+      removeOnFail: false
+    });
+  } catch {
+    // DLQ must not crash the worker; the failure is already in the job event log
   }
 }
