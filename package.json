@@ -17,6 +17,13 @@
   },
   "devDependencies": {
     "tsx": "^4.19.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "@aegix/blockchain": "workspace:*",
+    "@aegix/cache": "workspace:*",
+    "@aegix/config": "workspace:*",
+    "@aegix/database": "workspace:*",
+    "@aegix/queue": "workspace:*",
+    "@aegix/types": "workspace:*",
+    "@aegix/logging": "workspace:*"
   }
 }

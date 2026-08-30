@@ -8,6 +8,27 @@ importers:
 
   .:
     devDependencies:
+      '@aegix/blockchain':
+        specifier: workspace:*
+        version: link:packages/blockchain
+      '@aegix/cache':
+        specifier: workspace:*
+        version: link:packages/cache
+      '@aegix/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@aegix/database':
+        specifier: workspace:*
+        version: link:packages/database
+      '@aegix/logging':
+        specifier: workspace:*
+        version: link:packages/logging
+      '@aegix/queue':
+        specifier: workspace:*
+        version: link:packages/queue
+      '@aegix/types':
+        specifier: workspace:*
+        version: link:packages/types
       tsx:
         specifier: ^4.19.2
         version: 4.23.13

@@ -14,6 +14,7 @@
 import { loadConfig } from "@aegix/config";
 import { createDb, createAnalysisJobRepo, createWalletRepo } from "@aegix/database";
 import { createCache } from "@aegix/cache";
+import { createLogger } from "@aegix/logging";
 import { processAnalysis } from "../apps/worker/src/processors/analysis.js";
 
 interface GoldenWallet {
@@ -46,6 +47,7 @@ async function run(): Promise<void> {
   const walletRepo = createWalletRepo(sql);
   const jobRepo = createAnalysisJobRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
+  const logger = createLogger(config, { service: "golden-wallets" });
 
   const results: Array<Record<string, string | number | null>> = [];
 
@@ -69,7 +71,7 @@ async function run(): Promise<void> {
           data: { analysisId: job.id, walletAddress: wallet.address, chain: "solana", analysisType: "full" },
           log: () => undefined
         } as never,
-        { config, sql }
+        { config, sql, logger }
       );
 
       const final = await jobRepo.findById(job.id);
