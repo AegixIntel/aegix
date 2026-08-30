@@ -392,9 +392,21 @@ async function fetchSignaturesPaged(provider: BlockchainProvider, address: strin
   let before: string | undefined;
   const seen = new Set<string>();
   const pageSize = 100;
+  let consecutiveFailures = 0;
 
   for (let page = 0; page < config.ANALYSIS_MAX_SIGNATURE_PAGES; page++) {
-    const sigs = await provider.getSignatures(address, { limit: pageSize, before });
+    let sigs;
+    try {
+      sigs = await provider.getSignatures(address, { limit: pageSize, before });
+    } catch {
+      // A failed signature page must not fail the whole analysis: rate limits
+      // and transient RPC errors are expected under load. Skip forward and
+      // keep whatever we already have.
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= 3 || all.length === 0) throw new Error("RPC_UNAVAILABLE: signature fetch failed repeatedly");
+      continue;
+    }
+    consecutiveFailures = 0;
     if (sigs.length === 0) break;
     for (const s of sigs) {
       if (s.blockTime == null) continue;

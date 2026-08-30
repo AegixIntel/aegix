@@ -87,6 +87,9 @@ export function createAnalysisJobRepo(sql: Sql): AnalysisJobRepo {
         set status = 'FETCHING',
             started_at = now(),
             engine_version = ${engineVersion},
+            failure_code = null,
+            failure_message = null,
+            failed_at = null,
             updated_at = now()
         where id = ${id}
       `;
@@ -101,6 +104,9 @@ export function createAnalysisJobRepo(sql: Sql): AnalysisJobRepo {
             chain_data_until = ${freshness.chainDataUntil},
             fresh_until = ${freshness.freshUntil},
             data_quality = ${sql.json(dataQuality)},
+            failure_code = null,
+            failure_message = null,
+            failed_at = null,
             updated_at = now()
         where id = ${id}
       `;

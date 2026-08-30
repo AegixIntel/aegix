@@ -1,0 +1,12 @@
+[
+  { "category": "NFT_MARKETPLACE", "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", "note": "Metaplex Token Metadata (active)" },
+  { "category": "DEX", "address": "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", "note": "Orca V1 (active)" },
+  { "category": "DEX", "address": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", "note": "Meteora DLMM (active)" },
+  { "category": "STAKING", "address": "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD", "note": "Marinade (active)" },
+  { "category": "BRIDGE", "address": "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth", "note": "Wormhole (active)" },
+  { "category": "DEX", "address": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", "note": "Jupiter v6" },
+  { "category": "DEX", "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", "note": "Raydium CLMM" },
+  { "category": "PROTOCOL", "address": "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", "note": "Pump.fun" },
+  { "category": "LENDING", "address": "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw", "note": "Kamino" },
+  { "category": "USER", "address": "7iDEKWJMprnBCLj8ZnSJxxa9TvMN83YCzrqpAU4Sp9KU", "note": "repeated counterparty wallet" }
+]
