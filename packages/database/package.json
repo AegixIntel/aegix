@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests\"",
+    "test": "node --import tsx --test src/**/*.test.ts",
     "migrate": "node --import tsx src/migrate.ts",
     "seed:entities": "node --import tsx src/seed-entities.ts"
   },

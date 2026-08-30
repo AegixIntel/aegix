@@ -13,7 +13,7 @@ import { createEntityRegistryRepo } from "./repositories/entity-registry.js";
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix";
 
-interface SeedEntry {
+export interface SeedEntry {
   name: string;
   entityType: string;
   description: string;
@@ -139,10 +139,177 @@ const SEED_ENTITIES: SeedEntry[] = [
         evidenceSource: "https://github.com/openbook-dex"
       }
     ]
+  },
+  {
+    name: "Metaplex",
+    entityType: "NFT_MARKETPLACE",
+    description: "Metaplex Token Metadata — the standard for NFT metadata on Solana.",
+    status: "VERIFIED",
+    confidence: 0.98,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+        label: "Metaplex Token Metadata",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.metaplex.com"
+      }
+    ]
+  },
+  {
+    name: "Orca",
+    entityType: "DEX",
+    description: "Orca — concentrated liquidity DEX on Solana.",
+    status: "VERIFIED",
+    confidence: 0.98,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+        label: "Orca v1",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.orca.so"
+      },
+      {
+        address: "whirLbMiicVdio4qvUfM5KAg6Ct8VdjYdZyBf5byvVM",
+        label: "Orca Whirlpools",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.orca.so"
+      }
+    ]
+  },
+  {
+    name: "Meteora",
+    entityType: "DEX",
+    description: "Meteora — dynamic liquidity pools on Solana.",
+    status: "VERIFIED",
+    confidence: 0.95,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+        label: "Meteora DLMM",
+        confidence: 0.95,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.meteora.ag"
+      }
+    ]
+  },
+  {
+    name: "Marinade",
+    entityType: "STAKING",
+    description: "Marinade — liquid staking protocol on Solana.",
+    status: "VERIFIED",
+    confidence: 0.98,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD",
+        label: "Marinade Finance",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.marinade.finance"
+      }
+    ]
+  },
+  {
+    name: "Wormhole",
+    entityType: "BRIDGE",
+    description: "Wormhole — cross-chain bridge protocol.",
+    status: "VERIFIED",
+    confidence: 0.98,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth",
+        label: "Wormhole",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://docs.wormhole.com"
+      }
+    ]
   }
 ];
 
+/**
+ * Validates the seed registry before loading, see milestone D2 Phase 11.
+ * Invalid seeds must fail loudly at load time — never silently skip.
+ * Returns a list of problems; an empty list means the registry is valid.
+ */
+export function validateSeedEntries(entries: SeedEntry[]): string[] {
+  const problems: string[] = [];
+  const seenAddresses = new Map<string, string>(); // address -> entity name
+  const validStatuses = new Set(["VERIFIED", "PROBABLE", "UNVERIFIED"]);
+
+  for (const entry of entries) {
+    if (!entry.name || entry.name.trim().length === 0) {
+      problems.push("entity with empty name");
+    }
+    if (!validStatuses.has(entry.status)) {
+      problems.push(`${entry.name}: invalid status "${entry.status}"`);
+    }
+    if (typeof entry.confidence !== "number" || entry.confidence < 0 || entry.confidence > 1) {
+      problems.push(`${entry.name}: confidence ${entry.confidence} out of range [0,1]`);
+    }
+    if (!entry.sourceType || entry.sourceType.trim().length === 0) {
+      problems.push(`${entry.name}: missing sourceType`);
+    }
+    if (!entry.addresses || entry.addresses.length === 0) {
+      problems.push(`${entry.name}: no addresses`);
+      continue;
+    }
+
+    for (const addr of entry.addresses) {
+      if (!isValidBase58Address(addr.address)) {
+        problems.push(`${entry.name}: invalid Solana address "${addr.address.slice(0, 12)}…"`);
+      }
+      if (!validStatuses.has(addr.status)) {
+        problems.push(`${entry.name}/${addr.label}: invalid status "${addr.status}"`);
+      }
+      if (typeof addr.confidence !== "number" || addr.confidence < 0 || addr.confidence > 1) {
+        problems.push(`${entry.name}/${addr.label}: confidence ${addr.confidence} out of range [0,1]`);
+      }
+      if (!addr.evidenceSource || addr.evidenceSource.trim().length === 0) {
+        problems.push(`${entry.name}/${addr.label}: missing evidenceSource`);
+      }
+
+      const existing = seenAddresses.get(addr.address);
+      if (existing) {
+        if (existing !== entry.name) {
+          problems.push(`address ${addr.address.slice(0, 12)}… claimed by both "${existing}" and "${entry.name}"`);
+        }
+      } else {
+        seenAddresses.set(addr.address, entry.name);
+      }
+    }
+  }
+
+  return problems;
+}
+
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/** Base58 check: valid chars only + length in the Solana address range. */
+function isValidBase58Address(address: string): boolean {
+  if (address.length < 32 || address.length > 44) return false;
+  for (const ch of address) {
+    if (!BASE58_ALPHABET.includes(ch)) return false;
+  }
+  return true;
+}
+
 async function run(): Promise<void> {
+  const problems = validateSeedEntries(SEED_ENTITIES);
+  if (problems.length > 0) {
+    console.error("entity seed validation FAILED:");
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const sql = postgres(databaseUrl, { max: 1 });
   const repo = createEntityRegistryRepo(sql);
 
@@ -178,7 +345,10 @@ async function run(): Promise<void> {
   await sql.end();
 }
 
-run().catch((err) => {
-  console.error("entity seed failed:", err);
-  process.exitCode = 1;
-});
+// Only run the seed when executed directly, not when imported by tests.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  run().catch((err) => {
+    console.error("entity seed failed:", err);
+    process.exitCode = 1;
+  });
+}
