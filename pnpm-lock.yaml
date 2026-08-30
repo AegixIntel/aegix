@@ -29,6 +29,9 @@ importers:
       '@aegix/types':
         specifier: workspace:*
         version: link:packages/types
+      bullmq:
+        specifier: ^5.0.0
+        version: 5.81.4
       tsx:
         specifier: ^4.19.2
         version: 4.23.13
