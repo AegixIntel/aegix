@@ -19,6 +19,16 @@ export interface TokenAccountInfo {
   owner: string;
 }
 
+/** Minimal account info for classification, see milestone D3-A §9. */
+export interface AccountInfo {
+  owner: string;
+  executable: boolean;
+  lamports: number;
+  dataLength: number;
+  /** base58-encoded account data (may be empty for small accounts) */
+  data: string;
+}
+
 export interface RawTransaction {
   signature: string;
   slot: number;
@@ -33,6 +43,8 @@ export interface BlockchainProvider {
   validateAddress(address: string): boolean;
 
   getSignatures(address: string, options?: GetSignaturesOptions): Promise<SignatureInfo[]>;
+
+  getAccountInfo(address: string): Promise<AccountInfo | null>;
 
   getTransaction(signature: string): Promise<RawTransaction | null>;
 

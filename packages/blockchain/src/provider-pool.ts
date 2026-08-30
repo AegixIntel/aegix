@@ -225,6 +225,10 @@ export class ProviderPool implements BlockchainProvider {
     return this.withFailover((p) => p.getSignatures(address, options));
   }
 
+  getAccountInfo(address: string) {
+    return this.withFailover((p) => p.getAccountInfo(address));
+  }
+
   getTransaction(signature: string) {
     return this.withFailover((p) => p.getTransaction(signature));
   }

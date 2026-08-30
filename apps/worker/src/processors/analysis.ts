@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
 import type { AppConfig } from "@aegix/config";
 import type { BlockchainProvider } from "@aegix/blockchain";
-import { createProviderPoolFromConfig, ProviderPool } from "@aegix/blockchain";
+import { classifyAddress, createProviderPoolFromConfig, isAnalysisEligible, ProviderPool } from "@aegix/blockchain";
 import {
   createAnalysisJobRepo,
   createDb,
@@ -70,6 +70,18 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
   const provider: BlockchainProvider = createProviderPoolFromConfig(config);
 
   try {
+    // Account classification before expensive work, see D3-A §8.
+    const classification = await classifyAddress(provider, walletAddress);
+    if (!isAnalysisEligible(classification.accountType)) {
+      logger.warn("account not analyzable, skipping analysis", { accountType: classification.accountType, protocol: classification.protocol });
+      await jobRepo.markFailed(
+        analysisId,
+        "ACCOUNT_NOT_ANALYZABLE",
+        `Address is a ${classification.accountType.toLowerCase()} and is not analyzed as a personal wallet`
+      );
+      return;
+    }
+
     await jobRepo.markStarted(analysisId, PIPELINE_VERSION);
     await jobRepo.updateStatus(analysisId, "FETCHING", 10);
 

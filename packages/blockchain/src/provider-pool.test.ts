@@ -17,6 +17,9 @@ function fakeProvider(name: string, behavior: { fail?: boolean; failCount?: numb
       await new Promise((r) => setTimeout(r, behavior.latencyMs ?? 0));
       return [{ signature: `sig-${name}-${calls}`, slot: 1, blockTime: 1 }] as SignatureInfo[];
     },
+    async getAccountInfo() {
+      return { owner: "11111111111111111111111111111111", executable: false, lamports: 1, dataLength: 0, data: "" };
+    },
     async getTransaction() {
       throw new Error("not implemented");
     },

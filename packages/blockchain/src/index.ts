@@ -18,3 +18,13 @@ export {
 export { createProviderPoolFromConfig } from "./factory.js";
 export { SolanaRpcProvider } from "./solana/provider.js";
 export { isValidSolanaAddress } from "./solana/address.js";
+export {
+  classifyAccount,
+  classifyAddress,
+  isAnalysisEligible,
+  ACCOUNT_CLASSIFIER_VERSION,
+  type AccountType,
+  type AccountClassification,
+  type ClassificationEvidence
+} from "./classifier.js";
+export type { AccountInfo } from "./types.js";

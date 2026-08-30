@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import type { AppConfig } from "@aegix/config";
 import type {
+  AccountInfo,
   BlockchainProvider,
   GetSignaturesOptions,
   RawTransaction,
@@ -118,6 +119,20 @@ export class SolanaRpcProvider implements BlockchainProvider {
       return result.value
         .map((v) => formatTokenAccount({ account: v.account }))
         .filter((v): v is TokenAccountInfo => v !== null);
+    });
+  }
+
+  async getAccountInfo(address: string): Promise<AccountInfo | null> {
+    return this.withRetry(async () => {
+      const account = await this.connection.getAccountInfo(this.pubkey(address), DEFAULT_COMMITMENT);
+      if (!account) return null;
+      return {
+        owner: account.owner.toBase58(),
+        executable: account.executable,
+        lamports: account.lamports,
+        dataLength: account.data.length,
+        data: ""
+      };
     });
   }
 

@@ -4,7 +4,13 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
 import type { AppConfig } from "@aegix/config";
-import { isValidSolanaAddress } from "@aegix/blockchain";
+import {
+  classifyAddress,
+  createProviderPoolFromConfig,
+  isAnalysisEligible,
+  isValidSolanaAddress,
+  type AccountClassification
+} from "@aegix/blockchain";
 import { createLogger, walletRef } from "@aegix/logging";
 import {
   createAnalysisJobRepo,
@@ -88,6 +94,7 @@ export async function buildServer(deps: ApiDeps) {
   const intelligenceRepo = createIntelligenceRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
+  const provider = createProviderPoolFromConfig(config);
 
   app.addHook("onClose", async () => {
     await queues.close();
@@ -96,6 +103,31 @@ export async function buildServer(deps: ApiDeps) {
   });
 
   app.get("/health/live", async () => ({ status: "ok" }));
+
+  // Account classification, see milestone D3-A §14: exposes evidence-backed
+  // classification so the frontend can render program/mint/sysvar accounts
+  // without starting an expensive analysis.
+  app.get<{ Params: { address: string } }>("/v1/accounts/:address/classification", async (req, reply) => {
+    const { address } = req.params;
+    if (!isValidSolanaAddress(address)) {
+      return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+    }
+    let classification: AccountClassification;
+    try {
+      classification = await classifyAddress(provider, address);
+    } catch {
+      return reply.code(503).send({ code: "RPC_UNAVAILABLE", message: "Account classification unavailable right now", requestId: randomUUID() });
+    }
+    return reply.send({
+      address,
+      accountType: classification.accountType,
+      confidence: classification.confidence,
+      protocol: classification.protocol,
+      verificationStatus: classification.verificationStatus,
+      analysisEligible: isAnalysisEligible(classification.accountType),
+      evidence: classification.evidence
+    });
+  });
 
   app.get("/health/ready", async () => {
     await sql`select 1`;
@@ -118,6 +150,26 @@ export async function buildServer(deps: ApiDeps) {
       const address = req.body.address;
       if (!isValidSolanaAddress(address)) {
         return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+      }
+
+      // Account classification before any expensive work, see D3-A §8.
+      // Programs, mints, sysvars and token accounts are not analyzed as
+      // user wallets.
+      let classification: AccountClassification;
+      try {
+        classification = await classifyAddress(provider, address);
+      } catch {
+        return reply.code(503).send({ code: "RPC_UNAVAILABLE", message: "Account classification unavailable right now", requestId: randomUUID() });
+      }
+      if (!isAnalysisEligible(classification.accountType)) {
+        return reply.code(422).send({
+          code: "ACCOUNT_NOT_ANALYZABLE",
+          accountType: classification.accountType,
+          protocol: classification.protocol,
+          verificationStatus: classification.verificationStatus,
+          message: `Address is a ${classification.accountType.toLowerCase()} and is not analyzed as a personal wallet`,
+          requestId: randomUUID()
+        });
       }
 
       const engineVersion = "aegix-pipeline-v1.0.0";
