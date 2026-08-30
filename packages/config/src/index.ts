@@ -15,6 +15,17 @@ const envSchema = z.object({
   RPC_WEBSOCKET_URL: z.string().url().optional(),
   RPC_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(100),
 
+  RPC_PRIMARY_URL: z.string().url().optional(),
+  RPC_PRIMARY_NAME: z.string().optional(),
+  RPC_SECONDARY_URL: z.string().url().optional(),
+  RPC_SECONDARY_NAME: z.string().optional(),
+  RPC_TERTIARY_URL: z.string().url().optional(),
+  RPC_TERTIARY_NAME: z.string().optional(),
+
+  RPC_CIRCUIT_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
+  RPC_CIRCUIT_COOLDOWN_MS: z.coerce.number().int().positive().default(30000),
+  RPC_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(2),
+
   LLM_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().url().optional(),
   LLM_MODEL: z.string().default("gpt-4o-mini"),

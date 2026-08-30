@@ -48,6 +48,8 @@ export interface ProviderMetrics {
   errorRate: number;
   rateLimited: boolean;
   requestCount: number;
+  timeoutRate: number;
+  serverErrorRate: number;
 }
 
 export interface ProviderHealth {

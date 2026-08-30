@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
 import type { AppConfig } from "@aegix/config";
 import type { BlockchainProvider } from "@aegix/blockchain";
-import { SolanaRpcProvider } from "@aegix/blockchain";
+import { createProviderPoolFromConfig, ProviderPool } from "@aegix/blockchain";
 import {
   createAnalysisJobRepo,
   createDb,
@@ -58,10 +58,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
   const intelligenceRepo = createIntelligenceRepo(sql);
   const entityRepo = createEntityRegistryRepo(sql);
 
-  const provider = new SolanaRpcProvider(
-    { RPC_URL: config.RPC_URL, RPC_WEBSOCKET_URL: config.RPC_WEBSOCKET_URL },
-    { timeoutMs: config.ANALYSIS_RPC_TIMEOUT_MS }
-  );
+  const provider: BlockchainProvider = createProviderPoolFromConfig(config);
 
   try {
     await jobRepo.markStarted(analysisId, PIPELINE_VERSION);
@@ -277,8 +274,9 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
 
     await jobRepo.updateStatus(analysisId, "PERSISTING", 96);
 
-    // 8. Mark complete with freshness + data quality
+    // 8. Mark complete with freshness + data quality + RPC observability
     const chainDataUntil = new Date().toISOString();
+    const poolStats = provider instanceof ProviderPool ? provider.getStats() : null;
     const dataQuality = {
       transactionsRequested: stats.transactionsReceived,
       transactionsReceived: stats.transactionsReceived,
@@ -290,7 +288,18 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       historyEnd,
       parserSuccessRate:
         stats.transactionsReceived > 0 ? Math.round((stats.transactionsParsed / stats.transactionsReceived) * 1000) / 10 : 0,
-      signaturesFetched: stats.signaturesFetched
+      signaturesFetched: stats.signaturesFetched,
+      rpc: poolStats
+        ? {
+            lastProvider: poolStats.lastProvider,
+            circuits: Object.fromEntries(
+              Object.entries(poolStats.circuits).map(([name, c]) => [
+                name,
+                { state: c.state, requestCount: c.requestCount, errorRate: c.errorRate, failovers: c.failovers }
+              ])
+            )
+          }
+        : null
     };
     await jobRepo.markCompleted(
       analysisId,
