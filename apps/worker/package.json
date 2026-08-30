@@ -17,6 +17,7 @@
     "@aegix/blockchain": "workspace:*",
     "@aegix/config": "workspace:*",
     "@aegix/database": "workspace:*",
+    "@aegix/explanation": "workspace:^",
     "@aegix/graph": "workspace:*",
     "@aegix/intelligence": "workspace:*",
     "@aegix/normalizer": "workspace:*",

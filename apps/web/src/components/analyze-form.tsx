@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createAnalysis } from "@/lib/api";
 
-export default function AnalyzeForm() {
-  const [address, setAddress] = useState("");
+export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: string }) {
+  const [address, setAddress] = useState(initialAddress);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [resultAddress, setResultAddress] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const result = await createAnalysis(address.trim());
-      setAnalysisId(result.analysisId);
+      const trimmed = address.trim();
+      await createAnalysis(trimmed);
+      setResultAddress(trimmed);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis request failed");
     } finally {
@@ -48,12 +49,12 @@ export default function AnalyzeForm() {
 
       {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
 
-      {analysisId && (
+      {resultAddress && (
         <div className="mt-6 rounded-lg border border-slate-700 bg-slate-900 p-4">
           <p className="text-sm text-slate-300">
-            Analysis queued.{" "}
-            <a href={`/analyze/${analysisId}`} className="text-accent underline">
-              Track progress
+            Analysis requested.{" "}
+            <a href={`/analyze/${resultAddress}`} className="text-accent underline">
+              Open Wallet X-Ray
             </a>
           </p>
         </div>

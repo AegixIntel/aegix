@@ -27,10 +27,24 @@ async function shutdown(signal: string): Promise<void> {
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandled rejection:", reason instanceof Error ? reason.message : reason);
+});
 
 analysisWorkers.forEach((w) => {
   w.on("failed", (job, err) => {
-    console.error(`job ${job?.id} failed:`, err.message);
+    try {
+      console.error(`job ${job?.id} failed:`, err.message);
+    } catch {
+      // never crash on logging
+    }
+  });
+  w.on("error", (err) => {
+    try {
+      console.error(`worker ${w.name} error:`, err.message);
+    } catch {
+      // never crash on logging
+    }
   });
 });
 

@@ -18,6 +18,7 @@
     "@aegix/cache": "workspace:*",
     "@aegix/config": "workspace:*",
     "@aegix/database": "workspace:*",
+    "@aegix/explanation": "workspace:^",
     "@aegix/queue": "workspace:*",
     "@aegix/types": "workspace:*",
     "@fastify/cors": "^10.0.1",

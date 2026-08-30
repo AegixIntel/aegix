@@ -52,7 +52,9 @@ create table if not exists analysis_jobs (
   failure_message text,
   chain_data_until timestamptz,
   fresh_until timestamptz,
-  data_quality jsonb
+  data_quality jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_analysis_jobs_wallet_created on analysis_jobs (wallet_id, created_at desc);
@@ -118,7 +120,7 @@ create index if not exists idx_program_interactions_program on program_interacti
 
 create table if not exists entities (
   id bigserial primary key,
-  name text not null,
+  name text not null unique,
   entity_type text not null,
   description text,
   status text not null default 'UNVERIFIED',
@@ -181,11 +183,11 @@ create table if not exists behavioral_features (
   feature_name text not null,
   feature_value_number numeric,
   feature_value_json jsonb,
-  window text not null default 'all',
+  "window" text not null default 'all',
   sample_size integer not null default 0,
   computed_at timestamptz not null default now(),
   engine_version text,
-  unique (wallet_id, feature_name, window, engine_version)
+  unique (wallet_id, feature_name, "window", engine_version)
 );
 
 -- ============================================================

@@ -25,20 +25,30 @@ export interface ParsedInstruction {
 export interface ParsedTransactionLike {
   slot: number;
   blockTime: number | null;
+  version?: "legacy" | 0 | 1;
   meta?: {
     err?: unknown;
     fee?: number;
     preBalances?: number[];
     postBalances?: number[];
-    preTokenBalances?: Array<{ accountIndex: number; mint: string; uiTokenAmount: { amount: string } }>;
-    postTokenBalances?: Array<{ accountIndex: number; mint: string; uiTokenAmount: { amount: string } }>;
+    preTokenBalances?: Array<{ accountIndex: number; mint: string; uiTokenAmount: { amount: string; decimals?: number } }>;
+    postTokenBalances?: Array<{ accountIndex: number; mint: string; uiTokenAmount: { amount: string; decimals?: number } }>;
   };
   transaction?: {
     message?: {
       accountKeys?: Array<{ pubkey: string; signer?: boolean; writable?: boolean }>;
       instructions?: ParsedInstruction[];
+      addressTableLookups?: Array<{ accountKey: string; writableIndexes: number[]; readonlyIndexes: number[] }>;
     };
   };
+}
+
+/** Parse outcome with failure tracking, see architecture.md §137. */
+export interface ParseOutcome {
+  result: NormalizerResult | null;
+  failed: boolean;
+  failureReason: string | null;
+  unknownProgramCount: number;
 }
 
 export interface ProgramParser {

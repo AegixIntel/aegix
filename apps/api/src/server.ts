@@ -4,13 +4,29 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import type { AppConfig } from "@aegix/config";
 import { isValidSolanaAddress } from "@aegix/blockchain";
-import { createDb, createAnalysisJobRepo, createWalletRepo } from "@aegix/database";
+import {
+  createAnalysisJobRepo,
+  createDb,
+  createIntelligenceRepo,
+  createWalletRepo,
+  type AnalysisJobRow,
+  type ScoreRow,
+  type SignalRow
+} from "@aegix/database";
 import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
-import type { AnalysisJob } from "@aegix/types";
+import { explainPath, explainSignal } from "@aegix/explanation";
+import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
   config: AppConfig;
+}
+
+const ENGINE_SCOPE = "full";
+const CACHE_PREFIX = "analysis-result";
+
+function analysisLockKey(address: string, engineVersion: string): string {
+  return `analysis-lock:solana:${address}:${ENGINE_SCOPE}:${engineVersion}`;
 }
 
 export async function buildServer(deps: ApiDeps) {
@@ -26,6 +42,7 @@ export async function buildServer(deps: ApiDeps) {
   const sql = createDb(config.DATABASE_URL);
   const walletRepo = createWalletRepo(sql);
   const jobRepo = createAnalysisJobRepo(sql);
+  const intelligenceRepo = createIntelligenceRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
 
@@ -37,8 +54,8 @@ export async function buildServer(deps: ApiDeps) {
   app.get("/health/live", async () => ({ status: "ok" }));
 
   app.get("/health/ready", async () => {
-    // Lightweight dependency probe; fails fast when DB/Redis are down
     await sql`select 1`;
+    await cache.get("health:probe");
     return { status: "ok" };
   });
 
@@ -59,34 +76,62 @@ export async function buildServer(deps: ApiDeps) {
         return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
       }
 
-      // Cache lookup: return cached analysis if fresh
-      const cached = await cache.getJson<{ analysisId: string }>(`analysis:${address}`);
+      const engineVersion = "aegix-pipeline-v1.0.0";
+
+      // 1. Fresh cached analysis? Return it immediately.
+      const cached = await cache.getJson<{ analysisId: string }>(`${CACHE_PREFIX}:${address}`);
       if (cached?.analysisId) {
         return reply.send({ analysisId: cached.analysisId, cached: true });
       }
 
-      const wallet = await walletRepo.findOrCreate("solana", address);
-      const job = await jobRepo.create({
-        walletId: wallet.id,
-        requestedBy: null,
-        analysisType: "full",
-        priority: "standard"
-      });
+      // 2. Distributed lock: deduplicate concurrent analyses for the same wallet.
+      const lockKey = analysisLockKey(address, engineVersion);
+      const lockAcquired = await cache.acquireLock(lockKey, 300);
+      if (!lockAcquired) {
+        const existing = await cache.getJson<{ analysisId: string }>(`${CACHE_PREFIX}:${address}`);
+        if (existing?.analysisId) {
+          return reply.send({ analysisId: existing.analysisId, cached: true });
+        }
+        return reply.code(409).send({
+          code: "ANALYSIS_IN_PROGRESS",
+          message: "An analysis for this wallet is already in progress",
+          requestId: randomUUID()
+        });
+      }
 
-      const queue = queueForPriority(job.priority, queues);
-      await queue.add(
-        "analyze",
-        { analysisId: job.id, walletAddress: address, chain: "solana", analysisType: "full" },
-        { jobId: `analysis:${job.id}`, attempts: 3, backoff: { type: "exponential", delay: 2000 } }
-      );
+      try {
+        // 3. Check for a recent READY analysis before creating a duplicate job.
+        const wallet = await walletRepo.findOrCreate("solana", address);
+        const latest = await jobRepo.latestForWallet(wallet.id);
+        if (latest && latest.fresh_until && new Date(latest.fresh_until) > new Date()) {
+          await cache.setJson(`${CACHE_PREFIX}:${address}`, { analysisId: latest.id }, config.ANALYSIS_CACHE_TTL_SECONDS);
+          return reply.send({ analysisId: latest.id, cached: true });
+        }
 
-      await cache.setJson(`analysis:${address}`, { analysisId: job.id }, config.ANALYSIS_CACHE_TTL_SECONDS);
+        const job = await jobRepo.create({
+          walletId: wallet.id,
+          requestedBy: null,
+          analysisType: "full",
+          priority: "standard"
+        });
 
-      reply.code(202).send({
-        analysisId: job.id,
-        status: job.status,
-        walletAddress: address
-      });
+        const queue = queueForPriority(job.priority, queues);
+        await queue.add(
+          "analyze",
+          { analysisId: job.id, walletAddress: address, chain: "solana", analysisType: "full" },
+          { jobId: `analysis-${job.id}`, attempts: 3, backoff: { type: "exponential", delay: 2000 } }
+        );
+
+        await cache.setJson(`${CACHE_PREFIX}:${address}`, { analysisId: job.id }, config.ANALYSIS_CACHE_TTL_SECONDS);
+
+        reply.code(202).send({
+          analysisId: job.id,
+          status: job.status,
+          walletAddress: address
+        });
+      } finally {
+        await cache.releaseLock(lockKey);
+      }
     }
   );
 
@@ -129,5 +174,126 @@ export async function buildServer(deps: ApiDeps) {
     return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null });
   });
 
+  app.get<{ Params: { address: string } }>("/v1/wallets/:address/x-ray", async (req, reply) => {
+    const { address } = req.params;
+    if (!isValidSolanaAddress(address)) {
+      return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+    }
+
+    const wallet = await walletRepo.findByAddress("solana", address);
+    if (!wallet) {
+      return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "Wallet not found", requestId: randomUUID() });
+    }
+
+    const latest = await jobRepo.latestForWallet(wallet.id);
+    if (!latest) {
+      return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "No analysis available for this wallet", requestId: randomUUID() });
+    }
+
+    const [score, signals, paths] = await Promise.all([
+      intelligenceRepo.scoreForAnalysis(latest.id),
+      intelligenceRepo.signalsForAnalysis(latest.id),
+      intelligenceRepo.pathsForAnalysis(latest.id)
+    ]);
+
+    return reply.send(buildXRayResponse({ address, job: latest, score, signals, paths }));
+  });
+
   return app;
+}
+
+function buildXRayResponse(input: {
+  address: string;
+  job: AnalysisJobRow;
+  score: ScoreRow | null;
+  signals: SignalRow[];
+  paths: Array<{ id: string; rank: number; path_type: string; nodes_json: unknown; edges_json: unknown; path_score: number; confidence_score: number; summary: string | null }>;
+}) {
+  const { address, job, score, signals, paths } = input;
+  const dataQuality = (job.data_quality ?? {}) as Record<string, unknown>;
+
+  const topSignals = signals.slice(0, 5).map((s) => ({
+    type: s.signal_type,
+    category: s.category,
+    severity: s.severity,
+    confidence: Number(s.confidence),
+    title: s.title,
+    summary: s.summary,
+    evidence: (s.evidence_json as Array<{ key: string; value: string | number | boolean; label: string }>) ?? [],
+    explanation: explainSignal({
+      type: s.signal_type,
+      category: s.category as IntelligenceSignal["category"],
+      severity: s.severity,
+      confidence: Number(s.confidence),
+      title: s.title,
+      summary: s.summary ?? "",
+      evidence: (s.evidence_json as Array<{ key: string; value: string | number | boolean; label: string }>) ?? [],
+      engineVersion: s.engine_version ?? ""
+    })
+  }));
+
+  return {
+    analysis: {
+      id: job.id,
+      status: job.status,
+      createdAt: job.requested_at,
+      completedAt: job.completed_at,
+      engineVersion: job.engine_version,
+      chainDataUntil: job.chain_data_until,
+      freshUntil: job.fresh_until
+    },
+    wallet: { address },
+    coverage: {
+      ...dataQuality,
+      transactionsAnalyzed: dataQuality.transactionsParsed ?? 0,
+      historyCoverageDays: coverageDays(dataQuality)
+    },
+    score: score
+      ? {
+          overall: score.overall_score,
+          confidence: Number(score.overall_confidence),
+          scoringVersion: score.scoring_version
+        }
+      : null,
+    dimensions: score
+      ? [
+          { key: "identityLinkability", label: "Identity Linkability", score: score.identity_linkability },
+          { key: "fundingExposure", label: "Funding Exposure", score: score.funding_exposure },
+          { key: "walletClusterExposure", label: "Wallet Cluster Exposure", score: score.wallet_cluster_exposure },
+          { key: "behavioralFingerprint", label: "Behavioral Fingerprint", score: score.behavioral_fingerprint },
+          { key: "counterpartyExposure", label: "Counterparty Exposure", score: score.counterparty_exposure },
+          { key: "entityExposure", label: "Entity Exposure", score: score.entity_exposure },
+          { key: "transactionPatternExposure", label: "Transaction Pattern Exposure", score: score.transaction_pattern_exposure }
+        ]
+      : [],
+    topSignals,
+    relationships: [],
+    entities: [],
+    behavior: {},
+    attackPaths: paths.map((p) => ({
+      rank: p.rank,
+      pathType: p.path_type,
+      nodes: p.nodes_json,
+      edges: p.edges_json,
+      pathScore: p.path_score,
+      confidence: p.confidence_score,
+      summary: p.summary,
+      explanation: explainPath({
+        nodes: ((p.nodes_json as Array<{ type: string; label: string }>) ?? []).map((n) => ({ type: n.type, label: n.label })),
+        pathScore: p.path_score,
+        confidenceScore: p.confidence_score
+      })
+    })),
+    engineVersions: {
+      pipeline: job.engine_version,
+      scoring: score?.scoring_version ?? null
+    }
+  };
+}
+
+function coverageDays(dataQuality: Record<string, unknown>): number | null {
+  const start = dataQuality.historyStart;
+  const end = dataQuality.historyEnd;
+  if (typeof start !== "string" || typeof end !== "string") return null;
+  return Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000));
 }

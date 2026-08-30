@@ -94,7 +94,18 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
         insert into transfers (
           transaction_id, from_address, to_address, asset_type, mint,
           amount_raw, amount_normalized, transfer_type, block_time
-        ) values ${sql(rows, "transaction_id", "from_address", "to_address", "asset_type", "mint", "amount_raw", "amount_normalized", "transfer_type", "block_time")}
+        ) values ${sql(
+          rows.map((r) => sanitizeRow(r)),
+          "transaction_id",
+          "from_address",
+          "to_address",
+          "asset_type",
+          "mint",
+          "amount_raw",
+          "amount_normalized",
+          "transfer_type",
+          "block_time"
+        )}
       `;
     },
 
@@ -103,7 +114,16 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
       await sql`
         insert into program_interactions (
           wallet_id, transaction_id, program_id, program_label, protocol_category, action_type, block_time
-        ) values ${sql(rows, "wallet_id", "transaction_id", "program_id", "program_label", "protocol_category", "action_type", "block_time")}
+        ) values ${sql(
+          rows.map((r) => sanitizeRow(r)),
+          "wallet_id",
+          "transaction_id",
+          "program_id",
+          "program_label",
+          "protocol_category",
+          "action_type",
+          "block_time"
+        )}
       `;
     },
 
@@ -141,4 +161,13 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
       `;
     }
   };
+}
+
+/** postgres.js rejects undefined values; normalize them at the data boundary. */
+function sanitizeRow<T extends Record<string, unknown>>(row: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[key] = value === undefined ? null : value;
+  }
+  return out as T;
 }

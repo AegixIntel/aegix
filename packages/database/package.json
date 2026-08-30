@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"no tests\"",
-    "migrate": "node --import tsx ../../infra/scripts/migrate.ts"
+    "migrate": "node --import tsx src/migrate.ts",
+    "seed:entities": "node --import tsx src/seed-entities.ts"
   },
   "dependencies": {
     "@aegix/config": "workspace:*",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.5.4"
   }
 }

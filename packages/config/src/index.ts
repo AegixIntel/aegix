@@ -26,6 +26,11 @@ const envSchema = z.object({
   ANALYSIS_MAX_HISTORY_DAYS: z.coerce.number().int().positive().default(365),
   ANALYSIS_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   ANALYSIS_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(3),
+  ANALYSIS_MAX_SIGNATURE_PAGES: z.coerce.number().int().positive().default(5),
+  ANALYSIS_RPC_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  ANALYSIS_RPC_MIN_INTERVAL_MS: z.coerce.number().int().nonnegative().default(250),
+  ANALYSIS_RPC_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  ANALYSIS_TIMEOUT_MS: z.coerce.number().int().positive().default(600000),
 
   QUEUE_PREFIX: z.string().default("aegix"),
   REDIS_QUEUE_DB: z.coerce.number().int().min(0).max(15).default(1),

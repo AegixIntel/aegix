@@ -1,10 +1,19 @@
 import type { Job } from "bullmq";
 import type { AppConfig } from "@aegix/config";
-import type { BlockchainProvider, RawTransaction } from "@aegix/blockchain";
+import type { BlockchainProvider } from "@aegix/blockchain";
 import { SolanaRpcProvider } from "@aegix/blockchain";
-import { createDb, createAnalysisJobRepo, createWalletAnalyticsRepo, createWalletRepo } from "@aegix/database";
-import { normalizeTransaction } from "@aegix/normalizer";
-import type { NormalizedTransaction, WalletRelationship } from "@aegix/types";
+import {
+  createAnalysisJobRepo,
+  createDb,
+  createEntityRegistryRepo,
+  createIntelligenceRepo,
+  createWalletAnalyticsRepo,
+  createWalletRepo,
+  type EntityAddressSeedRow,
+  type EntitySeedRow
+} from "@aegix/database";
+import { normalizeTransaction, type ParsedTransactionLike } from "@aegix/normalizer";
+import type { IntelligenceSignal, NormalizedTransaction, WalletRelationship } from "@aegix/types";
 import {
   analyzeBehavior,
   analyzeClusters,
@@ -13,63 +22,121 @@ import {
   analyzeFunding,
   type EntityRegistry
 } from "@aegix/intelligence";
-import { scoreWallet } from "@aegix/scoring";
+import { scoreWallet, type ScoreResult } from "@aegix/scoring";
 import { annotateEntities, buildGraph, findExposurePaths } from "@aegix/graph";
+import { explainPath, explainSignal } from "@aegix/explanation";
 import type { AnalysisJobData } from "@aegix/queue";
 import type { ProcessorContext } from "../worker.js";
 
-const EMPTY_ENTITY_REGISTRY: EntityRegistry = { entities: [], addresses: [] };
+const PIPELINE_VERSION = "aegix-pipeline-v1.0.0";
+
+interface FetchStats {
+  signaturesFetched: number;
+  transactionsReceived: number;
+  transactionsParsed: number;
+  parserFailures: number;
+  rpcFailures: number;
+  unknownProgramCount: number;
+  historyStart: string | null;
+  historyEnd: string | null;
+}
 
 /**
  * Full wallet analysis pipeline, see architecture.md §140.
- * fetch -> normalize -> engines -> score -> paths -> persist.
+ * fetch (paginated, rate-limited) -> normalize (per-tx tolerant) ->
+ * engines -> score -> paths -> persist signals/scores/paths + report.
  */
 export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorContext): Promise<void> {
   const { config } = ctx;
   const { analysisId, walletAddress, chain } = job.data;
-  const sql = ctx.sql;
+  const log = (msg: string) => safeLog(job, msg);
 
+  const sql = ctx.sql;
   const jobRepo = createAnalysisJobRepo(sql);
   const walletRepo = createWalletRepo(sql);
   const analyticsRepo = createWalletAnalyticsRepo(sql);
+  const intelligenceRepo = createIntelligenceRepo(sql);
+  const entityRepo = createEntityRegistryRepo(sql);
 
-  const provider = new SolanaRpcProvider({ RPC_URL: config.RPC_URL, RPC_WEBSOCKET_URL: config.RPC_WEBSOCKET_URL });
+  const provider = new SolanaRpcProvider(
+    { RPC_URL: config.RPC_URL, RPC_WEBSOCKET_URL: config.RPC_WEBSOCKET_URL },
+    { timeoutMs: config.ANALYSIS_RPC_TIMEOUT_MS }
+  );
 
   try {
-    await jobRepo.markStarted(analysisId, "aegix-pipeline-v1.0.0");
+    await jobRepo.markStarted(analysisId, PIPELINE_VERSION);
     await jobRepo.updateStatus(analysisId, "FETCHING", 10);
 
     const wallet = await walletRepo.findOrCreate(chain, walletAddress);
+    const stats: FetchStats = {
+      signaturesFetched: 0,
+      transactionsReceived: 0,
+      transactionsParsed: 0,
+      parserFailures: 0,
+      rpcFailures: 0,
+      unknownProgramCount: 0,
+      historyStart: null,
+      historyEnd: null
+    };
 
-    // 1. Fetch signatures
-    const signatures = await fetchSignatures(provider, walletAddress, config);
+    // 1. Fetch signatures with pagination (bounded pages) and rate limiting
+    const signatures = await fetchSignaturesPaged(provider, walletAddress, config);
+    stats.signaturesFetched = signatures.length;
     if (signatures.length === 0) {
       await jobRepo.markFailed(analysisId, "INSUFFICIENT_HISTORY", "No activity found for wallet");
       return;
     }
     await jobRepo.updateStatus(analysisId, "NORMALIZING", 30);
 
-    // 2. Fetch + normalize transactions (bounded)
+    // 2. Fetch + normalize transactions — one bad tx must not kill the analysis
     const transactions: NormalizedTransaction[] = [];
     const txBudget = config.ANALYSIS_MAX_TRANSACTIONS;
+    const limiter = createRateLimiter(config.ANALYSIS_RPC_CONCURRENCY, config.ANALYSIS_RPC_MIN_INTERVAL_MS);
+
     for (const sig of signatures) {
       if (transactions.length >= txBudget) break;
-      const raw = await provider.getTransaction(sig.signature);
+      await limiter.acquire();
+      let raw;
+      try {
+        raw = await provider.getTransaction(sig.signature);
+      } catch {
+        stats.rpcFailures += 1;
+        limiter.release();
+        continue;
+      }
+      limiter.release();
       if (!raw) continue;
-      const normalized = normalizeTransaction({
+      stats.transactionsReceived += 1;
+
+      const outcome = normalizeTransaction({
         signature: sig.signature,
-        raw: raw.json as never,
+        raw: raw.json as ParsedTransactionLike,
         walletAddress,
         rawProvider: provider.name
       });
-      transactions.push(normalized.transaction);
+      stats.unknownProgramCount += outcome.unknownProgramCount;
+
+      if (outcome.failed || !outcome.result) {
+        stats.parserFailures += 1;
+        log(`parse failed for ${sig.signature.slice(0, 12)}: ${outcome.failureReason}`);
+        continue;
+      }
+      stats.transactionsParsed += 1;
+      transactions.push(outcome.result.transaction);
+
+      if (transactions.length % 100 === 0) {
+        log(`fetched ${transactions.length} transactions so far (rpc failures ${stats.rpcFailures}, parse failures ${stats.parserFailures})`);
+      }
     }
 
     if (transactions.length === 0) {
-      await jobRepo.markFailed(analysisId, "CHAIN_DATA_UNAVAILABLE", "No parseable transactions found");
+      await jobRepo.markFailed(
+        analysisId,
+        "CHAIN_DATA_UNAVAILABLE",
+        `No parseable transactions (received ${stats.transactionsReceived}, failed ${stats.parserFailures}, rpc failures ${stats.rpcFailures})`
+      );
       return;
     }
-    await jobRepo.updateStatus(analysisId, "ENTITY_ANALYSIS", 45);
 
     // 3. Persist normalized data
     for (const tx of transactions) {
@@ -84,61 +151,51 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         rawProvider: tx.rawProvider,
         parserVersion: tx.parserVersion
       });
-      if (row.id) {
-        await analyticsRepo.insertTransfers(
-          tx.transfers.map((t) => ({
-            transaction_id: row.id,
-            from_address: t.fromAddress,
-            to_address: t.toAddress,
-            asset_type: t.assetType,
-            mint: t.mint,
-            amount_raw: t.amountRaw,
-            amount_normalized: String(t.amountNormalized),
-            transfer_type: t.transferType,
-            block_time: t.timestamp
-          }))
-        );
-        await analyticsRepo.insertProgramInteractions(
-          tx.programInteractions.map((ix) => ({
-            wallet_id: wallet.id,
-            transaction_id: row.id,
-            program_id: ix.programId,
-            program_label: ix.programLabel,
-            protocol_category: ix.protocolCategory,
-            action_type: ix.actionType,
-            block_time: ix.blockTime
-          }))
-        );
-      }
+      if (!row.id) continue;
+      await analyticsRepo.insertTransfers(
+        tx.transfers.map((t) => ({
+          transaction_id: row.id,
+          from_address: t.fromAddress,
+          to_address: t.toAddress,
+          asset_type: t.assetType,
+          mint: sanitizeNullable(t.mint),
+          amount_raw: t.amountRaw,
+          amount_normalized: String(t.amountNormalized),
+          transfer_type: t.transferType,
+          block_time: t.timestamp
+        }))
+      );
+      await analyticsRepo.insertProgramInteractions(
+        tx.programInteractions.map((ix) => ({
+          wallet_id: wallet.id,
+          transaction_id: row.id,
+          program_id: ix.programId,
+          program_label: sanitizeNullable(ix.programLabel),
+          protocol_category: ix.protocolCategory,
+          action_type: ix.actionType,
+          block_time: ix.blockTime
+        }))
+      );
     }
 
-    // 4. Run intelligence engines
+    // 4. Load entity registry and run intelligence engines
+    const registry = await loadEntityRegistry(entityRepo);
     const allTransfers = transactions.flatMap((t) => t.transfers);
     const allInteractions = transactions.flatMap((t) => t.programInteractions);
 
+    await jobRepo.updateStatus(analysisId, "ENTITY_ANALYSIS", 45);
     const funding = analyzeFunding({ walletAddress, transfers: allTransfers });
     const counterparty = analyzeCounterparties({ walletAddress, transfers: allTransfers });
-    const behavior = analyzeBehavior({
-      walletAddress,
-      transactions,
-      interactions: allInteractions
-    });
-    const entities = analyzeEntities({
-      walletAddress,
-      transfers: allTransfers,
-      interactions: allInteractions,
-      registry: EMPTY_ENTITY_REGISTRY
-    });
-    const clusters = analyzeClusters({
-      walletAddress,
-      transfers: allTransfers,
-      sharedCounterparties: new Map()
-    });
+    const behavior = analyzeBehavior({ walletAddress, transactions, interactions: allInteractions });
+    const entities = analyzeEntities({ walletAddress, transfers: allTransfers, interactions: allInteractions, registry });
+    const clusters = analyzeClusters({ walletAddress, transfers: allTransfers, sharedCounterparties: new Map() });
 
     await jobRepo.updateStatus(analysisId, "SCORING", 70);
 
     // 5. Score
-    const historyStart = transactions[transactions.length - 1]?.blockTime;
+    const sortedByTime = [...transactions].sort((a, b) => a.blockTime.localeCompare(b.blockTime));
+    const historyStart = sortedByTime[0]?.blockTime ?? null;
+    const historyEnd = sortedByTime[sortedByTime.length - 1]?.blockTime ?? null;
     const historyDays = historyStart
       ? Math.max(1, (Date.now() - new Date(historyStart).getTime()) / 86_400_000)
       : 0;
@@ -154,9 +211,9 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       fundingConcentration: funding.fundingConcentration,
       transactionCount: transactions.length,
       historyDays,
-      parserFailures: 0,
-      transactionsRequested: signatures.length,
-      transactionsReceived: transactions.length
+      parserFailures: stats.parserFailures,
+      transactionsRequested: stats.transactionsReceived,
+      transactionsReceived: stats.transactionsParsed
     });
 
     await jobRepo.updateStatus(analysisId, "GRAPH_ANALYSIS", 85);
@@ -170,28 +227,80 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     );
     const pathResult = findExposurePaths({ targetAddress: walletAddress, graph });
 
-    await jobRepo.updateStatus(analysisId, "PERSISTING", 95);
+    await jobRepo.updateStatus(analysisId, "EXPLANATION", 92);
 
-    // 7. Mark complete with freshness + data quality
-    const chainDataUntil = new Date().toISOString();
-    await jobRepo.markCompleted(
+    // 7. Persist intelligence outputs (source of truth)
+    const allSignals = [
+      ...funding.signals,
+      ...counterparty.signals,
+      ...behavior.signals,
+      ...entities.signals,
+      ...clusters.signals
+    ];
+    await intelligenceRepo.insertSignals(
+      allSignals.map((s) => ({
+        analysisId,
+        walletId: wallet.id,
+        signalType: s.type,
+        category: s.category,
+        severity: s.severity,
+        confidence: s.confidence,
+        title: s.title,
+        summary: s.summary,
+        evidence: s.evidence,
+        engineVersion: s.engineVersion
+      }))
+    );
+    await intelligenceRepo.insertScore({
       analysisId,
-      {
-        chainDataUntil,
-        freshUntil: new Date(Date.now() + config.ANALYSIS_CACHE_TTL_SECONDS * 1000).toISOString()
-      },
-      {
-        transactionsRequested: signatures.length,
-        transactionsReceived: transactions.length,
-        transactionsParsed: transactions.length,
-        parserFailures: 0,
-        historyStart: historyStart ?? null,
-        historyEnd: chainDataUntil,
-        providerFailures: 0
-      }
+      walletId: wallet.id,
+      overallScore: score.overallScore,
+      dimensions: score.dimensions,
+      overallConfidence: score.overallConfidence,
+      scoringVersion: score.scoringVersion
+    });
+    await intelligenceRepo.insertPaths(
+      pathResult.paths.map((p) => ({
+        analysisId,
+        targetWalletId: wallet.id,
+        rank: p.rank,
+        pathType: p.pathType,
+        nodes: p.nodes,
+        edges: p.edges,
+        pathScore: p.pathScore,
+        confidenceScore: p.confidenceScore,
+        summary: p.summary,
+        engineVersion: p.engineVersion
+      }))
     );
 
-    job.log(`analysis ${analysisId} complete: ${transactions.length} tx, score ${score.overallScore}, ${pathResult.paths.length} paths`);
+    await jobRepo.updateStatus(analysisId, "PERSISTING", 96);
+
+    // 8. Mark complete with freshness + data quality
+    const chainDataUntil = new Date().toISOString();
+    const dataQuality = {
+      transactionsRequested: stats.transactionsReceived,
+      transactionsReceived: stats.transactionsReceived,
+      transactionsParsed: stats.transactionsParsed,
+      parserFailures: stats.parserFailures,
+      rpcFailures: stats.rpcFailures,
+      unknownProgramCount: stats.unknownProgramCount,
+      historyStart,
+      historyEnd,
+      parserSuccessRate:
+        stats.transactionsReceived > 0 ? Math.round((stats.transactionsParsed / stats.transactionsReceived) * 1000) / 10 : 0,
+      signaturesFetched: stats.signaturesFetched
+    };
+    await jobRepo.markCompleted(
+      analysisId,
+      { chainDataUntil, freshUntil: new Date(Date.now() + config.ANALYSIS_CACHE_TTL_SECONDS * 1000).toISOString() },
+      dataQuality
+    );
+
+    log(
+      `analysis ${analysisId} complete: ${transactions.length} tx parsed, score ${score.overallScore}/${score.overallConfidence}, ` +
+        `${allSignals.length} signals, ${pathResult.paths.length} paths, parser failures ${stats.parserFailures}`
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await jobRepo.markFailed(analysisId, "INTERNAL_ERROR", message.slice(0, 500));
@@ -199,9 +308,80 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
   }
 }
 
-async function fetchSignatures(provider: BlockchainProvider, address: string, config: AppConfig): Promise<Array<{ signature: string; slot: number }>> {
-  const sigs = await provider.getSignatures(address, { limit: Math.min(config.ANALYSIS_MAX_TRANSACTIONS, 1000) });
-  return sigs.filter((s) => s.blockTime != null).map((s) => ({ signature: s.signature, slot: s.slot }));
+async function fetchSignaturesPaged(provider: BlockchainProvider, address: string, config: AppConfig): Promise<Array<{ signature: string; slot: number }>> {
+  const all: Array<{ signature: string; slot: number }> = [];
+  let before: string | undefined;
+  const seen = new Set<string>();
+  const pageSize = 100;
+
+  for (let page = 0; page < config.ANALYSIS_MAX_SIGNATURE_PAGES; page++) {
+    const sigs = await provider.getSignatures(address, { limit: pageSize, before });
+    if (sigs.length === 0) break;
+    for (const s of sigs) {
+      if (s.blockTime == null) continue;
+      if (seen.has(s.signature)) continue;
+      seen.add(s.signature);
+      all.push({ signature: s.signature, slot: s.slot });
+      if (all.length >= config.ANALYSIS_MAX_TRANSACTIONS) return all;
+    }
+    before = sigs[sigs.length - 1]?.signature;
+    if (!before) break;
+  }
+  return all;
+}
+
+/** Simple concurrency + min-interval limiter for RPC calls, see architecture.md §41. */
+function createRateLimiter(concurrency: number, minIntervalMs: number) {
+  let active = 0;
+  let lastCall = 0;
+  const waiters: Array<() => void> = [];
+
+  async function acquire(): Promise<void> {
+    while (active >= concurrency) {
+      await new Promise<void>((resolve) => waiters.push(resolve));
+    }
+    active += 1;
+    const now = Date.now();
+    const wait = Math.max(0, lastCall + minIntervalMs - now);
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastCall = Date.now();
+  }
+
+  function release(): void {
+    active -= 1;
+    waiters.shift()?.();
+  }
+
+  return { acquire, release };
+}
+
+async function loadEntityRegistry(entityRepo: ReturnType<typeof createEntityRegistryRepo>): Promise<EntityRegistry> {
+  const [entities, addresses] = await Promise.all([entityRepo.listEntities(), entityRepo.findAddressesByChain("solana")]);
+  return {
+    entities: entities.map((e: EntitySeedRow) => ({
+      id: e.id,
+      name: e.name,
+      entityType: e.entity_type as EntityRegistry["entities"][number]["entityType"],
+      description: null,
+      status: e.status as EntityRegistry["entities"][number]["status"],
+      defaultConfidence: Number(e.default_confidence),
+      sourceType: e.source_type,
+      createdAt: "",
+      updatedAt: ""
+    })),
+    addresses: addresses.map((a: EntityAddressSeedRow) => ({
+      id: a.id,
+      entityId: a.entity_id,
+      chain: a.chain as "solana",
+      address: a.address,
+      label: a.label,
+      confidence: Number(a.confidence),
+      evidenceSource: a.evidence_source,
+      firstVerifiedAt: null,
+      lastVerifiedAt: null,
+      status: a.status as EntityRegistry["addresses"][number]["status"]
+    }))
+  };
 }
 
 /** Builds relationship edges from transfer pairs for the attack graph. */
@@ -230,7 +410,7 @@ function buildRelationshipsFromTransfers(transfers: NormalizedTransaction["trans
         totalValue: t.amountNormalized,
         firstSeen: t.timestamp,
         lastSeen: t.timestamp,
-        strengthScore: 0.35,
+        strengthScore: Math.min(1, 0.3 + 0.05 * Math.log10(1 + Math.abs(t.amountNormalized))),
         confidenceScore: 0.7,
         evidenceJson: {},
         engineVersion: "relationship-v1.0.0",
@@ -241,3 +421,19 @@ function buildRelationshipsFromTransfers(transfers: NormalizedTransaction["trans
   }
   return [...pairs.values()];
 }
+
+/** postgres.js rejects undefined values; normalize them to null at the data boundary. */
+function sanitizeNullable(value: string | null | undefined): string | null {
+  return value ?? null;
+}
+
+/** job.log can throw when the job key is missing from Redis; logging must never crash the pipeline. */
+function safeLog(job: Job<AnalysisJobData>, message: string): void {
+  try {
+    job.log(message);
+  } catch {
+    // ignore — logging is best-effort
+  }
+}
+
+export type { IntelligenceSignal, ScoreResult };

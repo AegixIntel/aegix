@@ -12,9 +12,11 @@
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
-    "dev": "pnpm -r --parallel run dev"
+    "dev": "pnpm -r --parallel run dev",
+    "test:wallets": "node --import tsx tests/golden-wallets.ts"
   },
   "devDependencies": {
+    "tsx": "^4.19.2",
     "typescript": "^5.5.4"
   }
 }

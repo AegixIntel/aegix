@@ -1,6 +1,7 @@
 import AnalyzeForm from "@/components/analyze-form";
 
-export default function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ address?: string }> }) {
+  const { address } = await searchParams;
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-6">
       <div className="mx-auto max-w-2xl text-center">
@@ -15,7 +16,7 @@ export default function Home() {
         </p>
       </div>
       <div className="mt-12 w-full">
-        <AnalyzeForm />
+        <AnalyzeForm initialAddress={address ?? ""} />
       </div>
       <footer className="mt-16 text-xs text-slate-600">
         AEGIX measures observable linkability — it never claims identity.

@@ -7,10 +7,19 @@ import type {
 } from "@aegix/types";
 import { parseSplTransfer, parseSystemTransfer } from "./programs/system.js";
 import { parserFor, programLabelFor, protocolCategoryFor } from "./programs/registry.js";
-import { PARSER_VERSION, type NormalizeInput, type NormalizerResult, type ParsedInstruction, type ParsedTransactionLike } from "./types.js";
+import {
+  PARSER_VERSION,
+  type NormalizeInput,
+  type NormalizerResult,
+  type ParseOutcome,
+  type ParsedInstruction,
+  type ParsedTransactionLike
+} from "./types.js";
 
-const SOL_DECIMALS = 9;
 const LAMPORTS_PER_SOL = 1_000_000_000;
+
+const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
+const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
 
 /**
  * Detects the transaction class from its instructions.
@@ -31,118 +40,180 @@ export function detectTransactionClass(ixs: ParsedInstruction[]): TransactionCla
   return "UNKNOWN";
 }
 
-/** Builds a map of account index -> mint from pre/post token balances. */
-function buildTokenBalanceMints(tx: ParsedTransactionLike): Map<number, string> {
-  const mints = new Map<number, string>();
-  for (const bal of tx.meta?.preTokenBalances ?? []) {
-    if (!mints.has(bal.accountIndex)) mints.set(bal.accountIndex, bal.mint);
-  }
-  for (const bal of tx.meta?.postTokenBalances ?? []) {
-    if (!mints.has(bal.accountIndex)) mints.set(bal.accountIndex, bal.mint);
-  }
-  return mints;
-}
-
-function lamportsToSol(lamports: number): number {
-  return lamports / LAMPORTS_PER_SOL;
-}
-
 /**
  * Normalizes a parsed Solana transaction into AEGIX structures.
- * See architecture.md §14-§16 and the pipeline in §140.
+ * Handles inner instructions, wrapped SOL, missing blockTime, versioned
+ * transactions and unknown programs without throwing. Parse failures are
+ * reported through ParseOutcome so the pipeline can continue.
  */
-export function normalizeTransaction(input: NormalizeInput): NormalizerResult {
+export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
   const { signature, raw, walletAddress, rawProvider } = input;
-  const accountKeys = raw.transaction?.message?.accountKeys ?? [];
-  const instructions = raw.transaction?.message?.instructions ?? [];
-  const blockTime = raw.blockTime ? new Date(raw.blockTime * 1000).toISOString() : new Date(0).toISOString();
-  const tokenMints = buildTokenBalanceMints(raw);
 
-  const transfers: NormalizedTransfer[] = [];
-  const interactions: NormalizedProgramInteraction[] = [];
+  try {
+    const accountKeys = raw.transaction?.message?.accountKeys ?? [];
+    const outerInstructions = raw.transaction?.message?.instructions ?? [];
+    const innerInstructions = raw.meta && "innerInstructions" in raw.meta
+      ? ((raw.meta as { innerInstructions?: Array<{ instructions?: ParsedInstruction[] }> }).innerInstructions ?? [])
+      : [];
+    const allInstructions = [
+      ...outerInstructions,
+      ...innerInstructions.flatMap((group) => group.instructions ?? [])
+    ];
 
-  for (const ix of instructions) {
-    const system = parseSystemTransfer(ix);
-    if (system) {
-      transfers.push({
-        chain: "solana",
-        transactionId: signature,
-        timestamp: blockTime,
-        fromAddress: system.from,
-        toAddress: system.to,
-        assetType: "SOL",
-        mint: null,
-        amountRaw: String(system.lamports),
-        amountNormalized: lamportsToSol(system.lamports),
-        transferType: "TRANSFER"
-      });
+    const blockTime = raw.blockTime ? new Date(raw.blockTime * 1000).toISOString() : null;
+    const timestamp = blockTime ?? new Date(0).toISOString();
+    const accountKeyByIndex = new Map(accountKeys.map((k, i) => [i, k.pubkey]));
+    const tokenBalances = buildTokenBalanceMap(raw);
+    const unknownProgramCount = allInstructions.filter(
+      (ix) => !isSystemProgram(ix.programId) && !isTokenProgram(ix.programId) && !parserFor(ix.programId)
+    ).length;
+
+    const transfers: NormalizedTransfer[] = [];
+    const interactions: NormalizedProgramInteraction[] = [];
+    const seenTransfers = new Set<string>();
+
+    for (const ix of allInstructions) {
+      const system = parseSystemTransfer(ix);
+      if (system) {
+        const dedupeKey = `sol:${system.from}:${system.to}:${system.lamports}`;
+        if (!seenTransfers.has(dedupeKey)) {
+          seenTransfers.add(dedupeKey);
+          transfers.push({
+            chain: "solana",
+            transactionId: signature,
+            timestamp,
+            fromAddress: system.from,
+            toAddress: system.to,
+            assetType: "SOL",
+            mint: null,
+            amountRaw: String(system.lamports),
+            amountNormalized: system.lamports / LAMPORTS_PER_SOL,
+            transferType: "TRANSFER"
+          });
+        }
+      }
+
+      const spl = parseSplTransfer(ix);
+      if (spl) {
+        const mint = spl.mint ?? resolveMintFromAccounts(ix, accountKeyByIndex, tokenBalances) ?? null;
+        const amount = resolveSplAmount(ix, tokenBalances, spl.amount);
+        const dedupeKey = `spl:${spl.from}:${spl.to}:${mint}:${spl.amount}`;
+        if (!seenTransfers.has(dedupeKey)) {
+          seenTransfers.add(dedupeKey);
+          transfers.push({
+            chain: "solana",
+            transactionId: signature,
+            timestamp,
+            fromAddress: spl.from,
+            toAddress: spl.to,
+            assetType: mint === WRAPPED_SOL_MINT ? "SOL" : "SPL",
+            mint,
+            amountRaw: spl.amount,
+            amountNormalized: amount,
+            transferType: spl.type
+          });
+        }
+      }
+
+      const programParser = parserFor(ix.programId);
+      const actionType = programParser?.parse(ix)?.actionType ?? ix.parsed?.type ?? "UNKNOWN";
+      if (!isSystemProgram(ix.programId) || actionType !== "UNKNOWN") {
+        interactions.push({
+          chain: "solana",
+          transactionId: signature,
+          walletId: walletAddress,
+          programId: ix.programId,
+          programLabel: programLabelFor(ix.programId),
+          protocolCategory: protocolCategoryFor(ix.programId),
+          actionType,
+          blockTime: timestamp
+        });
+      }
     }
 
-    const spl = parseSplTransfer(ix);
-    if (spl) {
-      const mint = spl.mint ?? resolveMintFromAccounts(ix, tokenMints);
-      transfers.push({
-        chain: "solana",
-        transactionId: signature,
-        timestamp: blockTime,
-        fromAddress: spl.from,
-        toAddress: spl.to,
-        assetType: "SPL",
-        mint,
-        amountRaw: spl.amount,
-        amountNormalized: 0, // requires decimals; enriched by the parser
-        transferType: spl.type
-      });
-    }
+    const transactionClass = detectTransactionClass(allInstructions);
 
-    const programParser = parserFor(ix.programId);
-    const actionType = programParser?.parse(ix)?.actionType ?? ix.parsed?.type ?? "UNKNOWN";
-    if (!isSystemProgram(ix.programId) || actionType !== "UNKNOWN") {
-      interactions.push({
-        chain: "solana",
-        transactionId: signature,
-        walletId: walletAddress,
-        programId: ix.programId,
-        programLabel: programLabelFor(ix.programId),
-        protocolCategory: protocolCategoryFor(ix.programId),
-        actionType,
-        blockTime
-      });
-    }
+    const transaction: NormalizedTransaction = {
+      chain: "solana",
+      signature,
+      slot: raw.slot,
+      blockTime: timestamp,
+      walletId: walletAddress,
+      success: raw.meta?.err == null,
+      fee: raw.meta?.fee ?? 0, // lamports, integer — matches transactions.fee bigint
+      transactionClass,
+      transfers,
+      programInteractions: interactions,
+      rawProvider,
+      parserVersion: PARSER_VERSION,
+      createdAt: new Date().toISOString()
+    };
+
+    return { result: { transaction, transfers, interactions }, failed: false, failureReason: null, unknownProgramCount };
+  } catch (err) {
+    return {
+      result: null,
+      failed: true,
+      failureReason: err instanceof Error ? err.message : String(err),
+      unknownProgramCount: 0
+    };
   }
-
-  const transactionClass = detectTransactionClass(instructions);
-
-  const transaction: NormalizedTransaction = {
-    chain: "solana",
-    signature,
-    slot: raw.slot,
-    blockTime,
-    walletId: walletAddress,
-    success: raw.meta?.err == null,
-    fee: (raw.meta?.fee ?? 0) / LAMPORTS_PER_SOL,
-    transactionClass,
-    transfers,
-    programInteractions: interactions,
-    rawProvider,
-    parserVersion: PARSER_VERSION,
-    createdAt: new Date().toISOString()
-  };
-
-  return { transaction, transfers, interactions };
 }
 
-function resolveMintFromAccounts(ix: ParsedInstruction, tokenMints: Map<number, string>): string | null {
-  // Use the first known account index that has a mint mapping
-  for (let i = 0; i < (ix.accounts?.length ?? 0); i++) {
-    const mint = tokenMints.get(i);
-    if (mint) return mint;
+function buildTokenBalanceMap(raw: ParsedTransactionLike): Map<number, { mint: string; amount: string; decimals: number }> {
+  const map = new Map<number, { mint: string; amount: string; decimals: number }>();
+  const pre = raw.meta?.preTokenBalances ?? [];
+  const post = raw.meta?.postTokenBalances ?? [];
+  // prefer post balances for the "after" state
+  for (const bal of post) {
+    map.set(bal.accountIndex, { mint: bal.mint, amount: bal.uiTokenAmount.amount, decimals: bal.uiTokenAmount.decimals ?? 0 });
   }
+  for (const bal of pre) {
+    if (!map.has(bal.accountIndex)) {
+      map.set(bal.accountIndex, { mint: bal.mint, amount: bal.uiTokenAmount.amount, decimals: bal.uiTokenAmount.decimals ?? 0 });
+    }
+  }
+  return map;
+}
+
+function resolveMintFromAccounts(
+  ix: ParsedInstruction,
+  accountKeyByIndex: Map<number, string>,
+  tokenBalances: Map<number, { mint: string; amount: string; decimals: number }>
+): string | null {
+  // token balance mints are the most reliable
+  for (let i = 0; i < (ix.accounts?.length ?? 0); i++) {
+    const bal = tokenBalances.get(i);
+    if (bal) return bal.mint;
+  }
+  // fall back to token program account heuristic: account[0] often the token account;
+  // without an index->mint map we cannot infer reliably, so return null
   return null;
 }
 
+function resolveSplAmount(
+  ix: ParsedInstruction,
+  tokenBalances: Map<number, { mint: string; amount: string; decimals: number }>,
+  fallback: string
+): number {
+  // use the first token balance diff for this instruction's accounts if available
+  for (let i = 0; i < (ix.accounts?.length ?? 0); i++) {
+    const bal = tokenBalances.get(i);
+    if (bal && bal.decimals > 0) {
+      return Number(bal.amount) / 10 ** bal.decimals;
+    }
+  }
+  // fallback: parse raw amount as base units of 9 decimals (approximation)
+  const n = Number(fallback);
+  return Number.isFinite(n) ? n / 1e9 : 0;
+}
+
 function isSystemProgram(id: string): boolean {
-  return id === "11111111111111111111111111111111";
+  return id === SYSTEM_PROGRAM_ID;
+}
+
+function isTokenProgram(id: string): boolean {
+  return id === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" || id === "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 }
 
 export type { NormalizedProgramInteraction, NormalizedTransaction, NormalizedTransfer, ProtocolCategory, TransactionClass };

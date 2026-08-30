@@ -20,6 +20,13 @@ function tx(instructions: Array<Record<string, unknown>>): ParsedTransactionLike
   } as unknown as ParsedTransactionLike;
 }
 
+/** Unwraps a ParseOutcome, failing the test if parsing failed. */
+function unwrap(outcome: ReturnType<typeof normalizeTransaction>) {
+  assert.equal(outcome.failed, false, outcome.failureReason ?? "parse failed");
+  assert.ok(outcome.result, "expected a result");
+  return outcome.result;
+}
+
 test("normalizes a simple SOL transfer", () => {
   const result = normalizeTransaction({
     signature: "sig1",
@@ -34,9 +41,11 @@ test("normalizes a simple SOL transfer", () => {
     rawProvider: "test"
   });
 
-  assert.equal(result.transaction.transactionClass, "UNKNOWN");
-  assert.equal(result.transfers.length, 1);
-  const t = result.transfers[0]!;
+  const r = unwrap(result);
+
+  assert.equal(r.transaction.transactionClass, "UNKNOWN");
+  assert.equal(r.transfers.length, 1);
+  const t = r.transfers[0]!;
   assert.equal(t.fromAddress, "walletA");
   assert.equal(t.toAddress, "walletB");
   assert.equal(t.assetType, "SOL");
@@ -61,8 +70,10 @@ test("normalizes an SPL token transfer", () => {
     rawProvider: "test"
   });
 
-  assert.equal(result.transfers.length, 1);
-  const t = result.transfers[0]!;
+  const r = unwrap(result);
+
+  assert.equal(r.transfers.length, 1);
+  const t = r.transfers[0]!;
   assert.equal(t.assetType, "SPL");
   assert.equal(t.transferType, "TRANSFER");
   assert.equal(t.amountRaw, "2500");
@@ -84,7 +95,8 @@ test("treats failed transactions as not successful", () => {
     walletAddress: "walletA",
     rawProvider: "test"
   });
-  assert.equal(result.transaction.success, false);
+  const r = unwrap(result);
+  assert.equal(r.transaction.success, false);
 });
 
 test("records program interactions with category", () => {
@@ -97,8 +109,10 @@ test("records program interactions with category", () => {
     rawProvider: "test"
   });
 
-  assert.equal(result.interactions.length, 1);
-  const ix = result.interactions[0]!;
+  const r = unwrap(result);
+
+  assert.equal(r.interactions.length, 1);
+  const ix = r.interactions[0]!;
   assert.equal(ix.programLabel, "Jupiter");
   assert.equal(ix.protocolCategory, "DEX");
   assert.equal(ix.actionType, "SWAP");
