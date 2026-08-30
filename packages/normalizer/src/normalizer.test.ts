@@ -117,3 +117,62 @@ test("records program interactions with category", () => {
   assert.equal(ix.protocolCategory, "DEX");
   assert.equal(ix.actionType, "SWAP");
 });
+
+test("classifies fully parsed protocol transactions", () => {
+  const outcome = normalizeTransaction({
+    signature: "sig5",
+    raw: tx([
+      { programId: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", program: "jupiter", parsed: { type: "swap" } }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  assert.equal(outcome.parseClass, "FULLY_PARSED");
+  assert.equal(outcome.semanticCoverage, 1);
+});
+
+test("classifies generic transfer-only transactions", () => {
+  const outcome = normalizeTransaction({
+    signature: "sig6",
+    raw: tx([
+      { programId: SYSTEM_PROGRAM, program: "system", parsed: { type: "transfer", info: { from: "a", to: "b", lamports: 1000 } } }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  assert.equal(outcome.parseClass, "GENERIC_PARSED");
+  assert.equal(outcome.semanticCoverage, 1);
+});
+
+test("classifies partially parsed transactions (known program, unknown action)", () => {
+  const outcome = normalizeTransaction({
+    signature: "sig7",
+    raw: tx([
+      { programId: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", program: "jupiter", parsed: { type: "someUnknownAction" } }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  assert.equal(outcome.parseClass, "PARTIALLY_PARSED");
+  assert.ok(outcome.semanticCoverage < 1);
+});
+
+test("recognizes new protocol parsers (Metaplex, Orca, Marinade)", () => {
+  const cases: Array<[string, string, string]> = [
+    ["metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", "createMetadataAccountV3", "CREATE_METADATA"],
+    ["9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", "swap", "SWAP"],
+    ["MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD", "deposit", "DEPOSIT"]
+  ];
+  for (const [programId, action, expected] of cases) {
+    const outcome = normalizeTransaction({
+      signature: `sig-${action}`,
+      raw: tx([{ programId, program: "protocol", parsed: { type: action } }]),
+      walletAddress: "walletA",
+      rawProvider: "test"
+    });
+    const r = unwrap(outcome);
+    assert.equal(outcome.parseClass, "FULLY_PARSED", `${programId} should be fully parsed`);
+    assert.equal(r.interactions[0]!.actionType, expected);
+    assert.equal(r.interactions[0]!.protocolCategory === "UNKNOWN", false);
+  }
+});

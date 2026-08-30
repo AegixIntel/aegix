@@ -49,6 +49,16 @@ export interface ParseOutcome {
   failed: boolean;
   failureReason: string | null;
   unknownProgramCount: number;
+  /**
+   * Semantic classification of the parse, see milestone D2 Phase 19:
+   * - FULLY_PARSED: at least one known protocol instruction with a mapped action
+   * - PARTIALLY_PARSED: known programs present but no action mapped
+   * - GENERIC_PARSED: only transfer-level parsing (system/SPL), no protocol semantics
+   * - FAILED: normalizeTransaction threw
+   */
+  parseClass: "FULLY_PARSED" | "PARTIALLY_PARSED" | "GENERIC_PARSED" | "FAILED";
+  /** 0-1, see milestone D2 Phase 20: how much of observed activity was understood. */
+  semanticCoverage: number;
 }
 
 export interface ProgramParser {

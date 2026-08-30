@@ -133,6 +133,31 @@ export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
 
     const transactionClass = detectTransactionClass(allInstructions);
 
+    // Semantic classification, see milestone D2 Phase 19-20.
+    // Count instructions whose semantics we actually understand: system/SPL
+    // transfers, token program actions, and known protocol actions.
+    let understood = 0;
+    let knownProtocolActions = 0;
+    let knownProgramsPresent = false;
+    for (const ix of allInstructions) {
+      const parser = parserFor(ix.programId);
+      if (parser) {
+        knownProgramsPresent = true;
+        const action = parser.parse(ix)?.actionType;
+        if (action) {
+          understood += 1;
+          knownProtocolActions += 1;
+        }
+        continue;
+      }
+      if (isSystemProgram(ix.programId) || isTokenProgram(ix.programId) || ix.parsed?.type) {
+        understood += 1;
+      }
+    }
+    const parseClass: ParseOutcome["parseClass"] =
+      knownProtocolActions > 0 ? "FULLY_PARSED" : knownProgramsPresent ? "PARTIALLY_PARSED" : "GENERIC_PARSED";
+    const semanticCoverage = allInstructions.length > 0 ? understood / allInstructions.length : 0;
+
     const transaction: NormalizedTransaction = {
       chain: "solana",
       signature,
@@ -149,13 +174,22 @@ export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
       createdAt: new Date().toISOString()
     };
 
-    return { result: { transaction, transfers, interactions }, failed: false, failureReason: null, unknownProgramCount };
+    return {
+      result: { transaction, transfers, interactions },
+      failed: false,
+      failureReason: null,
+      unknownProgramCount,
+      parseClass,
+      semanticCoverage
+    };
   } catch (err) {
     return {
       result: null,
       failed: true,
       failureReason: err instanceof Error ? err.message : String(err),
-      unknownProgramCount: 0
+      unknownProgramCount: 0,
+      parseClass: "FAILED",
+      semanticCoverage: 0
     };
   }
 }

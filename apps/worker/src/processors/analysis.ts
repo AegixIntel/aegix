@@ -40,6 +40,11 @@ interface FetchStats {
   unknownProgramCount: number;
   historyStart: string | null;
   historyEnd: string | null;
+  fullyParsed: number;
+  partiallyParsed: number;
+  genericParsed: number;
+  /** average semantic coverage across parsed transactions, 0-1 */
+  semanticCoverage: number;
 }
 
 /**
@@ -77,7 +82,11 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       rpcFailures: 0,
       unknownProgramCount: 0,
       historyStart: null,
-      historyEnd: null
+      historyEnd: null,
+      fullyParsed: 0,
+      partiallyParsed: 0,
+      genericParsed: 0,
+      semanticCoverage: 0
     };
 
     // 1. Fetch signatures with pagination (bounded pages) and rate limiting
@@ -123,6 +132,10 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         return;
       }
       stats.transactionsParsed += 1;
+      stats.semanticCoverage += outcome.semanticCoverage;
+      if (outcome.parseClass === "FULLY_PARSED") stats.fullyParsed += 1;
+      else if (outcome.parseClass === "PARTIALLY_PARSED") stats.partiallyParsed += 1;
+      else stats.genericParsed += 1;
       transactions.push(outcome.result.transaction);
     });
 
@@ -347,6 +360,11 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       historyEnd,
       parserSuccessRate:
         stats.transactionsReceived > 0 ? Math.round((stats.transactionsParsed / stats.transactionsReceived) * 1000) / 10 : 0,
+      fullyParsed: stats.fullyParsed,
+      partiallyParsed: stats.partiallyParsed,
+      genericParsed: stats.genericParsed,
+      semanticCoverage:
+        stats.transactionsParsed > 0 ? Math.round((stats.semanticCoverage / stats.transactionsParsed) * 1000) / 10 : 0,
       signaturesFetched: stats.signaturesFetched,
       rpc: poolStats
         ? {
