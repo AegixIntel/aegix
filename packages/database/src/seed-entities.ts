@@ -141,6 +141,23 @@ const SEED_ENTITIES: SeedEntry[] = [
     ]
   },
   {
+    name: "Magic Eden",
+    entityType: "NFT_MARKETPLACE",
+    description: "Magic Eden v2 — Solana NFT marketplace.",
+    status: "VERIFIED",
+    confidence: 0.98,
+    sourceType: "PROTOCOL_DOCUMENTATION",
+    addresses: [
+      {
+        address: "M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K",
+        label: "Magic Eden v2",
+        confidence: 0.98,
+        status: "VERIFIED",
+        evidenceSource: "https://magiceden.io"
+      }
+    ]
+  },
+  {
     name: "Metaplex",
     entityType: "NFT_MARKETPLACE",
     description: "Metaplex Token Metadata — the standard for NFT metadata on Solana.",

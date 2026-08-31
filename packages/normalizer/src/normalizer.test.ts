@@ -176,3 +176,35 @@ test("recognizes new protocol parsers (Metaplex, Orca, Marinade)", () => {
     assert.equal(r.interactions[0]!.protocolCategory === "UNKNOWN", false);
   }
 });
+
+test("recognized programs with opaque instructions fall back to generic action (D3-B)", () => {
+  // Real Metaplex instructions come as opaque base58 `data` without a parsed
+  // type — the program is recognized, so the interaction must still be
+  // semantically classified instead of UNKNOWN.
+  const outcome = normalizeTransaction({
+    signature: "sig-metaplex-opaque",
+    raw: tx([
+      { programId: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", program: "metaplex", data: "3zRedDvfuC4YZdreTwV8KBm16Vk6tAWDk5XFLywbBjgEDjfxUUBZFTEr9HFNvnSrEieXVdGZ2ZtYM8NPukefk9RSog9wGsNmDzWF" }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(outcome.parseClass, "FULLY_PARSED");
+  assert.equal(r.interactions[0]!.actionType, "METADATA_INTERACTION");
+  assert.equal(r.interactions[0]!.protocolCategory, "NFT");
+});
+
+test("marketplace programs without parsed actions classify as MARKETPLACE_INTERACTION", () => {
+  const outcome = normalizeTransaction({
+    signature: "sig-me",
+    raw: tx([
+      { programId: "M2mx93ekt1fmXSVkTrUL9xVfhkmETpw96ZJ2h3fFw1g", program: "magic-eden", data: "abc" }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(outcome.parseClass, "FULLY_PARSED");
+  assert.equal(r.interactions[0]!.actionType, "MARKETPLACE_INTERACTION");
+});

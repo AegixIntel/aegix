@@ -7,6 +7,8 @@ export interface ProtocolParserDefinition {
   category: ProtocolCategory;
   /** Known action keywords to map parsed types / program names to actions. */
   actions: Record<string, string>;
+  /** Action used when the program is recognized but the instruction is not. */
+  fallbackAction?: string;
 }
 
 const JUPITER_V6 = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
@@ -23,7 +25,7 @@ const ORCA_WHIRLPOOL = "whirLbMiicVdio4qvUfM5KAg6Ct8VdjYdZyBf5byvVM";
 const METEORA_DLMM = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
 const MARINADE = "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD";
 const WORMHOLE = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth";
-const MAGIC_EDEN_V2 = "M2mx93ekt1fmXSVkTrUL9xVfhkmETpw96ZJ2h3fFw1g";
+const MAGIC_EDEN_V2 = "M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K";
 
 export const PROTOCOL_PARSERS: ProtocolParserDefinition[] = [
   {
@@ -78,6 +80,7 @@ export const PROTOCOL_PARSERS: ProtocolParserDefinition[] = [
     programId: METAPLEX_TM,
     label: "Metaplex",
     category: "NFT",
+    fallbackAction: "METADATA_INTERACTION",
     actions: {
       createMetadataAccount: "CREATE_METADATA",
       createMetadataAccountV3: "CREATE_METADATA",
@@ -121,6 +124,7 @@ export const PROTOCOL_PARSERS: ProtocolParserDefinition[] = [
     programId: MAGIC_EDEN_V2,
     label: "Magic Eden v2",
     category: "NFT",
+    fallbackAction: "MARKETPLACE_INTERACTION",
     actions: { buy: "BUY", sell: "SELL", list: "LIST", delist: "DELIST", executeSale: "SELL" }
   }
 ];
@@ -137,8 +141,13 @@ export function parserFor(programId: string): ProgramParser | null {
     parse(ix: ParsedInstruction) {
       const type = ix.parsed?.type;
       const action = type ? def.actions[type] : undefined;
-      if (!action) return null;
-      return { actionType: action };
+      // Recognized program, unknown instruction: fall back to a generic
+      // protocol action so the interaction is still semantically classified
+      // (D3-B §18-21). Programs without an explicit fallback return null so
+      // unrecognized instructions are honestly counted as PARTIALLY_PARSED.
+      if (action) return { actionType: action };
+      if (def.fallbackAction) return { actionType: def.fallbackAction };
+      return null;
     }
   };
 }

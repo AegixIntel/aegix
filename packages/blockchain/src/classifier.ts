@@ -73,7 +73,7 @@ const KNOWN_PROTOCOLS: Record<string, { protocol: string; status: string }> = {
   MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD: { protocol: "Marinade", status: "VERIFIED" },
   worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth: { protocol: "Wormhole", status: "VERIFIED" },
   srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX: { protocol: "OpenBook", status: "PROBABLE" },
-  M2mx93ekt1fmXSVkTrUL9xVfhkmETpw96ZJ2h3fFw1g: { protocol: "Magic Eden v2", status: "PROBABLE" },
+  M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K: { protocol: "Magic Eden v2", status: "VERIFIED" },
   TSWAPaqyCsxBPKKhB9A9d3SxJS1QyJzUHVN5VKHTWA: { protocol: "Tensor", status: "PROBABLE" }
 };
 
