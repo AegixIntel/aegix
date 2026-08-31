@@ -15,7 +15,7 @@ import type { AegixLogger } from "@aegix/logging";
 import type { ProcessorContext } from "./types.js";
 import { buildExposureDiff, type DiffInputs } from "@aegix/diff";
 import { applyRules, evaluateThreats } from "./threat.js";
-import { createEmailProvider, type EmailProvider } from "./email.js";
+import { createEmailProvider, PermanentEmailError, type EmailProvider } from "./email.js";
 
 /**
  * Monitor pipeline, see docs/milestone-d4.md (D4-D §34, D4-E §47, D4-I §75).
@@ -311,9 +311,13 @@ export async function deliverNotification(ctx: ProcessorContext, notificationId:
     logger.info("notification delivered", { delivered });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (Number(notification.attempt_count) >= config.MONITOR_CHECK_RETRY_LIMIT - 1) {
-      await notificationRepo.markFailed(notificationId, `retry exhausted: ${message}`);
-      logger.error("notification permanently failed", { notificationId, error: message });
+    // D5-J §50: permanent failures (invalid recipient, auth rejected) never
+    // retry; transient failures retry with backoff. The PENDING status guard
+    // keeps retries idempotent (no duplicate sends, D5-J §51).
+    const permanent = err instanceof PermanentEmailError;
+    if (permanent || Number(notification.attempt_count) >= config.MONITOR_CHECK_RETRY_LIMIT - 1) {
+      await notificationRepo.markFailed(notificationId, permanent ? `permanent: ${message}` : `retry exhausted: ${message}`);
+      logger.error("notification permanently failed", { notificationId, error: message.slice(0, 200) });
       return;
     }
     await notificationRepo.markFailed(notificationId, message);

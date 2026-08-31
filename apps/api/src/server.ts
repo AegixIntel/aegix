@@ -14,6 +14,7 @@ import {
 import { createLogger, walletRef } from "@aegix/logging";
 import {
   createAnalysisJobRepo,
+  createCorrelationRepo,
   createDb,
   createExposureDiffRepo,
   createIntelligenceRepo,
@@ -33,6 +34,7 @@ import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
+import { cachedComparison, canonicalComparePair, compareCacheKey, compareLockKey, loadFreshAnalysis, runComparison } from "./compare.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -472,7 +474,172 @@ export async function buildServer(deps: ApiDeps) {
       intelligenceRepo.pathsForAnalysis(latest.id)
     ]);
 
-    return reply.send(buildXRayResponse({ address, job: latest, score, signals, paths }));
+    // D5-I §45-§47: potential wallet correlations from persisted results
+    // (bounded, no forced discovery). Only qualifying correlations are shown.
+    let correlations: Array<{ wallet: string; score: number; confidence: number; families: string[]; classification: string }> = [];
+    if (config.ENABLE_CORRELATION_ANALYSIS) {
+      try {
+        const correlationRepo = createCorrelationRepo(sql);
+        const rows = await correlationRepo.listForWallet(address, config.MAX_CORRELATION_CANDIDATE_WALLETS);
+        correlations = rows
+          .filter((r) => r.correlation_score >= config.MIN_INFERRED_EDGE_SCORE && Number(r.confidence) >= config.MIN_INFERRED_EDGE_CONFIDENCE)
+          .sort((a, b) => b.correlation_score - a.correlation_score)
+          .slice(0, 10)
+          .map((r) => {
+            const other = r.wallet_a === address ? r.wallet_b : r.wallet_a;
+            return {
+              wallet: other,
+              score: r.correlation_score,
+              confidence: Number(r.confidence),
+              families: ((r.evidence_families ?? []) as Array<{ family: string }>).map((f) => f.family),
+              classification: r.classification
+            };
+          });
+      } catch {
+        correlations = [];
+      }
+    }
+
+    return reply.send({ ...buildXRayResponse({ address, job: latest, score, signals, paths }), correlations });
+  });
+
+  // ---- Wallet comparison (D5-I §19-§26, §45-§48) ----
+
+  app.post<{ Body: { walletA: string; walletB: string } }>(
+    "/v1/compare",
+    {
+      config: {
+        rateLimit: {
+          max: config.COMPARE_RATE_LIMIT_PER_MINUTE,
+          timeWindow: "1 minute"
+        }
+      },
+      schema: {
+        body: {
+          type: "object",
+          required: ["walletA", "walletB"],
+          properties: {
+            walletA: { type: "string", minLength: 32, maxLength: 44 },
+            walletB: { type: "string", minLength: 32, maxLength: 44 }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+      const { walletA, walletB } = req.body;
+
+      // Input validation (D5-L §95): format, duplicate, unsupported type.
+      if (!isValidSolanaAddress(walletA) || !isValidSolanaAddress(walletB)) {
+        return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId });
+      }
+      if (walletA === walletB) {
+        return reply.code(400).send({ code: "DUPLICATE_WALLET", message: "Cannot compare a wallet with itself", requestId });
+      }
+
+      // Kill switches (D5-L §94): comparison depends on D5 intelligence.
+      if (!config.ENABLE_CORRELATION_ANALYSIS || !config.ENABLE_MULTI_HOP_GRAPH) {
+        return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Wallet comparison is currently disabled", requestId });
+      }
+
+      // Account classification before any work (D5-I §21): programs, mints,
+      // sysvars and token accounts are not user wallets.
+      for (const address of [walletA, walletB]) {
+        let classification: AccountClassification;
+        try {
+          classification = await classifyAddress(provider, address);
+        } catch {
+          return reply.code(503).send({ code: "RPC_UNAVAILABLE", message: "Account classification unavailable right now", requestId });
+        }
+        if (!isAnalysisEligible(classification.accountType)) {
+          return reply.code(422).send({
+            code: "ACCOUNT_NOT_COMPARABLE",
+            accountType: classification.accountType,
+            protocol: classification.protocol,
+            address,
+            message: `Address ${address.slice(0, 6)}… is a ${classification.accountType.toLowerCase()} and is not compared as a personal wallet`,
+            requestId
+          });
+        }
+      }
+
+      const pairId = canonicalComparePair(walletA, walletB);
+
+      // 1. Canonical cache: (A,B) == (B,A) — symmetric reuse (D5-I §25).
+      const cacheHit = await cachedComparison({ sql, config }, pairId);
+      if (cacheHit) {
+        logger.info("comparison cache hit", { requestId, pairId, score: cacheHit.correlation.correlationScore });
+        return reply.send({ ...cacheHit, cached: true });
+      }
+
+      // 2. Distributed dedup lock: concurrent identical comparisons share one
+      // expensive run (§26).
+      const lockAcquired = await cache.acquireLock(compareLockKey(pairId), 120);
+      if (!lockAcquired) {
+        const existing = await cachedComparison({ sql, config }, pairId);
+        if (existing) return reply.send({ ...existing, cached: true });
+        return reply.code(409).send({ code: "COMPARISON_IN_PROGRESS", message: "This comparison is already being computed", requestId });
+      }
+
+      try {
+        // 3. Admission + quota: comparison is more expensive than retrieval
+        // (D5-L §90-§93).
+        const user = req.user;
+        if (user && !user.isAnonymous) await auth.ensureProfile(user, sql);
+        const admission = await checkAdmission({ queues, sql, config, userId: user && !user.isAnonymous ? user.id : null, ip: req.ip });
+        if (!admission.admitted) return reply.code(503).send(admission.body);
+        const quota = await checkQuota(sql, config, quotaContext(req), {
+          usageType: "comparison",
+          limitOverride: user && !user.isAnonymous ? config.COMPARE_DAILY_USER_LIMIT : config.COMPARE_DAILY_ANON_LIMIT
+        });
+        if (!quota.allowed) {
+          return reply.code(429).send({ code: "COMPARISON_QUOTA_EXCEEDED", resetAt: quota.resetAt, message: `Daily comparison limit reached (${quota.limit}), resets at ${quota.resetAt}`, requestId });
+        }
+
+        // 4. Reuse-first: both wallets must already have fresh READY analyses.
+        const freshA = await loadFreshAnalysis({ sql, config }, walletA);
+        const freshB = await loadFreshAnalysis({ sql, config }, walletB);
+        if (!freshA || !freshB) {
+          const missing = !freshA ? walletA : walletB;
+          return reply.code(422).send({
+            code: "ANALYSIS_REQUIRED",
+            message: `No fresh analysis available for ${missing.slice(0, 6)}… — analyze it first`,
+            requestId
+          });
+        }
+
+        const result = await runComparison({ sql, config }, { walletA, walletB });
+        await recordQuotaUsage(sql, quotaContext(req), null, "comparison").catch(() => {});
+        await cache.setJson(compareCacheKey(pairId), result, config.CORRELATION_CACHE_TTL_SECONDS);
+
+        logger.info("comparison complete", {
+          requestId,
+          pairId,
+          correlationScore: result.correlation.correlationScore,
+          confidence: result.correlation.confidence,
+          analysisA: freshA.job.id,
+          analysisB: freshB.job.id,
+          paths: result.relationshipPaths.length,
+          clusters: result.clusters.length
+        });
+
+        return reply.send({ ...result, cached: false });
+      } finally {
+        await cache.releaseLock(compareLockKey(pairId));
+      }
+    }
+  );
+
+  app.get<{ Params: { pairId: string } }>("/v1/compare/:pairId", async (req, reply) => {
+    const { pairId } = req.params;
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}\|[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(pairId)) {
+      return reply.code(400).send({ code: "INVALID_PAIR", message: "Invalid comparison pair id", requestId: randomUUID() });
+    }
+    const hit = await cachedComparison({ sql, config }, pairId);
+    if (!hit) {
+      return reply.code(404).send({ code: "COMPARISON_NOT_FOUND", message: "Comparison not found — run a compare first", requestId: randomUUID() });
+    }
+    return reply.send({ ...hit, cached: true });
   });
 
   // ---- Saved analyses (authenticated), see D3-E §31-§33 and D3-G §38 ----

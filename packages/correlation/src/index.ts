@@ -37,6 +37,18 @@ export { evaluateCounterpartyOverlap, evaluateEntityOverlap, evaluateProtocolSim
 export { evaluateTemporalCorrelation, TEMPORAL_ENGINE_VERSION, type TemporalInput } from "./dimensions/temporal.js";
 export { FUNDING_FAMILY_ENGINE_VERSION, TRANSFER_FAMILY_ENGINE_VERSION } from "./dimensions/funding.js";
 export { BEHAVIORAL_SIMILARITY_ENGINE_VERSION } from "./dimensions/behavior.js";
+export {
+  INFERRED_EDGE_ENGINE_VERSION,
+  DEFAULT_INFERRED_EDGE_LIMITS,
+  correlationToInferredEdge,
+  correlationResultsToInferredEdges,
+  type InferredEdgeLimits,
+  type InferredEdgeOutcome,
+  type InferredEdgeResult,
+  type InferredEdgeRejection,
+  type CorrelationRowLike,
+  type InferredEdgeCandidate
+} from "./inferred-edges.js";
 
 export interface CorrelationInput {
   walletA: string;
@@ -146,15 +158,28 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
 
   // Weighted combination.
   const weights = new Map(CORRELATION_FAMILY_WEIGHTS.map((w) => [w.family, w]));
+  const admittedFamilies = families.filter((f) => {
+    const config = weights.get(f.family);
+    return config && f.strength >= config.minimumStrength;
+  });
   let weightedSum = 0;
   let weightTotal = 0;
-  for (const family of families) {
-    const config = weights.get(family.family);
-    if (!config || family.strength < config.minimumStrength) continue;
+  for (const family of admittedFamilies) {
+    const config = weights.get(family.family)!;
     weightedSum += config.weight * family.strength;
     weightTotal += config.weight;
   }
-  const rawScore = weightTotal > 0 ? weightedSum / weightTotal : 0;
+  let rawScore = weightTotal > 0 ? weightedSum / weightTotal : 0;
+
+  // Single-family cap (D5-K §69, §136): one non-direct evidence family alone
+  // must never produce strong correlation. Shared behavior, shared entity,
+  // shared counterparty or shared protocol are all common public patterns —
+  // only direct flow (funding/transfers) may stand alone as strong evidence.
+  const onlyFamily = admittedFamilies.length === 1 ? admittedFamilies[0]!.family : null;
+  const isDirectFamily = onlyFamily === "FUNDING" || onlyFamily === "TRANSFER_RELATIONSHIP";
+  if (onlyFamily && !isDirectFamily && rawScore > 0.45) {
+    rawScore = 0.45;
+  }
   const correlationScore = Math.round(rawScore * 100);
 
   // Confidence: base on family count and strengths, then sample/coverage caps.
@@ -173,6 +198,7 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
   if (coverage < 0.4) limitations.push(`Semantic coverage is low (${Math.round(coverage * 100)}%) — behavioral and protocol evidence is limited`);
   for (const family of families) limitations.push(...family.limitations);
   if (familyCount === 0) limitations.push("No overlapping evidence families observed between these wallets");
+  if (onlyFamily && !isDirectFamily) limitations.push(`Only one evidence family (${onlyFamily}) is present — single-family correlation is capped because it could reflect common public behavior`);
   if (!input.disabledFamilies) limitations.push("Correlation describes observable evidence; it does not establish common ownership or real-world identity");
 
   return {

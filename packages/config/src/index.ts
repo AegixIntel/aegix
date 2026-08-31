@@ -77,6 +77,16 @@ const envSchema = z.object({
   ENABLE_MONITORING: z.preprocess(boolEnv, z.boolean()).default(true),
   ENABLE_MONITOR_SCHEDULER: z.preprocess(boolEnv, z.boolean()).default(true),
   ENABLE_EMAIL_NOTIFICATIONS: z.preprocess(boolEnv, z.boolean()).default(false),
+  // D5-J §49: transactional email provider (server-side secrets only).
+  EMAIL_ENABLED: z.preprocess(boolEnv, z.boolean()).default(false),
+  EMAIL_PROVIDER: z.enum(["console", "smtp"]).default("console"),
+  EMAIL_FROM: z.string().default("AEGIX <no-reply@aegix.local>"),
+  EMAIL_SMTP_HOST: z.string().default(""),
+  EMAIL_SMTP_PORT: z.coerce.number().int().positive().default(587),
+  EMAIL_SMTP_SECURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  EMAIL_SMTP_USER: z.string().default(""),
+  EMAIL_SMTP_PASS: z.string().default(""),
+  EMAIL_SMTP_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
 
   MONITOR_ALLOWED_SCHEDULES: z.string().default("DAILY,EVERY_12_HOURS,EVERY_6_HOURS"),
   MONITOR_DEFAULT_SCHEDULE: z.string().default("DAILY"),
@@ -112,6 +122,16 @@ const envSchema = z.object({
   GRAPH_MAX_TIME_MS: z.coerce.number().int().positive().default(5000),
   /** D5-H §60: max members per relationship cluster. */
   CLUSTER_MAX_SIZE: z.coerce.number().int().positive().default(15),
+  /** D5-I §6: inferred-edge admission thresholds (correlation → graph). */
+  MIN_INFERRED_EDGE_SCORE: z.coerce.number().int().nonnegative().default(40),
+  MIN_INFERRED_EDGE_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.5),
+  MIN_INFERRED_EDGE_EVIDENCE_FAMILIES: z.coerce.number().int().nonnegative().default(2),
+  /** D5-I §7: strong direct exception score for single-family admission. */
+  INFERRED_EDGE_STRONG_DIRECT_SCORE: z.coerce.number().int().nonnegative().default(70),
+  /** D5-L §92-§93: comparison-specific limits (admission + rate limit). */
+  COMPARE_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(6),
+  COMPARE_DAILY_ANON_LIMIT: z.coerce.number().int().positive().default(10),
+  COMPARE_DAILY_USER_LIMIT: z.coerce.number().int().positive().default(50),
   /** Hub penalty (D5-G §49). */
   HUB_DEGREE_THRESHOLD: z.coerce.number().int().positive().default(50),
   HUB_PENALTY_FACTOR: z.coerce.number().min(0).max(1).default(0.5),

@@ -12,8 +12,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ a
           On-chain privacy intelligence for Solana. Know what the blockchain knows.
         </p>
         <p className="mt-2 text-sm text-slate-500">
-          Wallet X-Ray · Attack My Wallet · Privacy Threat Monitor
+          Wallet X-Ray · Compare Wallets · Attack My Wallet · Privacy Threat Monitor
         </p>
+        <a href="/compare" className="mt-4 inline-block rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-accent">
+          Compare two wallets
+        </a>
       </div>
       <div className="mt-12 w-full">
         <AnalyzeForm initialAddress={address ?? ""} />

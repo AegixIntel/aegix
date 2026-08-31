@@ -318,6 +318,33 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
         </section>
       )}
 
+      {/* Potential wallet correlations (D5-I §45-§48) */}
+      {data.correlations && data.correlations.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-400">Potential Wallet Correlations</h2>
+          <p className="mt-1 text-xs text-slate-500">Qualifying persisted correlations — observable linkability, not ownership.</p>
+          <div className="mt-3 space-y-2">
+            {data.correlations.map((c) => (
+              <div key={c.wallet} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm text-slate-200">{shortAddress(c.wallet)}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {c.classification.replace(/_/g, " ").toLowerCase()} · strength {c.score}/100 · confidence {Math.round(c.confidence * 100)}%
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-600">{c.families.join(" + ")}</p>
+                </div>
+                <a
+                  href={`/compare?a=${encodeURIComponent(wallet)}&b=${encodeURIComponent(c.wallet)}`}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                >
+                  Compare
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {data.topSignals.length === 0 && (
         <p className="mt-10 text-center text-sm text-slate-500">No significant exposure signals found for this wallet.</p>
       )}

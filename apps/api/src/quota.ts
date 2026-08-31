@@ -46,17 +46,18 @@ function windowEnd(now: Date): string {
   return d.toISOString();
 }
 
-export async function checkQuota(sql: Sql, config: AppConfig, ctx: QuotaContext): Promise<QuotaResult> {
+export async function checkQuota(sql: Sql, config: AppConfig, ctx: QuotaContext, opts: { usageType?: string; limitOverride?: number } = {}): Promise<QuotaResult> {
   const now = new Date();
   const start = windowStart(now);
   const end = windowEnd(now);
-  const limit = ctx.userId ? config.FREE_USER_DAILY_LIMIT : config.FREE_ANON_DAILY_LIMIT;
+  const usageType = opts.usageType ?? "expensive_analysis";
+  const limit = opts.limitOverride ?? (ctx.userId ? config.FREE_USER_DAILY_LIMIT : config.FREE_ANON_DAILY_LIMIT);
   const key = ctx.userId ?? ctx.anonymousKey ?? `ip:${ctx.ip}`;
 
   const [row] = await sql<Array<{ count: string }>>`
     select count(*)::text as count
     from usage_records
-    where usage_type = 'expensive_analysis'
+    where usage_type = ${usageType}
       and created_at >= ${start}::timestamptz
       and created_at < ${end}::timestamptz
       and (user_id = ${ctx.userId} or anonymous_key = ${key})
@@ -75,12 +76,13 @@ export async function checkQuota(sql: Sql, config: AppConfig, ctx: QuotaContext)
 export async function recordQuotaUsage(
   sql: Sql,
   ctx: QuotaContext,
-  analysisId: string
+  analysisId: string | null,
+  usageType: "expensive_analysis" | "comparison" = "expensive_analysis"
 ): Promise<void> {
   const key = ctx.userId ?? ctx.anonymousKey ?? `ip:${ctx.ip}`;
   await sql`
     insert into usage_records (user_id, anonymous_key, analysis_id, usage_type, wallet_id)
-    values (${ctx.userId}, ${ctx.userId ? null : key}, ${analysisId}, 'expensive_analysis', null)
+    values (${ctx.userId}, ${ctx.userId ? null : key}, ${analysisId}, ${usageType}, null)
   `;
 }
 

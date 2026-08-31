@@ -97,6 +97,13 @@ export interface WalletXRay {
   behavior: Record<string, unknown>;
   attackPaths: XRayPath[];
   engineVersions: Record<string, string | null>;
+  correlations?: Array<{
+    wallet: string;
+    score: number;
+    confidence: number;
+    families: string[];
+    classification: string;
+  }>;
 }
 
 export async function createAnalysis(address: string): Promise<CreateAnalysisResponse> {
@@ -386,4 +393,102 @@ export async function listNotifications(): Promise<{ notifications: Notification
 
 export async function markNotificationRead(id: string): Promise<void> {
   await fetch(`${API_BASE_URL}/v1/me/notifications/${id}/read`, { method: "POST", headers: authHeaders() });
+}
+
+// ---- D5-I: wallet comparison ----
+
+export interface CompareEvidenceFamily {
+  family: string;
+  strength: number;
+  confidence: number;
+  summary: string;
+  evidence: XRayEvidence[];
+  limitations: string[];
+  engineVersion: string;
+}
+
+export interface ComparePath {
+  id: string;
+  pathType: string;
+  nodes: Array<{ id: string; type: string; label: string }>;
+  edges: Array<{
+    source: string;
+    target: string;
+    type: string;
+    strength: number;
+    confidence: number;
+    observationClass: string;
+    evidence: string[];
+    sourceEngine: string;
+    engineVersion: string;
+  }>;
+  pathScore: number;
+  confidenceScore: number;
+  summary: string;
+  explanation: string[];
+}
+
+export interface CompareClusterMember {
+  wallet: string;
+  strengthToCore: number;
+  confidence: number;
+  evidenceFamilies: string[];
+  anchor: string;
+  lowData: boolean;
+}
+
+export interface CompareCluster {
+  id: string;
+  targetWallet: string;
+  members: CompareClusterMember[];
+  confidence: number;
+  evidenceFamilies: string[];
+  engineVersion: string;
+  limitations: string[];
+}
+
+export interface CompareResult {
+  walletA: string;
+  walletB: string;
+  pairId: string;
+  correlation: {
+    correlationScore: number;
+    confidence: number;
+    classification: string;
+    evidenceFamilies: CompareEvidenceFamily[];
+    limitations: string[];
+    engineVersion: string;
+    pairId: string;
+  };
+  analyses: {
+    a: { wallet: string; analysisId: string; status: string } | null;
+    b: { wallet: string; analysisId: string; status: string } | null;
+  };
+  relationshipPaths: ComparePath[];
+  clusters: CompareCluster[];
+  dataQuality: { a: Record<string, unknown> | null; b: Record<string, unknown> | null };
+  limitations: string[];
+  engineVersions: Record<string, string>;
+  cached?: boolean;
+}
+
+export async function compareWallets(walletA: string, walletB: string): Promise<CompareResult> {
+  const res = await fetch(`${API_BASE_URL}/v1/compare`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ walletA, walletB })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
+    const err = new Error(body.message ?? `Comparison failed with status ${res.status}`) as Error & { code?: string };
+    err.code = body.code;
+    throw err;
+  }
+  return res.json() as Promise<CompareResult>;
+}
+
+export async function getComparison(pairId: string): Promise<CompareResult> {
+  const res = await fetch(`${API_BASE_URL}/v1/compare/${encodeURIComponent(pairId)}`);
+  if (!res.ok) throw new Error(`Comparison failed with status ${res.status}`);
+  return res.json() as Promise<CompareResult>;
 }

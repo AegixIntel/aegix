@@ -23,10 +23,12 @@
     "@aegix/diff": "workspace:*",
     "@aegix/logging": "workspace:*",
     "@aegix/queue": "workspace:*",
-    "@aegix/types": "workspace:*"
+    "@aegix/types": "workspace:*",
+    "nodemailer": "^6.9.14"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.15",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4"
   }

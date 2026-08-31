@@ -5,6 +5,7 @@ import { classifyAddress, createProviderPoolFromConfig, isAnalysisEligible, Prov
 import {
   createAnalysisJobRepo,
   createBehavioralFeatureRepo,
+  createCorrelationRepo,
   createDb,
   createEntityRegistryRepo,
   createFundingPathRepo,
@@ -28,7 +29,7 @@ import {
 } from "@aegix/intelligence";
 import { scoreWallet, computeDataQuality, type ScoreResult } from "@aegix/scoring";
 import { annotateEntities, buildGraph, findExposurePaths, findRelationshipPaths, buildRelationshipClusters, type ClusterEdge } from "@aegix/graph";
-import { traceFundingProvenance } from "@aegix/correlation";
+import { traceFundingProvenance, correlationResultsToInferredEdges } from "@aegix/correlation";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { walletRef } from "@aegix/logging";
 import type { AnalysisJobData } from "@aegix/queue";
@@ -473,10 +474,56 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         }
         const clusterEdges: ClusterEdge[] = [];
         const relationshipRepo = createRelationshipRepo(sql);
+
+        // D5-I §5-§12: persisted correlation_results become qualified
+        // CORRELATED_WITH inferred edges (bounded to the analyzed wallet).
+        const correlationRepo = createCorrelationRepo(sql);
+        const persistedCorrelations = await correlationRepo.listForWallet(walletAddress, config.MAX_CORRELATION_CANDIDATE_WALLETS);
+        const inferred = correlationResultsToInferredEdges(
+          persistedCorrelations.map((row) => ({
+            walletA: row.wallet_a,
+            walletB: row.wallet_b,
+            correlationScore: row.correlation_score,
+            confidence: Number(row.confidence),
+            evidenceFamilies: ((row.evidence_families ?? []) as Array<{ family: string; strength: number; confidence: number; engineVersion: string }>).map((f) => ({
+              family: f.family,
+              strength: Number(f.strength),
+              confidence: Number(f.confidence),
+              engineVersion: f.engineVersion ?? "unknown"
+            })),
+            limitations: (row.limitations ?? []) as string[],
+            engineVersion: row.engine_version,
+            pairId: [row.wallet_a, row.wallet_b].sort().join("|")
+          })),
+          {
+            minScore: config.MIN_INFERRED_EDGE_SCORE,
+            minConfidence: config.MIN_INFERRED_EDGE_CONFIDENCE,
+            minEvidenceFamilies: config.MIN_INFERRED_EDGE_EVIDENCE_FAMILIES,
+            minSample: 0,
+            minSemanticCoverage: 0,
+            strongDirectScore: config.INFERRED_EDGE_STRONG_DIRECT_SCORE
+          }
+        );
+        logger.info("inferred edges admitted", {
+          stage: "graph",
+          candidateCorrelations: persistedCorrelations.length,
+          inferredEdges: inferred.edges.length,
+          rejected: inferred.rejections.length
+        });
+
         const graphResult = await findRelationshipPaths({
           targetWallet: walletAddress,
           relationships,
-          inferredEdges: [],
+          inferredEdges: inferred.edges.map((e) => ({
+            walletA: e.source,
+            walletB: e.target,
+            type: e.type,
+            strength: e.strength,
+            confidence: e.confidence,
+            evidence: e.evidence,
+            sourceEngine: e.sourceEngine,
+            engineVersion: e.engineVersion
+          })),
           commonality: new Map(
             [...entityNames.keys()].map((addr) => [addr, 0.9]) // known verified entities are common by definition
           ),
@@ -512,16 +559,26 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
           }
         });
 
-        // Feed observed + inferred edges into the cluster engine (D5-H).
+        // Feed observed + inferred edges into the cluster engine (D5-H,
+        // D5-I §13-§16). Inferred correlation edges only enter with their
+        // correlation evidence families; the cluster engine's conservative
+        // admission (multi-evidence / strong direct) still applies, so weak
+        // inferred edges never merge clusters and hub-penalized paths stay out.
         for (const edge of graphResult.edges) {
-          if (edge.observationClass !== "OBSERVED") continue;
+          const direct = edge.type === "FUNDED" || edge.type === "TRANSFERRED" || edge.type === "RECEIVED_FROM";
+          const families = edge.observationClass === "OBSERVED"
+            ? [edge.type === "FUNDED" || edge.type === "RECEIVED_FROM" ? "FUNDING" : "TRANSFER"]
+            : edge.type === "CORRELATED_WITH"
+              ? ((edge.evidence ?? []).filter((e) => /^[A-Z_]+:/.test(e)).map((e) => e.split(":")[0]!).filter((f) => f !== "correlation_result"))
+              : [edge.type];
+          if (families.length === 0) continue;
           clusterEdges.push({
             walletA: edge.source,
             walletB: edge.target,
-            evidenceFamilies: [edge.type === "FUNDED" ? "FUNDING" : "TRANSFER"],
+            evidenceFamilies: [...new Set(families)],
             strength: edge.strength,
             confidence: edge.confidence,
-            direct: edge.type === "FUNDED" || edge.type === "TRANSFERRED"
+            direct
           });
         }
         const clusterResult = buildRelationshipClusters({
