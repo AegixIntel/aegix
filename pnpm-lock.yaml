@@ -151,6 +151,9 @@ importers:
       '@aegix/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@aegix/monitor':
+        specifier: workspace:*
+        version: link:../../packages/monitor
       '@aegix/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
@@ -247,6 +250,25 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  packages/diff:
+    dependencies:
+      '@aegix/database':
+        specifier: workspace:*
+        version: link:../database
+      '@aegix/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
   packages/explanation:
     dependencies:
       '@aegix/types':
@@ -304,6 +326,37 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/monitor:
+    dependencies:
+      '@aegix/config':
+        specifier: workspace:*
+        version: link:../config
+      '@aegix/database':
+        specifier: workspace:*
+        version: link:../database
+      '@aegix/diff':
+        specifier: workspace:*
+        version: link:../diff
+      '@aegix/logging':
+        specifier: workspace:*
+        version: link:../logging
+      '@aegix/queue':
+        specifier: workspace:*
+        version: link:../queue
+      '@aegix/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

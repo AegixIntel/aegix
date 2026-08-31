@@ -51,10 +51,16 @@ export interface RefreshJobData {
   chain: "solana";
 }
 
-export interface MonitoringJobData {
-  walletId: string;
-  chain: "solana";
-}
+/**
+ * Monitoring queue payloads, see docs/milestone-d4.md (D4-B).
+ * - check: scheduler sweep tick, or a per-monitor run (deterministic jobId).
+ * - diff: analysis-complete fan-out to the wallet's monitors (D4-I §75).
+ * - deliver: notification delivery attempt (D4-F §53-§54).
+ */
+export type MonitoringJobData =
+  | { kind: "check"; monitorId?: string; walletId?: string }
+  | { kind: "diff"; analysisId: string; walletId: string }
+  | { kind: "deliver"; notificationId: string };
 
 export type QueueDataMap = {
   "analysis.high": AnalysisJobData;

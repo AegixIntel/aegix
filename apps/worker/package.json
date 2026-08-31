@@ -21,6 +21,7 @@
     "@aegix/graph": "workspace:*",
     "@aegix/intelligence": "workspace:*",
     "@aegix/logging": "workspace:*",
+    "@aegix/monitor": "workspace:*",
     "@aegix/normalizer": "workspace:*",
     "@aegix/queue": "workspace:*",
     "@aegix/scoring": "workspace:*",

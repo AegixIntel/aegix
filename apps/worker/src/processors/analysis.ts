@@ -396,6 +396,22 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       dataQuality
     );
 
+    // D4-B §14 / D4-I §75: fan out to monitors watching this wallet. One
+    // analysis serves every monitor — the monitoring worker runs the
+    // diff/rules pipeline per monitor. Best-effort: a queue failure must
+    // never fail the analysis itself.
+    if (config.ENABLE_MONITORING) {
+      try {
+        await ctx.queues.monitoring.add(
+          "monitor-diff",
+          { kind: "diff", analysisId, walletId: wallet.id },
+          { jobId: `monitor-diff-${analysisId}`, attempts: 1, removeOnComplete: 100 }
+        );
+      } catch (err) {
+        logger.error("monitor fan-out enqueue failed", { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
     const totalMs = Date.now() - startedAt;
     logger.info("analysis complete", {
       stage: "total",

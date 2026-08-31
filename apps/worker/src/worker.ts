@@ -1,6 +1,6 @@
 import { Worker, type Job } from "bullmq";
 import type { AppConfig } from "@aegix/config";
-import type { AnalysisJobData, QueueName } from "@aegix/queue";
+import type { AegixQueues, AnalysisJobData, QueueName } from "@aegix/queue";
 import type { Sql } from "@aegix/database";
 import type { AegixLogger } from "@aegix/logging";
 
@@ -8,6 +8,7 @@ export interface ProcessorContext {
   config: AppConfig;
   sql: Sql;
   logger: AegixLogger;
+  queues: AegixQueues;
 }
 
 export type JobProcessor<T> = (job: Job<T>, ctx: ProcessorContext) => Promise<void>;
@@ -32,4 +33,4 @@ export function createWorker<T>(options: WorkerOptions, processor: JobProcessor<
   );
 }
 
-export type { AnalysisJobData, QueueName };
+export type { AnalysisJobData, AegixQueues, QueueName };

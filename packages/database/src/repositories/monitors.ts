@@ -48,8 +48,12 @@ export interface MonitorRepo {
   listForUser(userId: string): Promise<MonitorViewRow[]>;
   getForUser(userId: string, monitorId: string): Promise<MonitorViewRow | null>;
   getRowForUser(userId: string, monitorId: string): Promise<MonitorRow | null>;
+  /** Worker-side lookup without a user context (scheduler path). */
+  getRowForUserOwned(monitorId: string): Promise<MonitorRow | null>;
   updateSchedule(userId: string, monitorId: string, scheduleType: string, nextCheckAt: string): Promise<boolean>;
   setStatus(userId: string, monitorId: string, status: string): Promise<boolean>;
+  /** Worker-side status update (scheduler path). */
+  setStatusById(monitorId: string, status: string): Promise<void>;
   listDue(now: string, limit: number): Promise<MonitorRow[]>;
   listActiveForWallet(walletId: string): Promise<MonitorRow[]>;
   setLastAnalysis(monitorId: string, analysisId: string): Promise<void>;
@@ -146,6 +150,15 @@ export function createMonitorRepo(sql: Sql): MonitorRepo {
       return row ?? null;
     },
 
+    async getRowForUserOwned(monitorId) {
+      const [row] = await sql<MonitorRow[]>`
+        select * from privacy_monitors
+        where id = ${monitorId}
+        limit 1
+      `;
+      return row ?? null;
+    },
+
     async updateSchedule(userId, monitorId, scheduleType, nextCheckAt) {
       const result = await sql`
         update privacy_monitors
@@ -162,6 +175,14 @@ export function createMonitorRepo(sql: Sql): MonitorRepo {
         where user_id = ${userId} and id = ${monitorId}
       `;
       return result.count > 0;
+    },
+
+    async setStatusById(monitorId, status) {
+      await sql`
+        update privacy_monitors
+        set status = ${status}, updated_at = now()
+        where id = ${monitorId}
+      `;
     },
 
     async listDue(now, limit) {
