@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
@@ -26,6 +26,7 @@ import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
+import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -37,6 +38,16 @@ const CACHE_PREFIX = "analysis-result";
 
 function analysisLockKey(address: string, engineVersion: string): string {
   return `analysis-lock:solana:${address}:${ENGINE_SCOPE}:${engineVersion}`;
+}
+
+/** Builds the quota context for a request, see D3-F. */
+function quotaContext(req: FastifyRequest): QuotaContext {
+  const user = req.user;
+  return {
+    userId: user && !user.isAnonymous ? user.id : null,
+    anonymousKey: (req.headers["x-anonymous-id"] as string | undefined) ?? null,
+    ip: req.ip
+  };
 }
 
 /**
@@ -233,9 +244,12 @@ export async function buildServer(deps: ApiDeps) {
 
       const engineVersion = "aegix-pipeline-v1.0.0";
 
-      // 1. Fresh cached analysis? Return it immediately.
+      // 1. Fresh cached analysis? Return it immediately. Cache hits do not
+      // consume quota, see D3-C §24.
       const cached = await cache.getJson<{ analysisId: string }>(`${CACHE_PREFIX}:${address}`);
       if (cached?.analysisId) {
+        const quotaCtx = quotaContext(req);
+        await recordCacheHit(sql, quotaCtx, cached.analysisId).catch(() => {});
         return reply.send({ analysisId: cached.analysisId, cached: true });
       }
 
@@ -279,6 +293,17 @@ export async function buildServer(deps: ApiDeps) {
           return reply.code(503).send(admission.body);
         }
 
+        // 5. Quota check, see D3-F: only expensive analyses consume quota.
+        const quota = await checkQuota(sql, config, quotaContext(req));
+        if (!quota.allowed) {
+          return reply.code(429).send({
+            code: "ANALYSIS_QUOTA_EXCEEDED",
+            resetAt: quota.resetAt,
+            message: `Daily analysis limit reached (${quota.limit}), resets at ${quota.resetAt}`,
+            requestId: randomUUID()
+          });
+        }
+
         const job = await jobRepo.create({
           walletId: wallet.id,
           requestedBy: user && !user.isAnonymous ? user.id : null,
@@ -288,6 +313,7 @@ export async function buildServer(deps: ApiDeps) {
 
         // Record origin IP for pending-per-IP limits.
         await sql`update analysis_jobs set ip_address = ${req.ip} where id = ${job.id}`;
+        await recordQuotaUsage(sql, quotaContext(req), job.id).catch(() => {});
 
         const queue = queueForPriority(job.priority, queues);
         await queue.add(
