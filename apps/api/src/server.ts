@@ -200,10 +200,43 @@ export async function buildServer(deps: ApiDeps) {
     });
   });
 
-  app.get("/health/ready", async () => {
-    await sql`select 1`;
-    await cache.get("health:probe");
-    return { status: "ok" };
+  app.get("/health/ready", async (_req, reply) => {
+    // Readiness reflects the real dependency state, see D3-J §59:
+    // LIVE = process up, READY = db+redis+queue ok, DEGRADED = RPC down.
+    const checks: Record<string, boolean> = { postgres: false, redis: false, queue: false, rpc: false };
+    try {
+      await sql`select 1`;
+      checks.postgres = true;
+    } catch {
+      // keep false
+    }
+    try {
+      await cache.get("health:probe");
+      checks.redis = true;
+    } catch {
+      // keep false
+    }
+    try {
+      const counts = await queues.analysisStandard.getJobCounts();
+      checks.queue = counts !== null;
+    } catch {
+      // keep false
+    }
+    try {
+      await provider.getLatestBlockHeight();
+      checks.rpc = true;
+    } catch {
+      // keep false
+    }
+
+    const allUp = Object.values(checks).every(Boolean);
+    const coreUp = checks.postgres && checks.redis && checks.queue;
+    if (allUp) return { status: "ok", checks };
+    if (coreUp) {
+      // Cache and existing reports still work; new analyses may be degraded.
+      return reply.code(200).send({ status: "degraded", checks });
+    }
+    return reply.code(503).send({ status: "unavailable", checks });
   });
 
   app.post<{ Body: { address: string } }>(

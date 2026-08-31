@@ -83,5 +83,27 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
-  return parsed.data;
+  const config = parsed.data;
+
+  // Fail fast in production: never silently run with unsafe defaults, see
+  // milestone D3-J §57. Development keeps the ergonomic defaults.
+  if (config.NODE_ENV === "production") {
+    const required = [
+      ["DATABASE_URL", config.DATABASE_URL],
+      ["REDIS_URL", config.REDIS_URL],
+      ["RPC_URL", config.RPC_URL],
+      ["CORS_ORIGIN", config.CORS_ORIGIN]
+    ];
+    const missing = required.filter(([, v]) => !v || v.includes("localhost") && v.startsWith("postgres://postgres:postgres"));
+    if (missing.length > 0) {
+      throw new Error(
+        `Production configuration error: ${missing.map(([k]) => k).join(", ")} must be explicitly set (no unsafe defaults)`
+      );
+    }
+    if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_KEY) {
+      throw new Error("Production configuration error: SUPABASE_URL and SUPABASE_SERVICE_KEY are required");
+    }
+  }
+
+  return config;
 }
