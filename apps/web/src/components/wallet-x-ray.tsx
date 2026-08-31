@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getWalletXRay, type WalletXRay, type XRaySignal } from "@/lib/api";
+import { getWalletXRay, saveAnalysis, type WalletXRay, type XRaySignal } from "@/lib/api";
 
 function severityLabel(score: number): { label: string; color: string } {
   if (score < 20) return { label: "MINIMAL", color: "text-emerald-400" };
@@ -22,6 +22,8 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
   const [loading, setLoading] = useState(true);
   const [selectedSignal, setSelectedSignal] = useState<XRaySignal | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,16 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       // clipboard unavailable
+    }
+  }
+
+  async function save() {
+    setSaveError(null);
+    try {
+      await saveAnalysis(wallet);
+      setSaved(true);
+    } catch {
+      setSaveError("Sign in to save this wallet to your dashboard.");
     }
   }
 
@@ -105,13 +117,23 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
             {coverage.parserSuccessRate != null && <span>Parser: {coverage.parserSuccessRate}%</span>}
           </div>
         </div>
-        <a
-          href={`/?address=${encodeURIComponent(wallet)}`}
-          className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent"
-        >
-          Refresh Analysis
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/?address=${encodeURIComponent(wallet)}`}
+            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent"
+          >
+            Refresh Analysis
+          </a>
+          <button
+            onClick={() => void save()}
+            disabled={saved}
+            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent disabled:opacity-40"
+          >
+            {saved ? "Saved" : "Save Wallet"}
+          </button>
+        </div>
       </header>
+      {saveError && <p className="mt-2 text-xs text-amber-400">{saveError}</p>}
 
       {/* Data coverage (D2 §76) */}
       <section className="mt-8 rounded-xl border border-slate-700 bg-slate-900 p-6">
@@ -151,6 +173,12 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
               <dt className="text-xs text-slate-500">Parser success</dt>
               <dd className="font-semibold text-slate-200">
                 {coverage.parserSuccessRate != null ? `${coverage.parserSuccessRate}%` : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-500">Semantic understanding</dt>
+              <dd className="font-semibold text-slate-200">
+                {coverage.semanticCoverage != null ? `${coverage.semanticCoverage}%` : "—"}
               </dd>
             </div>
           </dl>

@@ -68,6 +68,10 @@ export interface WalletXRay {
     historyStart?: string | null;
     historyEnd?: string | null;
     parserSuccessRate?: number;
+    semanticCoverage?: number;
+    fullyParsed?: number;
+    partiallyParsed?: number;
+    genericParsed?: number;
     transactionsAnalyzed?: number;
     historyCoverageDays?: number | null;
     dataQualityScore?: number | null;
