@@ -105,12 +105,13 @@ async function checkAdmission(deps: {
 
 export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
-  const app = Fastify({ logger: { level: config.LOG_LEVEL } });
+  const app = Fastify({ logger: { level: config.LOG_LEVEL }, bodyLimit: 1024 });
   const logger = createLogger(config, { service: "api" });
 
   await app.register(cors, { origin: config.CORS_ORIGIN.split(",") });
+  // Global baseline rate limit; per-route limits below override it, see D3-I §50-§51.
   await app.register(rateLimit, {
-    max: 60,
+    max: 120,
     timeWindow: "1 minute"
   });
 
@@ -208,6 +209,12 @@ export async function buildServer(deps: ApiDeps) {
   app.post<{ Body: { address: string } }>(
     "/v1/analyses",
     {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: "1 minute"
+        }
+      },
       schema: {
         body: {
           type: "object",
