@@ -94,6 +94,23 @@ const envSchema = z.object({
   MONITOR_SCORE_DELTA_THRESHOLD: z.coerce.number().int().nonnegative().default(10),
   MONITOR_EVENT_EXPIRY_DAYS: z.coerce.number().int().positive().default(30),
 
+  // D5: cross-wallet correlation — kill switches, budgets (D5-B, D5-L §86, §99).
+  ENABLE_CORRELATION_ANALYSIS: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_MULTI_HOP_GRAPH: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_CLUSTER_HYPOTHESES: z.preprocess(boolEnv, z.boolean()).default(true),
+  /** Bounded cross-wallet candidate scan during analysis (D5-B). */
+  MAX_CORRELATION_CANDIDATE_WALLETS: z.coerce.number().int().positive().default(50),
+  /** Secondary fetch budgets for multi-hop exploration (D5-L §86). */
+  MAX_SECONDARY_WALLETS: z.coerce.number().int().positive().default(20),
+  MAX_SECONDARY_TRANSACTIONS: z.coerce.number().int().positive().default(5000),
+  MAX_SECONDARY_RPC_CALLS: z.coerce.number().int().positive().default(100),
+  MAX_GRAPH_ANALYSIS_TIME_MS: z.coerce.number().int().positive().default(30000),
+  /** Hub penalty (D5-G §49). */
+  HUB_DEGREE_THRESHOLD: z.coerce.number().int().positive().default(50),
+  HUB_PENALTY_FACTOR: z.coerce.number().min(0).max(1).default(0.5),
+  /** Correlation pair cache TTL (D5-L §87). */
+  CORRELATION_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
 

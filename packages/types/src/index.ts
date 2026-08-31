@@ -8,3 +8,4 @@ export * from "./score.js";
 export * from "./graph.js";
 export * from "./report.js";
 export * from "./monitor.js";
+export * from "./correlation.js";

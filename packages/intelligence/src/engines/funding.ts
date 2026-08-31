@@ -1,12 +1,17 @@
 import type { IntelligenceSignal, NormalizedTransfer } from "@aegix/types";
 import { makeSignal } from "../signals.js";
 
-export const FUNDING_ENGINE_VERSION = "funding-v1.0.0";
+export const FUNDING_ENGINE_VERSION = "funding-v2.0.0";
+
+/** Dust threshold: transfers below this SOL-equivalent are not meaningful
+ * funding (D5-C §18). */
+export const FUNDING_DUST_SOL = 0.001;
 
 export interface CounterpartySummary {
   address: string;
   transactionCount: number;
   totalValue: number;
+  firstSeen: string;
   lastSeen: string;
   direction: "INCOMING" | "OUTGOING" | "BIDIRECTIONAL";
 }
@@ -42,11 +47,13 @@ export function analyzeFunding(input: FundingAnalysisInput): FundingAnalysisResu
       address: t.fromAddress,
       transactionCount: 0,
       totalValue: 0,
+      firstSeen: t.timestamp,
       lastSeen: t.timestamp,
       direction: "INCOMING" as const
     };
     cur.transactionCount += 1;
     cur.totalValue += t.amountNormalized;
+    if (t.timestamp < cur.firstSeen) cur.firstSeen = t.timestamp;
     if (t.timestamp > cur.lastSeen) cur.lastSeen = t.timestamp;
     bySource.set(t.fromAddress, cur);
   }
@@ -55,7 +62,12 @@ export function analyzeFunding(input: FundingAnalysisInput): FundingAnalysisResu
   const totalValue = fundingSources.reduce((sum, s) => sum + s.totalValue, 0);
   const fundingConcentration = totalValue > 0 ? (fundingSources[0]?.totalValue ?? 0) / totalValue : 0;
   const repeatedFunders = fundingSources.filter((s) => s.transactionCount >= 2);
-  const initialFunder = fundingSources[fundingSources.length - 1] ?? null; // earliest by lastSeen is wrong; see below
+  // Earliest observed funder by first transfer time (D5-C §19). Dust-only
+  // sources are excluded so a 0.001 SOL airdrop is never "the initial funder".
+  const nonDust = fundingSources.filter((s) => s.totalValue >= FUNDING_DUST_SOL);
+  const initialFunder = nonDust.length > 0
+    ? [...nonDust].sort((a, b) => a.firstSeen.localeCompare(b.firstSeen))[0] ?? null
+    : null;
 
   const signals: IntelligenceSignal[] = [];
 

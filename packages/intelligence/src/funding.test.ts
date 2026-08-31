@@ -60,3 +60,24 @@ test("counterparty engine counts unique and repeated counterparties", () => {
   assert.equal(result.counterparties[0]!.address, "alice");
   assert.ok(result.signals.some((s) => s.type === "REPEATED_COUNTERPARTY"));
 });
+
+test("funding v2: initial funder is the earliest non-dust funder (D5-C)", () => {
+  const result = analyzeFunding({
+    walletAddress: "walletA",
+    transfers: [
+      transfer("laterFunder", "walletA", 50, "2026-03-01T00:00:00Z"),
+      transfer("earlyFunder", "walletA", 1, "2026-01-01T00:00:00Z"),
+      transfer("dust", "walletA", 0.0001, "2025-12-01T00:00:00Z")
+    ]
+  });
+  assert.equal(result.initialFunder?.address, "earlyFunder");
+  assert.equal(result.initialFunder?.firstSeen, "2026-01-01T00:00:00Z");
+});
+
+test("funding v2: dust-only wallet has no initial funder", () => {
+  const result = analyzeFunding({
+    walletAddress: "walletA",
+    transfers: [transfer("dust", "walletA", 0.0001), transfer("dust2", "walletA", 0.0002)]
+  });
+  assert.equal(result.initialFunder, null);
+});

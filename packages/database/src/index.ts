@@ -60,3 +60,23 @@ export {
   type NotificationRepo,
   type NotificationRow
 } from "./repositories/notifications.js";
+export {
+  createBehavioralFeatureRepo,
+  type BehavioralFeatureRepo,
+  type BehavioralFeatureRow
+} from "./repositories/behavioral.js";
+export {
+  createRelationshipRepo,
+  type RelationshipRepo,
+  type WalletRelationshipRow
+} from "./repositories/relationships.js";
+export {
+  createCorrelationRepo,
+  type CorrelationRepo,
+  type CorrelationResultRow
+} from "./repositories/correlation.js";
+export {
+  createFundingPathRepo,
+  type FundingPathRepo,
+  type FundingPathRow
+} from "./repositories/funding-paths.js";

@@ -4,9 +4,12 @@ import type { BlockchainProvider } from "@aegix/blockchain";
 import { classifyAddress, createProviderPoolFromConfig, isAnalysisEligible, ProviderPool } from "@aegix/blockchain";
 import {
   createAnalysisJobRepo,
+  createBehavioralFeatureRepo,
   createDb,
   createEntityRegistryRepo,
+  createFundingPathRepo,
   createIntelligenceRepo,
+  createRelationshipRepo,
   createWalletAnalyticsRepo,
   createWalletRepo,
   type EntityAddressSeedRow,
@@ -24,6 +27,7 @@ import {
 } from "@aegix/intelligence";
 import { scoreWallet, computeDataQuality, type ScoreResult } from "@aegix/scoring";
 import { annotateEntities, buildGraph, findExposurePaths } from "@aegix/graph";
+import { traceFundingProvenance } from "@aegix/correlation";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { walletRef } from "@aegix/logging";
 import type { AnalysisJobData } from "@aegix/queue";
@@ -232,7 +236,25 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     const counterparty = analyzeCounterparties({ walletAddress, transfers: allTransfers });
     const behavior = analyzeBehavior({ walletAddress, transactions, interactions: allInteractions });
     const entities = analyzeEntities({ walletAddress, transfers: allTransfers, interactions: allInteractions, registry });
-    const clusters = analyzeClusters({ walletAddress, transfers: allTransfers, sharedCounterparties: new Map() });
+
+    // D5-B: populate shared-counterparty evidence from other analyzed
+    // wallets (bounded). This activates the cluster engine, which previously
+    // always received an empty map. Best-effort: cross-wallet discovery must
+    // never fail an analysis.
+    let clusters = analyzeClusters({ walletAddress, transfers: allTransfers, sharedCounterparties: new Map() });
+    try {
+      const sharedCounterparties = await sharedCounterpartiesForWallet(
+        sql,
+        wallet.id,
+        walletAddress,
+        allTransfers,
+        config.MAX_CORRELATION_CANDIDATE_WALLETS
+      );
+      clusters = analyzeClusters({ walletAddress, transfers: allTransfers, sharedCounterparties });
+      logger.info("cluster engine populated", { stage: "engines", shared: sharedCounterparties.size, signals: clusters.signals.length });
+    } catch (err) {
+      logger.warn("shared-counterparty discovery failed, cluster engine empty", { error: err instanceof Error ? err.message : String(err) });
+    }
     const enginesMs = Date.now() - enginesStarted;
     logger.info("intelligence engines complete", {
       stage: "engines",
@@ -354,6 +376,88 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         engineVersion: p.engineVersion
       }))
     );
+
+    // D5-D: persist behavioral feature distributions so the correlation
+    // engine can compare wallets without re-running analysis.
+    const behaviorRepo = createBehavioralFeatureRepo(sql);
+    await behaviorRepo.upsertFeatures(wallet.id, [
+      { featureName: "activityHourDistribution", valueNumber: null, valueJson: behavior.activityHourDistribution, sampleSize: transactions.length, engineVersion: behavior.signals[0]?.engineVersion ?? "behavior-v1.0.0" },
+      { featureName: "weekdayDistribution", valueNumber: null, valueJson: behavior.weekdayDistribution, sampleSize: transactions.length, engineVersion: behavior.signals[0]?.engineVersion ?? "behavior-v1.0.0" },
+      { featureName: "protocolDistribution", valueNumber: null, valueJson: behavior.protocolDistribution, sampleSize: allInteractions.length, engineVersion: behavior.signals[0]?.engineVersion ?? "behavior-v1.0.0" },
+      { featureName: "transferSizeDistribution", valueNumber: null, valueJson: behavior.transferSizeDistribution, sampleSize: allTransfers.length, engineVersion: behavior.signals[0]?.engineVersion ?? "behavior-v1.0.0" },
+      { featureName: "txIntervalDistribution", valueNumber: null, valueJson: behavior.txIntervalDistribution, sampleSize: Math.max(0, transactions.length - 1), engineVersion: behavior.signals[0]?.engineVersion ?? "behavior-v1.0.0" }
+    ]);
+
+    // D5-G: persist direct funding/transfer relationships (the table existed
+    // since 0001 but was never written). Best-effort — analysis must not fail
+    // on relationship persistence.
+    try {
+      const relationshipRepo = createRelationshipRepo(sql);
+      for (const rel of relationships) {
+        await relationshipRepo.upsert({
+          walletA: rel.walletA,
+          walletB: rel.walletB,
+          relationshipType: rel.relationshipType,
+          direction: rel.direction,
+          transactionCount: rel.transactionCount,
+          interactionCount: rel.interactionCount,
+          totalValue: rel.totalValue,
+          firstSeen: rel.firstSeen,
+          lastSeen: rel.lastSeen,
+          strengthScore: rel.strengthScore,
+          confidenceScore: rel.confidenceScore,
+          evidence: rel.evidenceJson,
+          engineVersion: rel.engineVersion
+        });
+      }
+    } catch (err) {
+      logger.warn("relationship persistence failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+
+    // D5-C: bounded funding provenance (persisted for the x-ray UI).
+    if (config.ENABLE_CORRELATION_ANALYSIS) {
+      try {
+        const fundingPathRepo = createFundingPathRepo(sql);
+        const entityAddresses = new Map(
+          (await entityRepo.findAddressesByChain("solana"))
+            .filter((a) => a.status === "VERIFIED")
+            .map((a) => [a.address, a.label ?? a.address])
+        );
+        const paths = await traceFundingProvenance({
+          targetWallet: walletAddress,
+          targetTransfers: allTransfers.map((t) => ({
+            id: "",
+            transaction_id: t.transactionId,
+            from_address: t.fromAddress,
+            to_address: t.toAddress,
+            asset_type: t.assetType,
+            mint: t.mint,
+            amount_raw: t.amountRaw,
+            amount_normalized: String(t.amountNormalized),
+            transfer_type: t.transferType,
+            block_time: t.timestamp
+          })),
+          fetchTransfers: async () => [], // DB-backed expansion lands in D5-G; no RPC crawling here
+          knownEntities: entityAddresses,
+          maxHops: 2,
+          maxWallets: config.MAX_SECONDARY_WALLETS,
+          maxTransfers: config.MAX_SECONDARY_TRANSACTIONS
+        });
+        if (paths.length > 0) {
+          await fundingPathRepo.replaceForTarget(wallet.id, paths.map((p) => ({
+            path: p.hops,
+            pathScore: p.pathScore,
+            pathConfidence: p.pathConfidence,
+            terminusType: p.terminusType,
+            terminusAddress: p.terminusAddress,
+            terminusEntityName: p.terminusEntityName,
+            engineVersion: p.engineVersion
+          })));
+        }
+      } catch (err) {
+        logger.warn("funding provenance failed", { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
     await jobRepo.updateStatus(analysisId, "PERSISTING", 96);
 
@@ -511,6 +615,48 @@ async function loadEntityRegistry(entityRepo: ReturnType<typeof createEntityRegi
       status: a.status as EntityRegistry["addresses"][number]["status"]
     }))
   };
+}
+
+/**
+ * D5-B: finds counterparties of this wallet that other analyzed wallets also
+ * interact with (bounded scan). Returns address -> share count. Reads only
+ * persisted data — no RPC.
+ */
+async function sharedCounterpartiesForWallet(
+  sql: ProcessorContext["sql"],
+  walletId: string,
+  walletAddress: string,
+  allTransfers: NormalizedTransaction["transfers"],
+  maxCandidates: number
+): Promise<Map<string, number>> {
+  const analyticsRepo = createWalletAnalyticsRepo(sql);
+  const myCounterparties = new Set<string>();
+  for (const t of allTransfers) {
+    const cp = t.fromAddress === walletAddress ? t.toAddress : t.toAddress === walletAddress ? t.fromAddress : null;
+    if (cp && cp !== walletAddress) myCounterparties.add(cp);
+  }
+  if (myCounterparties.size === 0) return new Map();
+
+  // Other wallets that share at least one of our counterparties.
+  const rows = await sql<Array<{ wallet_id: string }>>`
+    select distinct t.wallet_id::text as wallet_id
+    from transfers t
+    join analysis_jobs aj on aj.wallet_id = t.wallet_id and aj.status = 'READY'
+    where t.wallet_id <> ${walletId}
+      and (t.from_address = any(${[...myCounterparties]}) or t.to_address = any(${[...myCounterparties]}))
+    limit ${maxCandidates}
+  `;
+
+  const shared = new Map<string, number>();
+  for (const row of rows) {
+    const counterparties = await analyticsRepo.counterpartiesForWallet(row.wallet_id, 200);
+    for (const c of counterparties) {
+      if (myCounterparties.has(c.counterparty)) {
+        shared.set(c.counterparty, (shared.get(c.counterparty) ?? 0) + 1);
+      }
+    }
+  }
+  return shared;
 }
 
 /** Builds relationship edges from transfer pairs for the attack graph. */

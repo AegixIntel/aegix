@@ -16,6 +16,7 @@
   "dependencies": {
     "@aegix/blockchain": "workspace:*",
     "@aegix/config": "workspace:*",
+    "@aegix/correlation": "workspace:*",
     "@aegix/database": "workspace:*",
     "@aegix/explanation": "workspace:^",
     "@aegix/graph": "workspace:*",
