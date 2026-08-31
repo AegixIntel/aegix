@@ -16,6 +16,7 @@ import {
   createAnalysisJobRepo,
   createDb,
   createIntelligenceRepo,
+  createSavedAnalysisRepo,
   createWalletRepo,
   type AnalysisJobRow,
   type ScoreRow,
@@ -149,6 +150,7 @@ export async function buildServer(deps: ApiDeps) {
   const walletRepo = createWalletRepo(sql);
   const jobRepo = createAnalysisJobRepo(sql);
   const intelligenceRepo = createIntelligenceRepo(sql);
+  const savedRepo = createSavedAnalysisRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
   const provider = createProviderPoolFromConfig(config);
@@ -370,6 +372,69 @@ export async function buildServer(deps: ApiDeps) {
     ]);
 
     return reply.send(buildXRayResponse({ address, job: latest, score, signals, paths }));
+  });
+
+  // ---- Saved analyses (authenticated), see D3-E §31-§33 and D3-G §38 ----
+
+  app.get("/v1/me/saved", async (req, reply) => {
+    if (!config.ENABLE_SAVE_WALLET) {
+      return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Saving wallets is disabled", requestId: randomUUID() });
+    }
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+    const saved = await savedRepo.listForUser(user.id);
+    return reply.send({ saved });
+  });
+
+  app.post<{ Body: { address: string; label?: string | null } }>(
+    "/v1/me/saved",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["address"],
+          properties: { address: { type: "string", minLength: 32, maxLength: 44 }, label: { type: "string", maxLength: 100 } }
+        }
+      }
+    },
+    async (req, reply) => {
+      if (!config.ENABLE_SAVE_WALLET) {
+        return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Saving wallets is disabled", requestId: randomUUID() });
+      }
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      await auth.ensureProfile(user, sql);
+
+      const { address, label } = req.body;
+      if (!isValidSolanaAddress(address)) {
+        return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+      }
+      const wallet = await walletRepo.findOrCreate("solana", address);
+      const latest = await jobRepo.latestForWallet(wallet.id);
+      const saved = await savedRepo.save({
+        userId: user.id,
+        walletId: wallet.id,
+        analysisId: latest?.id ?? null,
+        label: label ?? null
+      });
+      return reply.code(201).send({ saved });
+    }
+  );
+
+  app.delete<{ Params: { address: string } }>("/v1/me/saved/:address", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const { address } = req.params;
+    if (!isValidSolanaAddress(address)) {
+      return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+    }
+    const wallet = await walletRepo.findByAddress("solana", address);
+    if (!wallet) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Wallet not found", requestId: randomUUID() });
+    }
+    const deleted = await savedRepo.deleteForUser(user.id, wallet.id);
+    return reply.send({ deleted });
   });
 
   return app;

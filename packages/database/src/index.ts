@@ -26,3 +26,8 @@ export {
   type EntityRegistryRepo,
   type EntitySeedRow
 } from "./repositories/entity-registry.js";
+export {
+  createSavedAnalysisRepo,
+  type SavedAnalysisRepo,
+  type SavedAnalysisRow
+} from "./repositories/saved-analyses.js";
