@@ -33,13 +33,13 @@ export function scoreChange(previous: number, current: number): ScoreChange {
 }
 
 const DIMENSION_LABELS: Record<string, string> = {
-  identityLinkability: "Identity Linkability",
-  fundingExposure: "Funding Exposure",
-  walletClusterExposure: "Wallet Cluster Exposure",
-  behavioralFingerprint: "Behavioral Fingerprint",
-  counterpartyExposure: "Counterparty Exposure",
-  entityExposure: "Entity Exposure",
-  transactionPatternExposure: "Transaction Pattern Exposure"
+  identity_linkability: "Identity Linkability",
+  funding_exposure: "Funding Exposure",
+  wallet_cluster_exposure: "Wallet Cluster Exposure",
+  behavioral_fingerprint: "Behavioral Fingerprint",
+  counterparty_exposure: "Counterparty Exposure",
+  entity_exposure: "Entity Exposure",
+  transaction_pattern_exposure: "Transaction Pattern Exposure"
 };
 
 export function diffScores(previous: ScoreRow | null, current: ScoreRow | null): {
@@ -50,7 +50,7 @@ export function diffScores(previous: ScoreRow | null, current: ScoreRow | null):
     const currentOverall = current?.overall_score ?? 0;
     const change = scoreChange(0, currentOverall);
     const dimensions = Object.keys(DIMENSION_LABELS).map((key) => ({
-      key,
+      key: key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()),
       label: DIMENSION_LABELS[key] ?? key,
       change: scoreChange(0, current ? (current as unknown as Record<string, number>)[key] ?? 0 : 0)
     }));
@@ -59,7 +59,7 @@ export function diffScores(previous: ScoreRow | null, current: ScoreRow | null):
   const dimensionChanges: DimensionChange[] = Object.keys(DIMENSION_LABELS).map((key) => {
     const prevVal = (previous as unknown as Record<string, number>)[key] ?? 0;
     const currVal = (current as unknown as Record<string, number>)[key] ?? 0;
-    return { key, label: DIMENSION_LABELS[key] ?? key, change: scoreChange(prevVal, currVal) };
+    return { key: key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()), label: DIMENSION_LABELS[key] ?? key, change: scoreChange(prevVal, currVal) };
   });
   return { overallChange: scoreChange(previous.overall_score, current.overall_score), dimensionChanges };
 }
@@ -161,7 +161,7 @@ export function diffEntities(previous: SignalRow[], current: SignalRow[]): Entit
     const map = new Map<string, { count: number; confidence: number; entityType: string | null }>();
     for (const s of entitySignals(rows)) {
       const name = firstEvidenceValue(s, "entity", "entityName") ?? `entity-${s.severity}`;
-      const entry = map.get(name) ?? { count: 0, confidence: 0, entityType: firstEvidenceValue(s, "entityType") };
+      const entry = map.get(name) ?? { count: 0, confidence: 0, entityType: firstEvidenceValue(s, "entity_type", "entityType") };
       entry.count += 1;
       entry.confidence = Math.max(entry.confidence, Number(s.confidence));
       map.set(name, entry);
@@ -321,9 +321,13 @@ export function diffBehavior(previous: SignalRow[], current: SignalRow[]): Behav
 // reorder alone does not count as a change (D4-C §28).
 // ---------------------------------------------------------------------------
 
+/**
+ * Path identity is the sorted set of node labels — a reorder alone is not a
+ * change (D4-C §28). Same nodes in different order → same path.
+ */
 export function pathIdentity(path: PathRow): string {
   const nodes = Array.isArray(path.nodes_json) ? path.nodes_json as Array<{ label?: string; type?: string }> : [];
-  return nodes.map((n) => `${n.type ?? "?"}:${n.label ?? "?"}`).join(">");
+  return nodes.map((n) => `${n.type ?? "?"}:${n.label ?? "?"}`).sort().join(">");
 }
 
 export function diffAttackPaths(previous: PathRow[], current: PathRow[]): AttackPathChange[] {
@@ -457,10 +461,13 @@ export function buildExposureDiff(inputs: DiffInputs): ExposureDiff {
   const dataQualityChange = assessDataQualityChange(inputs.previousJob, inputs.currentJob);
   const comparability = computeComparability(inputs.previousJob, inputs.currentJob, inputs.previousScore, inputs.currentScore);
 
-  // Diff confidence: based on how much evidence the comparison rests on and
-  // how comparable the two analyses are.
+  // Diff confidence: how much evidence the comparison rests on, how large the
+  // score movement is, and how comparable the two analyses are. A large score
+  // delta is itself evidence — a +40 overall change with no new signals should
+  // still clear a 60% floor.
   const evidenceCount = newSignals.length + entityChanges.length + relationshipChanges.length + attackPathChanges.length;
-  let confidence = 0.5 + Math.min(0.4, evidenceCount * 0.05);
+  const scoreMagnitude = Math.min(0.35, Math.abs(overallChange.delta) / 100);
+  let confidence = 0.5 + Math.min(0.4, evidenceCount * 0.05) + scoreMagnitude;
   if (!comparability.comparable) confidence *= 0.5;
   if (dataQualityChange.degraded) confidence *= 0.7;
   confidence = Math.max(0.05, Math.min(0.98, confidence));

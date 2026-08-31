@@ -188,17 +188,22 @@ async function processMonitorDiff(
 
   // Evaluate threats (pure) then apply rules with cooldown context.
   const candidates = evaluateThreats(diff, input.walletAddress);
+  const cooldownSince = new Date(Date.now() - rules.cooldownHours * 3600_000).toISOString();
   const recentSameFingerprint = candidates.length > 0
-    ? await eventRepo.recentForMonitor(
-        input.monitorId,
-        candidates[0]!.fingerprint,
-        new Date(Date.now() - rules.cooldownHours * 3600_000).toISOString()
-      )
+    ? await eventRepo.recentForMonitor(input.monitorId, candidates[0]!.fingerprint, cooldownSince)
+    : null;
+  // Last event of the same fingerprint regardless of window (hysteresis).
+  const lastEvent = candidates.length > 0
+    ? await eventRepo.recentForMonitor(input.monitorId, candidates[0]!.fingerprint, "1970-01-01T00:00:00Z")
+    : null;
+  const lastEventDelta = lastEvent
+    ? { fingerprint: lastEvent.fingerprint, delta: Number(lastEvent.occurrence_count) > 1 ? 999 : 0 }
     : null;
   const decisions = applyRules(candidates, rules, {
     recentSameFingerprint: recentSameFingerprint
       ? { fingerprint: recentSameFingerprint.fingerprint, delta: Number(recentSameFingerprint.occurrence_count) > 1 ? 999 : 0 }
-      : null
+      : null,
+    lastEventDelta
   });
 
   for (const decision of decisions) {

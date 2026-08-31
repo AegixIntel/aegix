@@ -319,11 +319,20 @@ function mergeCandidates(candidates: ThreatCandidate[], monitorId: string, diff:
  * Alert rule engine, see docs/milestone-d4.md (D4-E).
  * Pure decision function: thresholds, confidence floor, per-type toggles,
  * cooldown and hysteresis. Reasons are returned so they can be persisted.
+ *
+ * - recentSameFingerprint: same event fingerprint seen within the cooldown
+ *   window → cooldown suppression (D4-H §64).
+ * - lastEventDelta: the most recent event of the same fingerprint regardless
+ *   of window → hysteresis for score-increase events (D4-H §65). A repeated
+ *   increase must exceed the previous one, else it is oscillation.
  */
 export function applyRules(
   candidates: ThreatCandidate[],
   rules: MonitorAlertRules,
-  context: { recentSameFingerprint?: { fingerprint: string; delta: number } | null }
+  context: {
+    recentSameFingerprint?: { fingerprint: string; delta: number } | null;
+    lastEventDelta?: { fingerprint: string; delta: number } | null;
+  }
 ): AlertDecision[] {
   const decisions: AlertDecision[] = [];
 
@@ -374,11 +383,15 @@ export function applyRules(
     }
 
     // Hysteresis (D4-H §65): for score-increase events, a repeated increase
-    // must exceed the previous increase, else it is oscillation.
-    if (candidate.eventType === "PRIVACY_EXPOSURE_INCREASED" && context.recentSameFingerprint) {
+    // must exceed the previous increase of the same event, else it is
+    // oscillation (49 → 51 → 49 → 51).
+    if (
+      (candidate.eventType === "PRIVACY_EXPOSURE_INCREASED" || candidate.eventType === "IDENTITY_LINKABILITY_INCREASED") &&
+      context.lastEventDelta?.fingerprint === candidate.fingerprint
+    ) {
       const delta = (candidate.evidence.delta as number | undefined) ?? 0;
-      if (delta <= context.recentSameFingerprint.delta) {
-        decisions.push({ event: candidate, action: "SUPPRESSED", reasons: [`hysteresis: delta ${delta} does not exceed previous ${context.recentSameFingerprint.delta}`] });
+      if (delta <= context.lastEventDelta.delta) {
+        decisions.push({ event: candidate, action: "SUPPRESSED", reasons: [`hysteresis: delta ${delta} does not exceed previous ${context.lastEventDelta.delta}`] });
         continue;
       }
     }

@@ -14,7 +14,9 @@
     "test": "pnpm -r run test",
     "dev": "pnpm -r --parallel run dev",
     "test:wallets": "node --import tsx tests/golden-wallets.ts",
-    "loadtest:analysis": "node --import tsx tests/load-test.ts"
+    "test:monitors": "node --import tsx tests/golden-monitors.ts",
+    "loadtest:analysis": "node --import tsx tests/load-test.ts",
+    "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
@@ -23,6 +25,8 @@
     "@aegix/cache": "workspace:*",
     "@aegix/config": "workspace:*",
     "@aegix/database": "workspace:*",
+    "@aegix/diff": "workspace:*",
+    "@aegix/monitor": "workspace:*",
     "@aegix/queue": "workspace:*",
     "@aegix/types": "workspace:*",
     "@aegix/logging": "workspace:*",

@@ -20,9 +20,15 @@ importers:
       '@aegix/database':
         specifier: workspace:*
         version: link:packages/database
+      '@aegix/diff':
+        specifier: workspace:*
+        version: link:packages/diff
       '@aegix/logging':
         specifier: workspace:*
         version: link:packages/logging
+      '@aegix/monitor':
+        specifier: workspace:*
+        version: link:packages/monitor
       '@aegix/queue':
         specifier: workspace:*
         version: link:packages/queue
