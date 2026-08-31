@@ -199,7 +199,7 @@ test("marketplace programs without parsed actions classify as MARKETPLACE_INTERA
   const outcome = normalizeTransaction({
     signature: "sig-me",
     raw: tx([
-      { programId: "M2mx93ekt1fmXSVkTrUL9xVfhkmETpw96ZJ2h3fFw1g", program: "magic-eden", data: "abc" }
+      { programId: "M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K", program: "magic-eden", data: "abc" }
     ]),
     walletAddress: "walletA",
     rawProvider: "test"
