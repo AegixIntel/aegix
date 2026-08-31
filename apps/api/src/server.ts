@@ -24,6 +24,7 @@ import {
 import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
+import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -103,12 +104,15 @@ export async function buildServer(deps: ApiDeps) {
 
   // Analysis trace, see D2 §56: every API request carries a request_id that
   // flows into job records. Full wallet addresses are never logged.
+  const auth = createAuth(config);
   app.addHook("onRequest", async (req) => {
     const requestId = randomUUID();
     req.headers["x-request-id"] = requestId;
     const address = (req.params as { address?: string })?.address ?? (req.body as { address?: string } | null)?.address;
     const ctx = { requestId, method: req.method, path: req.routeOptions?.url ?? req.url, ...(address ? walletRef(address) : {}) };
     logger.info("request started", ctx);
+    // Server-side auth resolution, see D3-D §29: never trust frontend claims.
+    req.user = await auth.resolveUser(req);
   });
 
   app.addHook("onResponse", async (req, reply) => {
@@ -258,11 +262,15 @@ export async function buildServer(deps: ApiDeps) {
         }
 
         // 4. Admission control before creating an expensive job, see D3-C.
+        const user = req.user;
+        if (user && !user.isAnonymous) {
+          await auth.ensureProfile(user, sql);
+        }
         const admission = await checkAdmission({
           queues,
           sql,
           config,
-          userId: null,
+          userId: user && !user.isAnonymous ? user.id : null,
           ip: req.ip
         });
         if (!admission.admitted) {
@@ -271,7 +279,7 @@ export async function buildServer(deps: ApiDeps) {
 
         const job = await jobRepo.create({
           walletId: wallet.id,
-          requestedBy: null,
+          requestedBy: user && !user.isAnonymous ? user.id : null,
           analysisType: "full",
           priority: "standard"
         });

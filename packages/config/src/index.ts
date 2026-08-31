@@ -16,6 +16,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().default("postgres://postgres:postgres@localhost:5432/aegix"),
   SUPABASE_SERVICE_KEY: z.string().optional(),
   SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_JWT_SECRET: z.string().optional(),
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
