@@ -26,6 +26,9 @@ importers:
       '@aegix/diff':
         specifier: workspace:*
         version: link:packages/diff
+      '@aegix/graph':
+        specifier: workspace:*
+        version: link:packages/graph
       '@aegix/logging':
         specifier: workspace:*
         version: link:packages/logging

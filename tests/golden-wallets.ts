@@ -1,14 +1,15 @@
 /**
  * Golden wallet test runner, see architecture.md §94 and milestone Phase 10.
  *
- * Runs the full analysis pipeline against real Solana mainnet for a curated
- * set of wallet categories and prints a comparison-friendly summary.
+ * DEPRECATED since D5 Block 2 fixture split (docs/d5-block2.md §85): most
+ * addresses here are program IDs / mints / sysvars that the D3 account
+ * classifier correctly rejects as user-wallet analyses.
+ * Use `pnpm test:user-wallets` (tests/golden-user-wallets.ts) and
+ * `pnpm test:account-classification` (tests/golden-account-classification.ts)
+ * instead. Kept for reproducibility; no longer wired to a script.
  *
- * Usage: pnpm test:wallets
+ * Usage: node --import tsx tests/golden-wallets.ts
  * Env:   RPC_URL (required, e.g. Helius), DATABASE_URL, REDIS_URL
- *
- * The wallet addresses here are public, well-known protocol/system accounts
- * or freshly generated test wallets — no personal attribution.
  */
 
 import { loadConfig } from "@aegix/config";

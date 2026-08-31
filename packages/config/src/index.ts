@@ -105,6 +105,13 @@ const envSchema = z.object({
   MAX_SECONDARY_TRANSACTIONS: z.coerce.number().int().positive().default(5000),
   MAX_SECONDARY_RPC_CALLS: z.coerce.number().int().positive().default(100),
   MAX_GRAPH_ANALYSIS_TIME_MS: z.coerce.number().int().positive().default(30000),
+  /** D5-G §33: bounded multi-hop graph expansion (versioned limits). */
+  GRAPH_MAX_DEPTH: z.coerce.number().int().positive().default(4),
+  GRAPH_MAX_NODES: z.coerce.number().int().positive().default(200),
+  GRAPH_MAX_EDGES: z.coerce.number().int().positive().default(800),
+  GRAPH_MAX_TIME_MS: z.coerce.number().int().positive().default(5000),
+  /** D5-H §60: max members per relationship cluster. */
+  CLUSTER_MAX_SIZE: z.coerce.number().int().positive().default(15),
   /** Hub penalty (D5-G §49). */
   HUB_DEGREE_THRESHOLD: z.coerce.number().int().positive().default(50),
   HUB_PENALTY_FACTOR: z.coerce.number().min(0).max(1).default(0.5),

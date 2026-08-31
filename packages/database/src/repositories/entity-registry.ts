@@ -1,5 +1,14 @@
 import type { Sql } from "../client.js";
 
+/**
+ * Entity registry repository, see architecture.md §17-§18 and
+ * docs/d5-block2.md (D5-F).
+ *
+ * Schema version: the registry_version is persisted with analyses
+ * (analysis_jobs.registry_version, migration 0004) so historical results
+ * stay explainable after seed changes (D5-F §27).
+ */
+
 export interface EntitySeedRow {
   id: string;
   name: string;
@@ -18,6 +27,11 @@ export interface EntityAddressSeedRow {
   confidence: number;
   evidence_source: string | null;
   status: string;
+  address_role: string;
+  deprecated_at: string | null;
+  notes: string | null;
+  first_verified_at: string | null;
+  last_verified_at: string | null;
 }
 
 export interface EntityRegistryRepo {
@@ -39,11 +53,19 @@ export interface EntityRegistryRepo {
     confidence: number;
     evidenceSource: string | null;
     status: string;
+    addressRole?: string;
+    notes?: string | null;
   }): Promise<EntityAddressSeedRow>;
   findAddressesByChain(chain: string): Promise<EntityAddressSeedRow[]>;
+  /** D5-F §25: an address must map to exactly one entity; NULL = no conflict. */
+  findConflictingAddress(address: string): Promise<EntityAddressSeedRow | null>;
+  /** D5-F §23: reject bad seeds at load time. */
+  deprecateAddress(address: string, reason: string): Promise<void>;
 }
 
-/** Entity registry repository, see architecture.md §17-§18, §36-§37. */
+/** Registry content version, bumped when seeds change (D5-F §27, §73). */
+export const ENTITY_REGISTRY_VERSION = "entity-registry-v3.0.0";
+
 export function createEntityRegistryRepo(sql: Sql): EntityRegistryRepo {
   return {
     async listEntities() {
@@ -73,14 +95,16 @@ export function createEntityRegistryRepo(sql: Sql): EntityRegistryRepo {
 
     async upsertAddress(input) {
       const [row] = await sql<EntityAddressSeedRow[]>`
-        insert into entity_addresses (entity_id, chain, address, label, confidence, evidence_source, status)
-        values (${input.entityId}, ${input.chain}, ${input.address}, ${input.label}, ${input.confidence}, ${input.evidenceSource}, ${input.status})
+        insert into entity_addresses (entity_id, chain, address, label, confidence, evidence_source, status, address_role, notes)
+        values (${input.entityId}, ${input.chain}, ${input.address}, ${input.label}, ${input.confidence}, ${input.evidenceSource}, ${input.status}, ${input.addressRole ?? "UNKNOWN_ROLE"}, ${input.notes ?? null})
         on conflict (chain, address) do update set
           entity_id = excluded.entity_id,
           label = excluded.label,
           confidence = excluded.confidence,
           evidence_source = excluded.evidence_source,
           status = excluded.status,
+          address_role = excluded.address_role,
+          notes = excluded.notes,
           last_verified_at = now()
         returning *
       `;
@@ -91,6 +115,21 @@ export function createEntityRegistryRepo(sql: Sql): EntityRegistryRepo {
     async findAddressesByChain(chain) {
       return sql<EntityAddressSeedRow[]>`
         select * from entity_addresses where chain = ${chain} and status != 'DEPRECATED'
+      `;
+    },
+
+    async findConflictingAddress(address) {
+      const [row] = await sql<EntityAddressSeedRow[]>`
+        select * from entity_addresses where address = ${address} limit 1
+      `;
+      return row ?? null;
+    },
+
+    async deprecateAddress(address, reason) {
+      await sql`
+        update entity_addresses
+        set status = 'DEPRECATED', deprecated_at = now(), notes = ${reason}
+        where address = ${address}
       `;
     }
   };

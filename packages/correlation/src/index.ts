@@ -20,6 +20,7 @@
 
 import { CORRELATION_ENGINE_VERSION, CORRELATION_FAMILY_WEIGHTS, FUNDING_MAX_HOPS, FUNDING_MAX_TRANSFERS, FUNDING_MAX_WALLETS, MIN_SAMPLE_FOR_ANY_ASSESSMENT, MIN_SAMPLE_FOR_CONFIDENCE, MIN_SAMPLE_FOR_FULL_CONFIDENCE } from "./config.js";
 import { evaluateBehavioralSimilarity, type BehaviorInput } from "./dimensions/behavior.js";
+import { evaluateTemporalCorrelation, TEMPORAL_ENGINE_VERSION, type TemporalInput } from "./dimensions/temporal.js";
 import { evaluateFundingFamily, evaluateTransferFamily, type FundingTransferInput } from "./dimensions/funding.js";
 import { evaluateCounterpartyOverlap, evaluateEntityOverlap, evaluateProtocolSimilarity, type OverlapInput } from "./dimensions/overlap.js";
 import { canonicalPairId, classifyCorrelation, type CorrelationResult, type EvidenceFamilyResult } from "./types.js";
@@ -33,6 +34,9 @@ export type { OverlapInput } from "./dimensions/overlap.js";
 export { evaluateFundingFamily, evaluateTransferFamily } from "./dimensions/funding.js";
 export { evaluateBehavioralSimilarity, featureSimilarities, sampleAdequacy } from "./dimensions/behavior.js";
 export { evaluateCounterpartyOverlap, evaluateEntityOverlap, evaluateProtocolSimilarity, isHubAddress } from "./dimensions/overlap.js";
+export { evaluateTemporalCorrelation, TEMPORAL_ENGINE_VERSION, type TemporalInput } from "./dimensions/temporal.js";
+export { FUNDING_FAMILY_ENGINE_VERSION, TRANSFER_FAMILY_ENGINE_VERSION } from "./dimensions/funding.js";
+export { BEHAVIORAL_SIMILARITY_ENGINE_VERSION } from "./dimensions/behavior.js";
 
 export interface CorrelationInput {
   walletA: string;
@@ -55,6 +59,9 @@ export interface CorrelationInput {
   /** Semantic coverage 0-1 per wallet (data_quality). */
   semanticCoverageA?: number;
   semanticCoverageB?: number;
+  /** Timestamped activity per wallet (for temporal correlation, D5-E). */
+  activityA?: TemporalInput["activityA"];
+  activityB?: TemporalInput["activityB"];
   /** Optional overrides (tests/ablation). */
   disabledFamilies?: Set<string>;
 }
@@ -97,6 +104,14 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
     semanticCoverageA,
     semanticCoverageB
   };
+  const temporalInput: TemporalInput = {
+    walletA,
+    walletB,
+    activityA: input.activityA ?? [],
+    activityB: input.activityB ?? [],
+    dataQualityA: semanticCoverageA,
+    dataQualityB: semanticCoverageB
+  };
 
   // Compute each family (evidence-independent by construction).
   const families: EvidenceFamilyResult[] = [];
@@ -122,6 +137,10 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
   }
   if (!disabledFamilies.has("BEHAVIORAL_SIMILARITY")) {
     const f = evaluateBehavioralSimilarity(behaviorInput);
+    if (f) families.push(f);
+  }
+  if (!disabledFamilies.has("TEMPORAL_CORRELATION")) {
+    const f = evaluateTemporalCorrelation(temporalInput);
     if (f) families.push(f);
   }
 

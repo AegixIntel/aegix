@@ -16,3 +16,32 @@ export {
   rankPaths,
   relationshipStrength
 } from "./path-scoring.js";
+export {
+  RELATIONSHIP_GRAPH_ENGINE_VERSION,
+  DEFAULT_RELATIONSHIP_GRAPH_LIMITS,
+  findRelationshipPaths,
+  classifyPathType,
+  canonicalPathIdentity,
+  explainPath,
+  type RelationshipEdge,
+  type RelationshipGraphInput,
+  type RelationshipGraphLimits,
+  type RelationshipGraphResult,
+  type RelationshipPathResult,
+  type GraphStopReason
+} from "./relationship-graph.js";
+export {
+  CLUSTER_ENGINE_VERSION,
+  DEFAULT_CLUSTER_LIMITS,
+  buildRelationshipClusters,
+  clusterConfidence,
+  clusterFingerprint,
+  clusterLimitations,
+  familyForEdgeType,
+  type ClusterEdge,
+  type ClusterInput,
+  type ClusterLimits,
+  type ClusterMember,
+  type ClusterResult,
+  type RelationshipCluster
+} from "./cluster.js";

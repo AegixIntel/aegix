@@ -13,6 +13,9 @@ import { FUNDING_DUST_SOL } from "../config.js";
 import type { EvidenceFamilyResult, EvidencePoint } from "../types.js";
 import type { TransferRow } from "@aegix/database";
 
+export const FUNDING_FAMILY_ENGINE_VERSION = "funding-family-v1.0.0";
+export const TRANSFER_FAMILY_ENGINE_VERSION = "transfer-family-v1.0.0";
+
 export interface FundingTransferInput {
   walletA: string;
   walletB: string;
@@ -102,7 +105,8 @@ export function evaluateFundingFamily(input: FundingTransferInput): EvidenceFami
     evidence: points,
     limitations: [
       "Funding flow is observable; it does not prove the wallets share an owner."
-    ]
+    ],
+    engineVersion: FUNDING_FAMILY_ENGINE_VERSION
   };
 }
 
@@ -143,6 +147,7 @@ export function evaluateTransferFamily(input: FundingTransferInput): EvidenceFam
     evidence: points,
     limitations: [
       "Repeated transfers between addresses are observable; they do not establish common ownership."
-    ]
+    ],
+    engineVersion: TRANSFER_FAMILY_ENGINE_VERSION
   };
 }

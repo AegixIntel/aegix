@@ -26,6 +26,10 @@ export interface SeedEntry {
     confidence: number;
     status: "VERIFIED" | "PROBABLE";
     evidenceSource: string;
+    /** D5-F §22: role of this address within the entity. */
+    role?: "PROGRAM" | "ROUTER" | "TREASURY" | "VAULT" | "HOT_WALLET" | "DEPOSIT" | "ESCROW" | "UNKNOWN_ROLE";
+    /** D5-F §26: deprecation reason; the address stays for reproducibility. */
+    deprecatedReason?: string;
   }>;
 }
 
@@ -260,6 +264,7 @@ export function validateSeedEntries(entries: SeedEntry[]): string[] {
   const problems: string[] = [];
   const seenAddresses = new Map<string, string>(); // address -> entity name
   const validStatuses = new Set(["VERIFIED", "PROBABLE", "UNVERIFIED"]);
+  const validRoles = new Set(["PROGRAM", "ROUTER", "TREASURY", "VAULT", "HOT_WALLET", "DEPOSIT", "ESCROW", "UNKNOWN_ROLE"]);
 
   for (const entry of entries) {
     if (!entry.name || entry.name.trim().length === 0) {
@@ -289,8 +294,17 @@ export function validateSeedEntries(entries: SeedEntry[]): string[] {
       if (typeof addr.confidence !== "number" || addr.confidence < 0 || addr.confidence > 1) {
         problems.push(`${entry.name}/${addr.label}: confidence ${addr.confidence} out of range [0,1]`);
       }
-      if (!addr.evidenceSource || addr.evidenceSource.trim().length === 0) {
-        problems.push(`${entry.name}/${addr.label}: missing evidenceSource`);
+      // D5-F §23: verified provenance is mandatory — a VERIFIED address
+      // without a documented source must fail loudly, never silently load.
+      if (addr.status === "VERIFIED" && (!addr.evidenceSource || addr.evidenceSource.trim().length === 0)) {
+        problems.push(`${entry.name}/${addr.label}: VERIFIED address missing evidenceSource`);
+      }
+      if (addr.role && !validRoles.has(addr.role)) {
+        problems.push(`${entry.name}/${addr.label}: invalid role "${addr.role}"`);
+      }
+      // D5-F §26: deprecation must carry a reason (reproducibility, not silence).
+      if (addr.deprecatedReason && addr.status === "VERIFIED") {
+        problems.push(`${entry.name}/${addr.label}: deprecated address cannot be VERIFIED`);
       }
 
       const existing = seenAddresses.get(addr.address);
@@ -352,7 +366,9 @@ async function run(): Promise<void> {
         label: addr.label,
         confidence: addr.confidence,
         evidenceSource: addr.evidenceSource,
-        status: addr.status
+        status: addr.deprecatedReason ? "DEPRECATED" : addr.status,
+        addressRole: addr.role,
+        notes: addr.deprecatedReason ?? null
       });
       addresses += 1;
     }

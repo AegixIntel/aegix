@@ -9,6 +9,7 @@ import {
   createEntityRegistryRepo,
   createFundingPathRepo,
   createIntelligenceRepo,
+  createRelationshipClusterRepo,
   createRelationshipRepo,
   createWalletAnalyticsRepo,
   createWalletRepo,
@@ -26,7 +27,7 @@ import {
   type EntityRegistry
 } from "@aegix/intelligence";
 import { scoreWallet, computeDataQuality, type ScoreResult } from "@aegix/scoring";
-import { annotateEntities, buildGraph, findExposurePaths } from "@aegix/graph";
+import { annotateEntities, buildGraph, findExposurePaths, findRelationshipPaths, buildRelationshipClusters, type ClusterEdge } from "@aegix/graph";
 import { traceFundingProvenance } from "@aegix/correlation";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { walletRef } from "@aegix/logging";
@@ -459,6 +460,113 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       }
     }
 
+    // D5-G: bounded multi-hop relationship graph (persisted data first,
+    // DB-backed expansion only — never RPC crawling). D5-H: conservative
+    // relationship cluster hypothesis. Both are best-effort; the analysis
+    // must never fail on them.
+    if (config.ENABLE_CORRELATION_ANALYSIS) {
+      try {
+        const graphStarted = Date.now();
+        const entityNames = new Map<string, string>();
+        for (const addr of await entityRepo.findAddressesByChain("solana")) {
+          if (addr.status === "VERIFIED") entityNames.set(addr.address, addr.label ?? addr.address);
+        }
+        const clusterEdges: ClusterEdge[] = [];
+        const relationshipRepo = createRelationshipRepo(sql);
+        const graphResult = await findRelationshipPaths({
+          targetWallet: walletAddress,
+          relationships,
+          inferredEdges: [],
+          commonality: new Map(
+            [...entityNames.keys()].map((addr) => [addr, 0.9]) // known verified entities are common by definition
+          ),
+          fetchRelationships: async (addr) => {
+            // DB-backed secondary expansion, bounded by config.
+            const rows = await relationshipRepo.listForWallet(addr, config.MAX_SECONDARY_WALLETS * 2);
+            return rows.map((r) => ({
+              id: String(r.id),
+              walletA: r.wallet_a,
+              walletB: r.wallet_b,
+              relationshipType: r.relationship_type as WalletRelationship["relationshipType"],
+              direction: r.direction as WalletRelationship["direction"],
+              transactionCount: r.transaction_count,
+              interactionCount: r.interaction_count,
+              totalValue: Number(r.total_value),
+              firstSeen: r.first_seen,
+              lastSeen: r.last_seen,
+              strengthScore: Number(r.strength_score),
+              confidenceScore: Number(r.confidence_score),
+              evidenceJson: r.evidence_json,
+              engineVersion: r.engine_version,
+              createdAt: r.created_at,
+              updatedAt: r.updated_at
+            }));
+          },
+          limits: {
+            maxDepth: config.GRAPH_MAX_DEPTH,
+            maxNodes: config.GRAPH_MAX_NODES,
+            maxEdges: config.GRAPH_MAX_EDGES,
+            maxSecondaryWallets: config.MAX_SECONDARY_WALLETS,
+            maxSecondaryRpcCalls: config.MAX_SECONDARY_RPC_CALLS,
+            maxGraphTimeMs: config.GRAPH_MAX_TIME_MS
+          }
+        });
+
+        // Feed observed + inferred edges into the cluster engine (D5-H).
+        for (const edge of graphResult.edges) {
+          if (edge.observationClass !== "OBSERVED") continue;
+          clusterEdges.push({
+            walletA: edge.source,
+            walletB: edge.target,
+            evidenceFamilies: [edge.type === "FUNDED" ? "FUNDING" : "TRANSFER"],
+            strength: edge.strength,
+            confidence: edge.confidence,
+            direct: edge.type === "FUNDED" || edge.type === "TRANSFERRED"
+          });
+        }
+        const clusterResult = buildRelationshipClusters({
+          targetWallet: walletAddress,
+          edges: clusterEdges,
+          entityAddresses: new Set(entityNames.keys()),
+          dataQuality: new Map([[walletAddress, dataQualityResult.dataQualityScore / 100]]),
+          limits: { maxClusterSize: config.CLUSTER_MAX_SIZE }
+        });
+
+        // Persist paths (idempotent replace per analysis).
+        await intelligenceRepo.insertPaths(
+          graphResult.paths.map((p) => ({
+            analysisId,
+            targetWalletId: wallet.id,
+            rank: p.path.rank,
+            pathType: p.path.pathType,
+            nodes: p.path.nodes,
+            edges: p.path.edges,
+            pathScore: p.path.pathScore,
+            confidenceScore: p.path.confidenceScore,
+            summary: p.path.summary,
+            engineVersion: p.path.engineVersion
+          }))
+        );
+        // Persist cluster hypotheses (idempotent replace per analysis).
+        await replaceClustersForAnalysis(sql, analysisId, wallet.id, clusterResult.clusters);
+        const graphMs = Date.now() - graphStarted;
+        logger.info("block2 graph+cluster complete", {
+          stage: "graph",
+          durationMs: graphMs,
+          paths: graphResult.paths.length,
+          nodes: graphResult.nodeCount,
+          edges: graphResult.edgeCount,
+          stopReason: graphResult.stopReason,
+          secondaryFetched: graphResult.secondaryWalletsFetched,
+          rpcConsumed: graphResult.rpcCallsConsumed,
+          clusters: clusterResult.clusters.length,
+          clusterMembers: clusterResult.clusters.reduce((s, c) => s + c.members.length, 0)
+        });
+      } catch (err) {
+        logger.warn("block2 relationship graph/cluster failed", { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
     await jobRepo.updateStatus(analysisId, "PERSISTING", 96);
 
     // 8. Mark complete with freshness + data quality + RPC observability
@@ -610,9 +718,12 @@ async function loadEntityRegistry(entityRepo: ReturnType<typeof createEntityRegi
       label: a.label,
       confidence: Number(a.confidence),
       evidenceSource: a.evidence_source,
-      firstVerifiedAt: null,
-      lastVerifiedAt: null,
-      status: a.status as EntityRegistry["addresses"][number]["status"]
+      firstVerifiedAt: a.first_verified_at,
+      lastVerifiedAt: a.last_verified_at,
+      status: a.status as EntityRegistry["addresses"][number]["status"],
+      addressRole: (a.address_role ?? "UNKNOWN_ROLE") as EntityRegistry["addresses"][number]["addressRole"],
+      deprecatedAt: a.deprecated_at,
+      notes: a.notes
     }))
   };
 }
@@ -715,6 +826,32 @@ function safeLog(job: Job<AnalysisJobData>, message: string): void {
   } catch {
     // ignore — logging is best-effort
   }
+}
+
+/** D5-H §64, §87: idempotent cluster persistence (replace per analysis). */
+async function replaceClustersForAnalysis(
+  sql: ProcessorContext["sql"],
+  analysisId: string,
+  walletId: string,
+  clusters: Array<{ id: string; targetWallet: string; members: unknown; confidence: number; evidenceFamilies: string[]; limitations: string[]; engineVersion: string }>
+): Promise<void> {
+  if (clusters.length === 0) return;
+  const repo = createRelationshipClusterRepo(sql);
+  await repo.replaceForAnalysis(
+    analysisId,
+    walletId,
+    clusters.map((c) => ({
+      analysisId,
+      walletId,
+      clusterId: c.id,
+      targetWallet: c.targetWallet,
+      members: c.members,
+      confidence: c.confidence,
+      evidenceFamilies: c.evidenceFamilies,
+      limitations: c.limitations,
+      engineVersion: c.engineVersion
+    }))
+  );
 }
 
 export type { IntelligenceSignal, ScoreResult };

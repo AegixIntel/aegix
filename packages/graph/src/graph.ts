@@ -1,6 +1,7 @@
 import {
   DEFAULT_GRAPH_LIMITS,
   type Confidence,
+  type EdgeObservationClass,
   type ExposurePath,
   type ExposurePathEdge,
   type ExposurePathEdgeType,
@@ -24,6 +25,10 @@ export interface GraphEdge {
   type: ExposurePathEdgeType;
   strength: number;
   confidence: Confidence;
+  observationClass: EdgeObservationClass;
+  evidence: string[];
+  sourceEngine: string;
+  engineVersion: string;
 }
 
 export interface WalletGraph {
@@ -55,7 +60,11 @@ export function buildGraph(relationships: WalletRelationship[]): WalletGraph {
         target: rel.walletB,
         type,
         strength: rel.strengthScore,
-        confidence: rel.confidenceScore
+        confidence: rel.confidenceScore,
+        observationClass: "OBSERVED",
+        evidence: [],
+        sourceEngine: rel.engineVersion ?? GRAPH_ENGINE_VERSION,
+        engineVersion: rel.engineVersion ?? GRAPH_ENGINE_VERSION
       });
     }
   }
@@ -133,7 +142,7 @@ export function findExposurePaths(input: PathFindingInput): PathFindingResult {
       }
       if (edgeCount < limits.maxEdges) {
         edgeCount += 1;
-        allEdges.push({ source: edge.source, target: edge.target, type: edge.type, strength: edge.strength, confidence: edge.confidence });
+        allEdges.push({ source: edge.source, target: edge.target, type: edge.type, strength: edge.strength, confidence: edge.confidence, observationClass: edge.observationClass, evidence: edge.evidence, sourceEngine: edge.sourceEngine, engineVersion: edge.engineVersion });
       }
 
       const nextPath = [...current.path, neighbor];
@@ -157,10 +166,11 @@ export function findExposurePaths(input: PathFindingInput): PathFindingResult {
             const n = graph.nodes.get(id)!;
             return { id: n.id, type: n.type, label: n.label };
           }),
-          edges: toEdges(nextPath),
+          edges: toEdges(nextPath, graph),
           pathScore: strength,
           confidenceScore: confidence,
           summary: `Path from ${targetAddress} through ${nextPath.length - 1} hop(s).`,
+          explanation: ["Legacy attribution path — observed transfer edges only."],
           createdAt: new Date().toISOString(),
           engineVersion: GRAPH_ENGINE_VERSION
         });
@@ -178,15 +188,23 @@ export function findExposurePaths(input: PathFindingInput): PathFindingResult {
   return { paths: paths.slice(0, 10), nodes: allNodes, edges: allEdges };
 }
 
-function toEdges(path: string[]): ExposurePathEdge[] {
+function toEdges(path: string[], graph: WalletGraph): ExposurePathEdge[] {
   const edges: ExposurePathEdge[] = [];
   for (let i = 0; i < path.length - 1; i++) {
+    const source = path[i]!;
+    const target = path[i + 1]!;
+    const key = [source, target].sort().join("|");
+    const edge = graph.edges.get(key);
     edges.push({
-      source: path[i]!,
-      target: path[i + 1]!,
-      type: "TRANSFERRED",
-      strength: 0,
-      confidence: 0
+      source,
+      target,
+      type: edge?.type ?? "TRANSFERRED",
+      strength: edge?.strength ?? 0,
+      confidence: edge?.confidence ?? 0,
+      observationClass: "OBSERVED",
+      evidence: edge?.evidence ?? [],
+      sourceEngine: edge?.sourceEngine ?? GRAPH_ENGINE_VERSION,
+      engineVersion: edge?.engineVersion ?? GRAPH_ENGINE_VERSION
     });
   }
   return edges;

@@ -80,3 +80,8 @@ export {
   type FundingPathRepo,
   type FundingPathRow
 } from "./repositories/funding-paths.js";
+export {
+  createRelationshipClusterRepo,
+  type RelationshipClusterRepo,
+  type RelationshipClusterRow
+} from "./repositories/relationship-clusters.js";

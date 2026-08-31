@@ -34,7 +34,7 @@ export const CORRELATION_FAMILY_WEIGHTS: CorrelationFamilyWeights[] = [
   { family: "ENTITY_OVERLAP", weight: 0.45, minimumStrength: 0.15 },
   { family: "COUNTERPARTY_OVERLAP", weight: 0.4, minimumStrength: 0.2 },
   { family: "ASSET_FLOW_CORRELATION", weight: 0.4, minimumStrength: 0.15 },
-  { family: "TEMPORAL_CORRELATION", weight: 0.3, minimumStrength: 0.25 },
+  { family: "TEMPORAL_CORRELATION", weight: 0.3, minimumStrength: 0.3 },
   { family: "PROTOCOL_SEQUENCE_SIMILARITY", weight: 0.1, minimumStrength: 0.4 }
 ];
 
@@ -58,6 +58,30 @@ export const COMMON_MINTS = new Set([
   "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" // USDT
 ]);
 
+/**
+ * D5-F §30: commonality penalty for ENTITY_OVERLAP. Popular entities
+ * (Jupiter, Raydium, USDC infrastructure, common bridges) carry a small
+ * correlation value — nearly every Solana wallet touches them. Only
+ * uncommon verified entities meaningfully separate wallets.
+ *
+ * The set stores entity NAMES (registry `name`), and the penalty is applied
+ * by matching the shared entity name (and its protocol category).
+ */
+export const COMMON_ENTITIES = new Set([
+  "Jupiter",
+  "Raydium AMM",
+  "Pump.fun",
+  "Wormhole",
+  "Orca",
+  "Meteora",
+  "Marinade",
+  "Metaplex"
+]);
+
+/** D5-F §30: verified common entities contribute this fraction of their
+ * base strength; uncommon verified entities keep full value. */
+export const COMMON_ENTITY_STRENGTH_FACTOR = 0.2;
+
 /** Dust threshold: transfers below this SOL-equivalent are not meaningful
  * funding unless repeated (D5-C §18). */
 export const FUNDING_DUST_SOL = 0.001;
@@ -69,6 +93,18 @@ export const MIN_SAMPLE_FOR_ANY_ASSESSMENT = 3;
 
 /** Temporal short-window (seconds) for paired-activity detection (D5-E §32). */
 export const TEMPORAL_SHORT_WINDOW_SECONDS = 60;
+
+/** Versioned temporal windows (D5-E §8) — config, never hard-coded in logic. */
+export const TEMPORAL_WINDOWS_SECONDS = [30, 60, 120, 300] as const;
+
+/** Minimum repeated matches for a short-window signal (D5-E §7). */
+export const TEMPORAL_MIN_REPEATED_MATCHES = 2;
+
+/** Directional sequence window (seconds), D5-E §12. */
+export const TEMPORAL_SEQUENCE_WINDOW_SECONDS = 120;
+
+/** Base-rate guard: expected collision ratio above which evidence is noise. */
+export const TEMPORAL_MAX_COLLISION_RATIO = 0.15;
 
 /** Multi-hop funding budget (D5-C §20, strict bounds). */
 export const FUNDING_MAX_HOPS = 2;

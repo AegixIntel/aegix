@@ -24,6 +24,8 @@ import {
   MIN_SAMPLE_FOR_FULL_CONFIDENCE
 } from "../config.js";
 import type { EvidenceFamilyResult, SampleAdequacy } from "../types.js";
+export const BEHAVIORAL_SIMILARITY_ENGINE_VERSION = "behavioral-similarity-v1.0.0";
+
 export interface BehaviorInput {
   walletA: string;
   walletB: string;
@@ -152,6 +154,7 @@ export function evaluateBehavioralSimilarity(input: BehaviorInput): EvidenceFami
       ...weakest.map((s) => `Major difference: ${s.feature} (${Math.round(s.similarity * 100)}% similarity)`),
       `Sample: ${sample} transactions — confidence is limited by sample size`,
       coverage < LOW_SEMANTIC_COVERAGE_THRESHOLD ? "Semantic coverage is low, capping behavioral confidence" : ""
-    ].filter(Boolean)
+    ].filter(Boolean),
+    engineVersion: BEHAVIORAL_SIMILARITY_ENGINE_VERSION
   };
 }

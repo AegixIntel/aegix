@@ -45,6 +45,8 @@ export interface EvidenceFamilyResult {
   evidence: EvidencePoint[];
   /** Reasons this family might be misleading. */
   limitations: string[];
+  /** Engine version that produced this family (D5-E §73). */
+  engineVersion: string;
 }
 
 export interface CorrelationResult {
