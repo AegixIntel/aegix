@@ -213,9 +213,11 @@ export async function buildServer(deps: ApiDeps) {
   });
 
   app.get("/health/ready", async (_req, reply) => {
-    // Readiness reflects the real dependency state, see D3-J §59:
-    // LIVE = process up, READY = db+redis+queue ok, DEGRADED = RPC down.
-    const checks: Record<string, boolean> = { postgres: false, redis: false, queue: false, rpc: false };
+    // Readiness reflects the real dependency state, see D3-J §59 and D4-I §87:
+    // LIVE = process up, READY = db+redis+queue ok, DEGRADED = non-core dep
+    // (RPC, monitoring, email) down. A dead email provider must never mark
+    // the whole application dead.
+    const checks: Record<string, boolean> = { postgres: false, redis: false, queue: false, rpc: false, monitoring: false, email: false };
     try {
       await sql`select 1`;
       checks.postgres = true;
@@ -239,6 +241,27 @@ export async function buildServer(deps: ApiDeps) {
       checks.rpc = true;
     } catch {
       // keep false
+    }
+    if (config.ENABLE_MONITORING) {
+      try {
+        const counts = await queues.monitoring.getJobCounts();
+        checks.monitoring = counts !== null;
+      } catch {
+        // keep false
+      }
+    } else {
+      checks.monitoring = true; // disabled is a valid state
+    }
+    if (config.ENABLE_EMAIL_NOTIFICATIONS) {
+      // Email provider availability is informational; never fatal.
+      try {
+        await cache.get("health:email-probe");
+        checks.email = true;
+      } catch {
+        // keep false
+      }
+    } else {
+      checks.email = true; // disabled is a valid state
     }
 
     const allUp = Object.values(checks).every(Boolean);
