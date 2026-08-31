@@ -72,6 +72,28 @@ const envSchema = z.object({
   ENABLE_ATTACK_MY_WALLET: z.preprocess(boolEnv, z.boolean()).default(true),
   ENABLE_SAVE_WALLET: z.preprocess(boolEnv, z.boolean()).default(true),
 
+  // D4: privacy threat monitor — kill switches, schedules, budgets, noise
+  // suppression. See docs/milestone-d4.md (D4-A, D4-H, D4-I).
+  ENABLE_MONITORING: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_MONITOR_SCHEDULER: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_EMAIL_NOTIFICATIONS: z.preprocess(boolEnv, z.boolean()).default(false),
+
+  MONITOR_ALLOWED_SCHEDULES: z.string().default("DAILY,EVERY_12_HOURS,EVERY_6_HOURS"),
+  MONITOR_DEFAULT_SCHEDULE: z.string().default("DAILY"),
+  MONITOR_TEST_SCHEDULES_ENABLED: z.preprocess(boolEnv, z.boolean()).default(false),
+  MONITOR_FRESHNESS_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  MONITOR_SCHEDULER_CRON: z.string().default("*/5 * * * *"),
+  MAX_ACTIVE_MONITORS_PER_USER: z.coerce.number().int().positive().default(3),
+  MAX_MONITOR_JOBS_PER_HOUR: z.coerce.number().int().positive().default(120),
+  MAX_ACTIVE_MONITOR_JOBS: z.coerce.number().int().positive().default(10),
+  MAX_MONITOR_QUEUE_DEPTH: z.coerce.number().int().positive().default(100),
+  MONITOR_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  MONITOR_CHECK_RETRY_LIMIT: z.coerce.number().int().positive().default(3),
+  MONITOR_EVENT_COOLDOWN_HOURS: z.coerce.number().int().positive().default(24),
+  MONITOR_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
+  MONITOR_SCORE_DELTA_THRESHOLD: z.coerce.number().int().nonnegative().default(10),
+  MONITOR_EVENT_EXPIRY_DAYS: z.coerce.number().int().positive().default(30),
+
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
 

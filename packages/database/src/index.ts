@@ -31,3 +31,32 @@ export {
   type SavedAnalysisRepo,
   type SavedAnalysisRow
 } from "./repositories/saved-analyses.js";
+export {
+  createMonitorRepo,
+  type MonitorRepo,
+  type MonitorRow,
+  type MonitorViewRow
+} from "./repositories/monitors.js";
+export {
+  createMonitorCheckRepo,
+  type MonitorCheckRepo,
+  type MonitorCheckRow
+} from "./repositories/monitor-checks.js";
+export {
+  createExposureDiffRepo,
+  type ExposureDiffRepo,
+  type ExposureDiffRow
+} from "./repositories/exposure-diffs.js";
+export {
+  createThreatEventRepo,
+  type ThreatEventRepo,
+  type ThreatEventRow
+} from "./repositories/threat-events.js";
+export {
+  createMonitorAlertRulesRepo,
+  createNotificationRepo,
+  type AlertRulesRow,
+  type MonitorAlertRulesRepo,
+  type NotificationRepo,
+  type NotificationRow
+} from "./repositories/notifications.js";

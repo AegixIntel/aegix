@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import Fastify, { type FastifyRequest } from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
@@ -15,8 +15,14 @@ import { createLogger, walletRef } from "@aegix/logging";
 import {
   createAnalysisJobRepo,
   createDb,
+  createExposureDiffRepo,
   createIntelligenceRepo,
+  createMonitorAlertRulesRepo,
+  createMonitorCheckRepo,
+  createMonitorRepo,
+  createNotificationRepo,
   createSavedAnalysisRepo,
+  createThreatEventRepo,
   createWalletRepo,
   type AnalysisJobRow,
   type ScoreRow,
@@ -163,6 +169,12 @@ export async function buildServer(deps: ApiDeps) {
   const jobRepo = createAnalysisJobRepo(sql);
   const intelligenceRepo = createIntelligenceRepo(sql);
   const savedRepo = createSavedAnalysisRepo(sql);
+  const monitorRepo = createMonitorRepo(sql);
+  const monitorCheckRepo = createMonitorCheckRepo(sql);
+  const diffRepo = createExposureDiffRepo(sql);
+  const threatEventRepo = createThreatEventRepo(sql);
+  const alertRulesRepo = createMonitorAlertRulesRepo(sql);
+  const notificationRepo = createNotificationRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
   const provider = createProviderPoolFromConfig(config);
@@ -502,6 +514,306 @@ export async function buildServer(deps: ApiDeps) {
     const deleted = await savedRepo.deleteForUser(user.id, wallet.id);
     return reply.send({ deleted });
   });
+
+  // ---- Privacy monitors, see milestone D4 (D4-A, D4-E, D4-F, D4-G) ----
+  // All routes require a verified registered user (server-side auth, D3-D).
+  // Monitor work is scheduled by the worker; the API only manages state.
+
+  const monitorGate = (reply: FastifyReply) => {
+    if (!config.ENABLE_MONITORING) {
+      return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Privacy monitoring is disabled", requestId: randomUUID() });
+    }
+    return null;
+  };
+
+  /** Allowed schedule types from config; EVERY_MINUTE only in test environments. */
+  function allowedSchedules(): string[] {
+    const base = config.MONITOR_ALLOWED_SCHEDULES.split(",").map((s) => s.trim()).filter(Boolean);
+    if (config.MONITOR_TEST_SCHEDULES_ENABLED) base.push("EVERY_MINUTE");
+    return base;
+  }
+
+  function scheduleIntervalMs(scheduleType: string): number {
+    switch (scheduleType) {
+      case "EVERY_6_HOURS": return 6 * 3600_000;
+      case "EVERY_12_HOURS": return 12 * 3600_000;
+      case "EVERY_MINUTE": return 60_000;
+      default: return 24 * 3600_000; // DAILY
+    }
+  }
+
+  app.get("/v1/me/monitors", async (req, reply) => {
+    const gate = monitorGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+    const monitors = await monitorRepo.listForUser(user.id);
+    return reply.send({ monitors });
+  });
+
+  app.post<{ Body: { address: string; scheduleType?: string } }>(
+    "/v1/me/monitors",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["address"],
+          properties: {
+            address: { type: "string", minLength: 32, maxLength: 44 },
+            scheduleType: { type: "string" }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = monitorGate(reply);
+      if (gate) return gate;
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      await auth.ensureProfile(user, sql);
+
+      const { address } = req.body;
+      if (!isValidSolanaAddress(address)) {
+        return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+      }
+
+      const scheduleType = req.body.scheduleType ?? config.MONITOR_DEFAULT_SCHEDULE;
+      if (!allowedSchedules().includes(scheduleType)) {
+        return reply.code(400).send({ code: "INVALID_SCHEDULE", message: `Schedule must be one of: ${allowedSchedules().join(", ")}`, requestId: randomUUID() });
+      }
+
+      const wallet = await walletRepo.findByAddress("solana", address);
+      if (!wallet) {
+        return reply.code(404).send({ code: "NOT_FOUND", message: "Wallet not found — analyze it first", requestId: randomUUID() });
+      }
+      const saved = await savedRepo.getForUser(user.id, wallet.id);
+      if (!saved) {
+        return reply.code(400).send({ code: "WALLET_NOT_SAVED", message: "Save the wallet before enabling monitoring", requestId: randomUUID() });
+      }
+
+      const active = await monitorRepo.countActiveForUser(user.id);
+      if (active >= config.MAX_ACTIVE_MONITORS_PER_USER) {
+        return reply.code(429).send({
+          code: "MONITOR_LIMIT_REACHED",
+          message: `Monitor limit reached (${config.MAX_ACTIVE_MONITORS_PER_USER} active)`,
+          requestId: randomUUID()
+        });
+      }
+
+      const latest = await jobRepo.latestForWallet(wallet.id);
+      const nextCheckAt = new Date(Date.now() + scheduleIntervalMs(scheduleType)).toISOString();
+      const monitor = await monitorRepo.create({
+        userId: user.id,
+        walletId: wallet.id,
+        savedAnalysisId: saved.id,
+        scheduleType,
+        baselineAnalysisId: latest?.id ?? null,
+        nextCheckAt
+      });
+      await alertRulesRepo.createWithMonitor(monitor.id, {
+        minimumSeverity: "HIGH",
+        minimumConfidence: config.MONITOR_MIN_CONFIDENCE,
+        overallScoreDeltaThreshold: config.MONITOR_SCORE_DELTA_THRESHOLD,
+        cooldownHours: config.MONITOR_EVENT_COOLDOWN_HOURS
+      });
+      const rules = await alertRulesRepo.getForMonitor(monitor.id);
+
+      logger.info("monitor created", { requestId: req.headers["x-request-id"], monitorId: monitor.id, ...walletRef(address) });
+      return reply.code(201).send({ monitor, rules });
+    }
+  );
+
+  app.patch<{ Params: { id: string }; Body: { scheduleType?: string; status?: string; alertRules?: Record<string, unknown> } }>(
+    "/v1/me/monitors/:id",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            scheduleType: { type: "string" },
+            status: { type: "string" },
+            alertRules: { type: "object" }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = monitorGate(reply);
+      if (gate) return gate;
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+
+      const monitor = await monitorRepo.getRowForUser(user.id, req.params.id);
+      if (!monitor) {
+        return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+      }
+
+      const { scheduleType, status, alertRules } = req.body;
+      if (scheduleType !== undefined) {
+        if (!allowedSchedules().includes(scheduleType)) {
+          return reply.code(400).send({ code: "INVALID_SCHEDULE", message: `Schedule must be one of: ${allowedSchedules().join(", ")}`, requestId: randomUUID() });
+        }
+        await monitorRepo.updateSchedule(user.id, monitor.id, scheduleType, new Date(Date.now() + scheduleIntervalMs(scheduleType)).toISOString());
+      }
+      if (status !== undefined) {
+        if (status !== "ACTIVE" && status !== "PAUSED") {
+          return reply.code(400).send({ code: "INVALID_STATUS", message: "Status must be ACTIVE or PAUSED", requestId: randomUUID() });
+        }
+        await monitorRepo.setStatus(user.id, monitor.id, status);
+      }
+      if (alertRules && typeof alertRules === "object") {
+        const patch: Record<string, unknown> = {};
+        const severities = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+        if (typeof alertRules.minimumSeverity === "string") {
+          if (!severities.includes(alertRules.minimumSeverity)) {
+            return reply.code(400).send({ code: "INVALID_SEVERITY", message: `Severity must be one of: ${severities.join(", ")}`, requestId: randomUUID() });
+          }
+          patch.minimum_severity = alertRules.minimumSeverity;
+        }
+        if (typeof alertRules.minimumConfidence === "number") patch.minimum_confidence = String(Math.min(1, Math.max(0, alertRules.minimumConfidence)));
+        if (typeof alertRules.overallScoreDeltaThreshold === "number") patch.overall_score_delta_threshold = alertRules.overallScoreDeltaThreshold;
+        if (typeof alertRules.notifyNewEntity === "boolean") patch.notify_new_entity = alertRules.notifyNewEntity;
+        if (typeof alertRules.notifyNewAttackPath === "boolean") patch.notify_new_attack_path = alertRules.notifyNewAttackPath;
+        if (typeof alertRules.notifyBehaviorChange === "boolean") patch.notify_behavior_change = alertRules.notifyBehaviorChange;
+        if (typeof alertRules.notifyDataQualityDegraded === "boolean") patch.notify_data_quality_degraded = alertRules.notifyDataQualityDegraded;
+        if (typeof alertRules.cooldownHours === "number") patch.cooldown_hours = alertRules.cooldownHours;
+        await alertRulesRepo.updateForMonitor(monitor.id, patch);
+      }
+
+      const updated = await monitorRepo.getForUser(user.id, monitor.id);
+      const rules = await alertRulesRepo.getForMonitor(monitor.id);
+      return reply.send({ monitor: updated, rules });
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>("/v1/me/monitors/:id", async (req, reply) => {
+    const gate = monitorGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const monitor = await monitorRepo.getRowForUser(user.id, req.params.id);
+    if (!monitor) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+    }
+    // Soft-disable: history (events/checks) stays inspectable, scheduling stops.
+    await monitorRepo.setStatus(user.id, monitor.id, "DISABLED");
+    return reply.send({ disabled: true });
+  });
+
+  app.get<{ Params: { id: string } }>("/v1/me/monitors/:id", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const monitor = await monitorRepo.getForUser(user.id, req.params.id);
+    if (!monitor) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+    }
+    const [rules, events, checks, diffs] = await Promise.all([
+      alertRulesRepo.getForMonitor(monitor.id),
+      threatEventRepo.listForMonitor(monitor.id, 20),
+      monitorCheckRepo.listForMonitor(monitor.id, 20),
+      diffRepo.listForMonitor(monitor.id, 20)
+    ]);
+    return reply.send({ monitor, rules, events, checks, diffs });
+  });
+
+  app.get<{ Params: { id: string } }>("/v1/me/monitors/:id/events", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const monitor = await monitorRepo.getRowForUser(user.id, req.params.id);
+    if (!monitor) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+    }
+    const events = await threatEventRepo.listForMonitor(monitor.id, 50);
+    return reply.send({ events });
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/me/events/:id/acknowledge", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const acknowledged = await threatEventRepo.acknowledge(user.id, req.params.id);
+    if (!acknowledged) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Event not found", requestId: randomUUID() });
+    }
+    return reply.send({ acknowledged: true });
+  });
+
+  app.get<{ Params: { id: string } }>("/v1/me/monitors/:id/compare", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const monitor = await monitorRepo.getRowForUser(user.id, req.params.id);
+    if (!monitor) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+    }
+    const diffs = await diffRepo.listForMonitor(monitor.id, 1);
+    const diff = diffs[0];
+    if (!diff) {
+      return reply.code(404).send({ code: "NO_DIFF", message: "No comparison available yet", requestId: randomUUID() });
+    }
+    const previous = await jobRepo.findById(diff.previous_analysis_id);
+    const current = await jobRepo.findById(diff.current_analysis_id);
+    return reply.send({ diff, previous, current });
+  });
+
+  // ---- Notifications inbox, see milestone D4 (D4-F §49) ----
+
+  app.get("/v1/me/notifications", async (req, reply) => {
+    const gate = monitorGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+    const [notifications, unreadCount] = await Promise.all([
+      notificationRepo.listForUser(user.id, 50),
+      notificationRepo.unreadCount(user.id)
+    ]);
+    return reply.send({ notifications, unreadCount });
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/me/notifications/:id/read", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const read = await notificationRepo.markRead(user.id, req.params.id);
+    if (!read) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Notification not found", requestId: randomUUID() });
+    }
+    return reply.send({ read: true });
+  });
+
+  // Test-only manual trigger, see milestone D4 §94: never exposed in production.
+  if (config.NODE_ENV !== "production") {
+    app.post<{ Params: { id: string } }>("/v1/me/monitors/:id/check", async (req, reply) => {
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      const monitor = await monitorRepo.getRowForUser(user.id, req.params.id);
+      if (!monitor) {
+        return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
+      }
+      const now = new Date().toISOString();
+      const check = await monitorCheckRepo.insert({ monitorId: monitor.id, scheduledFor: now });
+      await monitorCheckRepo.markStarted(check.id);
+      const latest = await jobRepo.latestForWallet(monitor.wallet_id);
+      if (latest && latest.fresh_until && new Date(latest.fresh_until) > new Date()) {
+        await monitorCheckRepo.markCompleted(check.id, { status: "REUSED", analysisId: latest.id, reused: true, previousAnalysisId: monitor.last_analysis_id });
+        return reply.send({ check, reused: true, analysisId: latest.id });
+      }
+      const job = await jobRepo.create({
+        walletId: monitor.wallet_id,
+        requestedBy: monitor.user_id,
+        analysisType: "full",
+        priority: "free"
+      });
+      await monitorCheckRepo.markCompleted(check.id, { status: "IN_PROGRESS", analysisId: job.id, reused: false, previousAnalysisId: monitor.last_analysis_id });
+      const wallet = await walletRepo.findById(monitor.wallet_id);
+      const queue = queueForPriority("free", queues);
+      await queue.add(
+        "analyze",
+        { analysisId: job.id, walletAddress: wallet?.address ?? "", chain: "solana", analysisType: "full" },
+        { jobId: `analysis-${job.id}`, attempts: 3, backoff: { type: "exponential", delay: 2000 } }
+      );
+      return reply.code(202).send({ check, analysisId: job.id });
+    });
+  }
 
   return app;
 }

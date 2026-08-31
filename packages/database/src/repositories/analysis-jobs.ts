@@ -50,6 +50,8 @@ export interface AnalysisJobRepo {
   markCompleted(id: string, freshness: { chainDataUntil: string; freshUntil: string }, dataQuality: JsonValue): Promise<void>;
   markFailed(id: string, code: string, message: string): Promise<void>;
   latestForWallet(walletId: string): Promise<AnalysisJobRow | null>;
+  /** READY analyses for a wallet, newest first — exposure timeline (D4-G §58). */
+  listReadyForWallet(walletId: string, limit: number): Promise<AnalysisJobRow[]>;
 }
 
 export function createAnalysisJobRepo(sql: Sql): AnalysisJobRepo {
@@ -132,6 +134,15 @@ export function createAnalysisJobRepo(sql: Sql): AnalysisJobRepo {
         limit 1
       `;
       return row ?? null;
+    },
+
+    async listReadyForWallet(walletId, limit) {
+      return sql<AnalysisJobRow[]>`
+        select * from analysis_jobs
+        where wallet_id = ${walletId} and status = 'READY'
+        order by created_at desc
+        limit ${limit}
+      `;
     }
   };
 }
