@@ -130,3 +130,81 @@ export async function getWalletXRay(address: string): Promise<WalletXRay> {
   }
   return res.json() as Promise<WalletXRay>;
 }
+
+// ---- D3: account classification + saved analyses (dashboard) ----
+
+export interface AccountClassification {
+  address: string;
+  accountType: string;
+  confidence: number;
+  protocol: string | null;
+  verificationStatus: string | null;
+  analysisEligible: boolean;
+  evidence: {
+    executable: boolean;
+    owner: string | null;
+    dataLength: number;
+    lamports: number;
+    knownProtocol: string | null;
+    sysvarName: string | null;
+    pdaHint: boolean;
+  };
+}
+
+export interface SavedAnalysis {
+  id: string;
+  user_id: string;
+  wallet_id: string;
+  wallet_address: string;
+  analysis_id: string | null;
+  label: string | null;
+  created_at: string;
+  score: number | null;
+  confidence: number | null;
+  status: string | null;
+  last_analyzed_at: string | null;
+  fresh_until: string | null;
+}
+
+/** Reads the Supabase access token from localStorage (set by the auth UI). */
+export function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem("aegix_access_token");
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+export async function getAccountClassification(address: string): Promise<AccountClassification> {
+  const res = await fetch(`${API_BASE_URL}/v1/accounts/${encodeURIComponent(address)}/classification`);
+  if (!res.ok) throw new Error(`Classification failed with status ${res.status}`);
+  return res.json() as Promise<AccountClassification>;
+}
+
+export async function listSavedAnalyses(): Promise<SavedAnalysis[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved`, { headers: authHeaders() });
+  if (res.status === 401) return [];
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { saved: SavedAnalysis[] };
+  return body.saved;
+}
+
+export async function saveAnalysis(address: string, label?: string): Promise<SavedAnalysis> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ address, label: label ?? null })
+  });
+  if (!res.ok) throw new Error(`Save failed with status ${res.status}`);
+  const body = (await res.json()) as { saved: SavedAnalysis };
+  return body.saved;
+}
+
+export async function deleteSavedAnalysis(address: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/v1/me/saved/${encodeURIComponent(address)}`, {
+    method: "DELETE",
+    headers: authHeaders()
+  });
+}
