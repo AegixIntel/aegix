@@ -15,6 +15,7 @@
     "dev": "pnpm -r --parallel run dev",
     "test:wallets": "node --import tsx tests/golden-wallets.ts",
     "test:monitors": "node --import tsx tests/golden-monitors.ts",
+    "test:e2e-monitor": "node --import tsx tests/e2e-monitor.ts",
     "loadtest:analysis": "node --import tsx tests/load-test.ts",
     "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts"
   },
