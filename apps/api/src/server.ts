@@ -37,6 +37,59 @@ function analysisLockKey(address: string, engineVersion: string): string {
   return `analysis-lock:solana:${address}:${ENGINE_SCOPE}:${engineVersion}`;
 }
 
+/**
+ * Admission control, see D3-C §25-§26: checks system capacity before
+ * accepting an expensive analysis job. Returns null when the request may
+ * proceed, or a SERVICE_BUSY response body when overloaded.
+ */
+async function checkAdmission(deps: {
+  queues: ReturnType<typeof createQueues>;
+  sql: ReturnType<typeof createDb>;
+  config: AppConfig;
+  userId: string | null;
+  ip: string;
+}): Promise<{ admitted: true } | { admitted: false; body: Record<string, unknown> }> {
+  const { queues, sql, config, userId, ip } = deps;
+
+  // Kill switch: new analyses can be disabled without touching cached reports.
+  if (!config.ENABLE_NEW_ANALYSES) {
+    return { admitted: false, body: { code: "SERVICE_BUSY", message: "New analyses are temporarily disabled", requestId: randomUUID() } };
+  }
+
+  const [standard, high, free] = await Promise.all([
+    queues.analysisStandard.getJobCounts(),
+    queues.analysisHigh.getJobCounts(),
+    queues.analysisFree.getJobCounts()
+  ]);
+  const totalQueued =
+    (standard.waiting ?? 0) + (standard.delayed ?? 0) +
+    (high.waiting ?? 0) + (high.delayed ?? 0) +
+    (free.waiting ?? 0) + (free.delayed ?? 0);
+  const totalActive = (standard.active ?? 0) + (high.active ?? 0) + (free.active ?? 0);
+
+  if (totalQueued >= config.MAX_QUEUE_DEPTH) {
+    return { admitted: false, body: { code: "SERVICE_BUSY", message: "Analysis queue is full, try again later", requestId: randomUUID() } };
+  }
+  if (totalActive >= config.MAX_ACTIVE_GLOBAL) {
+    return { admitted: false, body: { code: "SERVICE_BUSY", message: "System is at capacity, try again later", requestId: randomUUID() } };
+  }
+
+  // Per-actor pending limits: count non-terminal jobs for this user or IP.
+  const pendingWhere = userId
+    ? sql`requested_by = ${userId}`
+    : sql`requested_by is null and requested_at > now() - interval '24 hours' and ip_address = ${ip}`;
+  const [pending] = await sql<Array<{ count: string }>>`
+    select count(*)::text as count from analysis_jobs
+    where status not in ('READY', 'FAILED', 'CANCELLED') and ${pendingWhere}
+  `;
+  const limit = userId ? config.MAX_PENDING_PER_USER : config.MAX_PENDING_PER_IP;
+  if (pending && Number(pending.count) >= limit) {
+    return { admitted: false, body: { code: "SERVICE_BUSY", message: "Too many pending analyses, wait for them to finish", requestId: randomUUID() } };
+  }
+
+  return { admitted: true };
+}
+
 export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
   const app = Fastify({ logger: { level: config.LOG_LEVEL } });
@@ -204,12 +257,27 @@ export async function buildServer(deps: ApiDeps) {
           return reply.send({ analysisId: latest.id, cached: true });
         }
 
+        // 4. Admission control before creating an expensive job, see D3-C.
+        const admission = await checkAdmission({
+          queues,
+          sql,
+          config,
+          userId: null,
+          ip: req.ip
+        });
+        if (!admission.admitted) {
+          return reply.code(503).send(admission.body);
+        }
+
         const job = await jobRepo.create({
           walletId: wallet.id,
           requestedBy: null,
           analysisType: "full",
           priority: "standard"
         });
+
+        // Record origin IP for pending-per-IP limits.
+        await sql`update analysis_jobs set ip_address = ${req.ip} where id = ${job.id}`;
 
         const queue = queueForPriority(job.priority, queues);
         await queue.add(

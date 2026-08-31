@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/** Parses boolean env values: "true"/"1" → true, anything else → false. */
+function boolEnv(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") return v === "true" || v === "1";
+  return false;
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -49,6 +57,19 @@ const envSchema = z.object({
 
   FREE_ANON_DAILY_LIMIT: z.coerce.number().int().nonnegative().default(3),
   FREE_USER_DAILY_LIMIT: z.coerce.number().int().nonnegative().default(10),
+
+  // D3-C: public admission control
+  MAX_QUEUE_DEPTH: z.coerce.number().int().nonnegative().default(50),
+  MAX_PENDING_PER_USER: z.coerce.number().int().nonnegative().default(3),
+  MAX_PENDING_PER_IP: z.coerce.number().int().nonnegative().default(5),
+  MAX_ACTIVE_GLOBAL: z.coerce.number().int().nonnegative().default(30),
+
+  // D3-J: feature flags and kill switch. Boolean env vars are parsed
+  // explicitly — z.coerce.boolean() would turn "false" into true.
+  ENABLE_REGISTRATION: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_NEW_ANALYSES: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_ATTACK_MY_WALLET: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_SAVE_WALLET: z.preprocess(boolEnv, z.boolean()).default(true),
 
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
