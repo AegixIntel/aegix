@@ -85,3 +85,27 @@ export {
   type RelationshipClusterRepo,
   type RelationshipClusterRow
 } from "./repositories/relationship-clusters.js";
+export {
+  createSavedComparisonRepo,
+  type SavedComparisonRepo,
+  type SavedComparisonRow
+} from "./repositories/saved-comparisons.js";
+export {
+  createDeveloperApiKeyRepo,
+  developerKeyToView,
+  API_KEY_PREFIX,
+  API_KEY_HASH_ALGORITHM,
+  API_KEY_PREFIX_LENGTH,
+  KNOWN_API_KEY_SCOPES,
+  type ApiKeyScope,
+  type DeveloperApiKeyRepo,
+  type DeveloperApiKeyRow,
+  type DeveloperApiKeyView
+} from "./repositories/developer-keys.js";
+
+export {
+  createDeveloperUsageRepo,
+  type DeveloperUsageRepo,
+  type DeveloperUsageEventRow,
+  type DeveloperUsageSummary
+} from "./repositories/developer-usage.js";

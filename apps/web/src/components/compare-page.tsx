@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { compareWallets, type CompareClusterMember, type CompareEvidenceFamily, type ComparePath, type CompareResult } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { compareWallets, getAccessToken, saveComparison, deleteSavedComparison, type CompareClusterMember, type CompareEvidenceFamily, type ComparePath, type CompareResult, type SavedComparison } from "@/lib/api";
 
 function shortAddress(address: string): string {
   if (address.length <= 16) return address;
@@ -205,6 +205,67 @@ export default function ComparePage({ initialA, initialB }: { initialA?: string;
   );
 }
 
+// ---- D6-A: save/unsave a comparison (authenticated) ----
+
+function SaveComparisonButton({ result }: { result: CompareResult }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedComparison | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToken(getAccessToken());
+  }, []);
+
+  async function toggle() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      if (saved) {
+        await deleteSavedComparison(saved.id);
+        setSaved(null);
+      } else {
+        const row = await saveComparison(result.walletA, result.walletB);
+        setSaved(row);
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <p className="text-xs text-slate-500">
+        <a href="/?login=1" className="underline">Sign in</a> to save this comparison.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => void toggle()}
+        disabled={busy}
+        className={`rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+          saved
+            ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+            : "border-slate-600 text-slate-200 hover:border-accent"
+        }`}
+      >
+        {saved ? "Saved" : "Save Comparison"}
+      </button>
+      {saved && (
+        <a href="/dashboard" className="text-xs text-slate-500 underline hover:text-accent">
+          View in dashboard
+        </a>
+      )}
+      {message && <p className="text-xs text-red-400">{message}</p>}
+    </div>
+  );
+}
+
 function CompareResultView({ result, onRetry }: { result: CompareResult; onRetry: () => void }) {
   const { correlation } = result;
   const score = correlation.correlationScore;
@@ -217,6 +278,7 @@ function CompareResultView({ result, onRetry }: { result: CompareResult; onRetry
   return (
     <div className="mt-8 space-y-6">
       {result.cached && <p className="text-xs text-slate-500">Cached result — no new computation was performed.</p>}
+      <SaveComparisonButton result={result} />
 
       {/* Primary result: strength and confidence are SEPARATE metrics (D5-I §29). */}
       <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">

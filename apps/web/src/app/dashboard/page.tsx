@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { listSavedAnalyses, deleteSavedAnalysis, listMonitors, type SavedAnalysis, type Monitor } from "@/lib/api";
+import { listSavedAnalyses, deleteSavedAnalysis, listMonitors, listSavedComparisons, deleteSavedComparison, type SavedAnalysis, type Monitor, type SavedComparison } from "@/lib/api";
 
 function shortAddress(address: string): string {
   if (address.length <= 16) return address;
@@ -28,15 +28,17 @@ function statusBadge(status: string): string {
 export default function DashboardPage() {
   const [saved, setSaved] = useState<SavedAnalysis[] | null>(null);
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
+  const [comparisons, setComparisons] = useState<SavedComparison[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [items, mon] = await Promise.all([listSavedAnalyses(), listMonitors()]);
+      const [items, mon, cmp] = await Promise.all([listSavedAnalyses(), listMonitors(), listSavedComparisons()]);
       setSaved(items);
       setMonitors(mon);
+      setComparisons(cmp);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
     }
@@ -53,6 +55,11 @@ export default function DashboardPage() {
     setSaved((cur) => (cur ?? []).filter((s) => s.wallet_address !== address));
   }
 
+  async function removeComparison(id: string) {
+    await deleteSavedComparison(id);
+    setComparisons((cur) => (cur ?? []).filter((c) => c.id !== id));
+  }
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -63,6 +70,9 @@ export default function DashboardPage() {
         <div className="flex gap-2">
           <a href="/dashboard/notifications" className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent">
             Notifications
+          </a>
+          <a href="/developer" className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent">
+            Developer API
           </a>
           <a href="/" className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent">
             New Analysis
@@ -129,6 +139,69 @@ export default function DashboardPage() {
                   </span>
                 )}
               </a>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Saved comparisons (D6-A §23) */}
+      <section className="mt-10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Saved Comparisons</h2>
+          <a href="/compare" className="text-xs text-slate-500 hover:text-accent">Compare wallets →</a>
+        </div>
+        {comparisons === null && !error ? (
+          <p className="mt-4 text-sm text-slate-400">Loading…</p>
+        ) : comparisons?.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900 p-8 text-center">
+            <p className="text-slate-300">No saved comparisons yet.</p>
+            <a href="/compare" className="mt-4 inline-block rounded-lg bg-accent px-5 py-2.5 font-semibold text-white hover:opacity-90">
+              Compare two wallets
+            </a>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {comparisons?.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900 p-4">
+                <div className="min-w-0">
+                  <a href={`/dashboard/saved-comparison/${c.id}`} className="font-mono text-slate-100 hover:text-accent">
+                    {c.label ? `${c.label} · ` : ""}
+                    {shortAddress(c.wallet_a)} vs {shortAddress(c.wallet_b)}
+                  </a>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                    {c.correlation_score != null && (
+                      <span>
+                        Correlation <span className="font-semibold text-slate-300">{c.correlation_score}</span>
+                      </span>
+                    )}
+                    {c.confidence != null && (
+                      <span>
+                        Confidence <span className="font-semibold text-slate-300">{Math.round(Number(c.confidence) * 100)}%</span>
+                      </span>
+                    )}
+                    {c.classification && (
+                      <span>
+                        Class <span className="font-semibold text-slate-300">{c.classification.replace(/_/g, " ").toLowerCase()}</span>
+                      </span>
+                    )}
+                    <span>Saved {new Date(c.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <a
+                    href={`/dashboard/saved-comparison/${c.id}`}
+                    className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:border-accent"
+                  >
+                    Open
+                  </a>
+                  <button
+                    onClick={() => void removeComparison(c.id)}
+                    className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+                  >
+                    Unsave
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}

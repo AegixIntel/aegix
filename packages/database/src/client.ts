@@ -1,6 +1,8 @@
 import postgres from "postgres";
 
 export type Sql = postgres.Sql;
+/** Transaction handle accepted by repositories inside sql.begin(...). */
+export type SqlTransaction = postgres.TransactionSql;
 
 /** Serializable JSON payload accepted by sql.json(...). */
 export type JsonValue =

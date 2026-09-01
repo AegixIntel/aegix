@@ -138,6 +138,20 @@ const envSchema = z.object({
   /** Correlation pair cache TTL (D5-L §87). */
   CORRELATION_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
+  // D6 Block 1: saved comparisons (D6-A) + developer API (D6-B..D6-D).
+  // Feature flags default ON; kill switches can disable without touching the
+  // D1-D5 product surfaces (same pattern as ENABLE_MONITORING).
+  ENABLE_SAVED_COMPARISONS: z.preprocess(boolEnv, z.boolean()).default(true),
+  ENABLE_DEVELOPER_API: z.preprocess(boolEnv, z.boolean()).default(true),
+  /** Max active (non-revoked, non-expired) API keys per user (D6-C §60). */
+  MAX_ACTIVE_API_KEYS_PER_USER: z.coerce.number().int().positive().default(10),
+  /** Optional per-key lifetime in days; null = no expiration (D6-C §49). */
+  API_KEY_DEFAULT_TTL_DAYS: z.coerce.number().int().nonnegative().default(0),
+  /** Per-minute rate limit for developer API requests (D6-D §82). */
+  DEVELOPER_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(60),
+  /** Daily developer quota per user (D6-D §66-§69); keys cannot multiply it. */
+  DEVELOPER_DAILY_QUOTA: z.coerce.number().int().positive().default(500),
+
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
 

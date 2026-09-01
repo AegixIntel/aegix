@@ -492,3 +492,145 @@ export async function getComparison(pairId: string): Promise<CompareResult> {
   if (!res.ok) throw new Error(`Comparison failed with status ${res.status}`);
   return res.json() as Promise<CompareResult>;
 }
+
+// ---- D6-A: saved comparisons (authenticated) ----
+
+export interface SavedComparison {
+  id: string;
+  user_id: string;
+  pair_key: string;
+  wallet_a: string;
+  wallet_b: string;
+  comparison_result_id: string | null;
+  label: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  last_opened_at: string | null;
+  correlation_score: number | null;
+  confidence: string | null;
+  classification: string | null;
+  engine_version: string | null;
+  result_created_at: string | null;
+}
+
+export interface SavedComparisonDetail {
+  saved: SavedComparison;
+  comparison: CompareResult | null;
+  stale: boolean;
+}
+
+export async function saveComparison(walletA: string, walletB: string, label?: string, notes?: string): Promise<SavedComparison> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved-comparisons`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ walletA, walletB, label: label ?? null, notes: notes ?? null })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message ?? `Save failed with status ${res.status}`);
+  }
+  const body = (await res.json()) as { saved: SavedComparison };
+  return body.saved;
+}
+
+export async function listSavedComparisons(): Promise<SavedComparison[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved-comparisons?limit=50`, { headers: authHeaders() });
+  if (res.status === 401) return [];
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { saved: SavedComparison[] };
+  return body.saved;
+}
+
+export async function getSavedComparison(id: string): Promise<SavedComparisonDetail> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved-comparisons/${id}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  return res.json() as Promise<SavedComparisonDetail>;
+}
+
+export async function updateSavedComparison(id: string, patch: { label?: string | null; notes?: string | null }): Promise<SavedComparison> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/saved-comparisons/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify(patch)
+  });
+  if (!res.ok) throw new Error(`Update failed with status ${res.status}`);
+  const body = (await res.json()) as { saved: SavedComparison };
+  return body.saved;
+}
+
+export async function deleteSavedComparison(id: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/v1/me/saved-comparisons/${id}`, { method: "DELETE", headers: authHeaders() });
+}
+
+// ---- D6-C/D: developer API keys + usage (authenticated product UI) ----
+
+export interface DeveloperApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  status: "ACTIVE" | "REVOKED";
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface CreatedDeveloperKey {
+  id: string;
+  name: string;
+  key: string;
+  keyPrefix: string;
+  scopes: string[];
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface DeveloperUsageSummary {
+  periodStart: string;
+  periodEnd: string;
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: string;
+  breakdown: Array<{ operation: string; units: number }>;
+}
+
+export async function listDeveloperKeys(): Promise<DeveloperApiKey[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/developer/keys`, { headers: authHeaders() });
+  if (res.status === 401) return [];
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { keys: DeveloperApiKey[] };
+  return body.keys;
+}
+
+export async function createDeveloperKey(name: string, scopes: string[], expiresInDays?: number): Promise<CreatedDeveloperKey> {
+  const res = await fetch(`${API_BASE_URL}/v1/developer/keys`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ name, scopes, expiresInDays: expiresInDays ?? null })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message ?? `Create failed with status ${res.status}`);
+  }
+  return res.json() as Promise<CreatedDeveloperKey>;
+}
+
+export async function revokeDeveloperKey(id: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/v1/developer/keys/${id}/revoke`, { method: "POST", headers: authHeaders() });
+}
+
+export async function rotateDeveloperKey(id: string): Promise<CreatedDeveloperKey> {
+  const res = await fetch(`${API_BASE_URL}/v1/developer/keys/${id}/rotate`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Rotate failed with status ${res.status}`);
+  return res.json() as Promise<CreatedDeveloperKey>;
+}
+
+export async function getDeveloperUsage(): Promise<DeveloperUsageSummary> {
+  const res = await fetch(`${API_BASE_URL}/v1/developer/usage`, { headers: authHeaders() });
+  if (res.status === 401) return { periodStart: "", periodEnd: "", used: 0, limit: 0, remaining: 0, resetAt: "", breakdown: [] };
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  return res.json() as Promise<DeveloperUsageSummary>;
+}

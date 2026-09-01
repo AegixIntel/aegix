@@ -16,6 +16,8 @@ import {
   createAnalysisJobRepo,
   createCorrelationRepo,
   createDb,
+  createDeveloperApiKeyRepo,
+  createDeveloperUsageRepo,
   createExposureDiffRepo,
   createIntelligenceRepo,
   createMonitorAlertRulesRepo,
@@ -23,9 +25,14 @@ import {
   createMonitorRepo,
   createNotificationRepo,
   createSavedAnalysisRepo,
+  createSavedComparisonRepo,
   createThreatEventRepo,
   createWalletRepo,
+  developerKeyToView,
+  KNOWN_API_KEY_SCOPES,
   type AnalysisJobRow,
+  type ApiKeyScope,
+  type DeveloperApiKeyView,
   type ScoreRow,
   type SignalRow
 } from "@aegix/database";
@@ -34,7 +41,9 @@ import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
-import { cachedComparison, canonicalComparePair, compareCacheKey, compareLockKey, loadFreshAnalysis, runComparison } from "./compare.js";
+import { cachedComparison, canonicalComparePair, compareCacheKey, compareLockKey, loadFreshAnalysis, runComparison, type CompareResult } from "./compare.js";
+import { createDeveloperAuth, developerError, developerSuccess, setQuotaHeaders } from "./developer-api.js";
+import { generateApiKey } from "./developer-keys.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -171,6 +180,10 @@ export async function buildServer(deps: ApiDeps) {
   const jobRepo = createAnalysisJobRepo(sql);
   const intelligenceRepo = createIntelligenceRepo(sql);
   const savedRepo = createSavedAnalysisRepo(sql);
+  const savedComparisonRepo = createSavedComparisonRepo(sql);
+  const developerKeyRepo = createDeveloperApiKeyRepo(sql);
+  const developerUsageRepo = createDeveloperUsageRepo(sql);
+  const correlationRepo = createCorrelationRepo(sql);
   const monitorRepo = createMonitorRepo(sql);
   const monitorCheckRepo = createMonitorCheckRepo(sql);
   const diffRepo = createExposureDiffRepo(sql);
@@ -180,6 +193,7 @@ export async function buildServer(deps: ApiDeps) {
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
   const provider = createProviderPoolFromConfig(config);
+  const developerAuth = createDeveloperAuth({ sql, config, logger });
 
   app.addHook("onClose", async () => {
     await queues.close();
@@ -704,6 +718,462 @@ export async function buildServer(deps: ApiDeps) {
     const deleted = await savedRepo.deleteForUser(user.id, wallet.id);
     return reply.send({ deleted });
   });
+
+  // ---- Saved comparisons (D6-A): user-owned bookmarks referencing the
+  // shared comparison result. The intelligence payload is NOT copied per
+  // user; opening a saved comparison reuses the persisted result first and
+  // never triggers analysis automatically (docs/d6-block1.md D6-A).
+
+  const savedComparisonGate = (reply: FastifyReply) => {
+    if (!config.ENABLE_SAVED_COMPARISONS) {
+      return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Saved comparisons are disabled", requestId: randomUUID() });
+    }
+    return null;
+  };
+
+  app.post<{ Body: { walletA: string; walletB: string; label?: string | null; notes?: string | null } }>(
+    "/v1/me/saved-comparisons",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["walletA", "walletB"],
+          properties: {
+            walletA: { type: "string", minLength: 32, maxLength: 44 },
+            walletB: { type: "string", minLength: 32, maxLength: 44 },
+            label: { type: "string", maxLength: 120 },
+            notes: { type: "string", maxLength: 2000 }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = savedComparisonGate(reply);
+      if (gate) return gate;
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      await auth.ensureProfile(user, sql);
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+      const { walletA, walletB, label, notes } = req.body;
+      if (!isValidSolanaAddress(walletA) || !isValidSolanaAddress(walletB)) {
+        return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId });
+      }
+      if (walletA === walletB) {
+        return reply.code(400).send({ code: "DUPLICATE_WALLET", message: "Cannot save a comparison of a wallet with itself", requestId });
+      }
+
+      // Reference the existing persisted correlation result if present.
+      // Do NOT rerun analysis because the user clicks Save (D6-A §12).
+      const pairId = canonicalComparePair(walletA, walletB);
+      const result = await correlationRepo.findByPair(walletA, walletB);
+
+      const saved = await savedComparisonRepo.save({
+        userId: user.id,
+        pairKey: pairId,
+        walletA,
+        walletB,
+        comparisonResultId: result ? result.id : null,
+        label: label ?? null,
+        notes: notes ?? null
+      });
+      return reply.code(201).send({ saved });
+    }
+  );
+
+  app.get<{ Querystring: { limit?: string; offset?: string; sort?: string; order?: string } }>("/v1/me/saved-comparisons", async (req, reply) => {
+    const gate = savedComparisonGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 20) || 20));
+    const offset = Math.max(0, Number(req.query.offset ?? 0) || 0);
+    const sort = req.query.sort === "updated_at" || req.query.sort === "last_opened_at" ? req.query.sort : "created_at";
+    const order = req.query.order === "asc" ? "asc" : "desc";
+
+    const saved = await savedComparisonRepo.listForUser(user.id, { limit, offset, sort, order });
+    return reply.send({ saved, meta: { limit, offset, total: saved.length } });
+  });
+
+  app.get<{ Params: { id: string } }>("/v1/me/saved-comparisons/:id", async (req, reply) => {
+    const gate = savedComparisonGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+    const saved = await savedComparisonRepo.getForUser(user.id, req.params.id);
+    if (!saved) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Saved comparison not found", requestId });
+    }
+
+    // Historical result reuse: return the persisted correlation snapshot
+    // when present, and NEVER trigger a new analysis automatically (D6-A
+    // §10, §24). `stale` flags when the underlying analysis data is no
+    // longer fresh; refreshing is an explicit user action (frontend).
+    let comparison: CompareResult | null = null;
+    let stale = false;
+    if (saved.comparison_result_id) {
+      const cached = await cachedComparison({ sql, config }, saved.pair_key);
+      if (cached) {
+        comparison = cached;
+      } else {
+        // Persisted result row exists but is not in the Redis cache; rebuild
+        // from persisted data without triggering new analysis.
+        try {
+          const freshA = await loadFreshAnalysis({ sql, config }, saved.wallet_a);
+          const freshB = await loadFreshAnalysis({ sql, config }, saved.wallet_b);
+          if (freshA && freshB) {
+            comparison = await runComparison({ sql, config }, { walletA: saved.wallet_a, walletB: saved.wallet_b });
+          } else {
+            stale = true;
+          }
+        } catch {
+          stale = true;
+        }
+      }
+    } else {
+      stale = true;
+    }
+    await savedComparisonRepo.touchOpenedForUser(user.id, saved.id);
+    return reply.send({ saved, comparison, stale });
+  });
+
+  app.patch<{ Params: { id: string }; Body: { label?: string | null; notes?: string | null } }>(
+    "/v1/me/saved-comparisons/:id",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            label: { type: ["string", "null"], maxLength: 120 },
+            notes: { type: ["string", "null"], maxLength: 2000 }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = savedComparisonGate(reply);
+      if (gate) return gate;
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+      const { label, notes } = req.body;
+      if (label === undefined && notes === undefined) {
+        return reply.code(400).send({ code: "INVALID_REQUEST", message: "Provide label and/or notes", requestId });
+      }
+      const updated = await savedComparisonRepo.updateForUser(user.id, req.params.id, { label: label ?? null, notes: notes ?? null });
+      if (!updated) {
+        return reply.code(404).send({ code: "NOT_FOUND", message: "Saved comparison not found", requestId });
+      }
+      return reply.send({ saved: updated });
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>("/v1/me/saved-comparisons/:id", async (req, reply) => {
+    const gate = savedComparisonGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+    const deleted = await savedComparisonRepo.deleteForUser(user.id, req.params.id);
+    if (!deleted) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Saved comparison not found", requestId });
+    }
+    // Deleting the saved reference does NOT delete the shared correlation
+    // result (D6-A §16): correlation_results is public blockchain-derived
+    // data reused by other users and the X-Ray section.
+    return reply.send({ deleted: true });
+  });
+
+  // ---- Developer API (D6-B..D6-D): versioned /v1/developer namespace,
+  // Bearer API-key auth, scopes, per-user quota + usage metering.
+  // Block 1 exposes only key management + status + usage — the D1-D5
+  // intelligence endpoints are NOT exposed yet (D6-E will do that).
+
+  const developerGate = (reply: FastifyReply) => {
+    if (!config.ENABLE_DEVELOPER_API) {
+      return developerError(reply, "FEATURE_DISABLED", "The developer API is currently disabled", 403, randomUUID());
+    }
+    return null;
+  };
+
+  /** Records a metered developer request (attribution, D6-D §73). */
+  async function recordDeveloperUsage(input: {
+    developer: { userId: string; apiKeyId: string } | null;
+    requestId: string;
+    operation: string;
+    status: "SUCCESS" | "REJECTED";
+    units?: number;
+    cacheHit?: boolean;
+    createdWork?: boolean;
+    latencyMs?: number;
+    scope?: string;
+  }): Promise<void> {
+    await developerUsageRepo.record({
+      userId: input.developer?.userId ?? null,
+      apiKeyId: input.developer?.apiKeyId ?? null,
+      requestId: input.requestId,
+      operation: input.operation,
+      status: input.status,
+      units: input.units,
+      cacheHit: input.cacheHit,
+      createdWork: input.createdWork,
+      latencyMs: input.latencyMs,
+      scope: input.scope
+    }).catch(() => {});
+  }
+
+  app.get(
+    "/v1/developer/status",
+    {
+      config: {
+        rateLimit: {
+          max: config.DEVELOPER_RATE_LIMIT_PER_MINUTE,
+          timeWindow: "1 minute"
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = developerGate(reply);
+      if (gate) return gate;
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+      const started = Date.now();
+      const result = await developerAuth.authenticate(req);
+      if (!result.ok) {
+        await recordDeveloperUsage({
+          developer: null,
+          requestId,
+          operation: "developer.status",
+          status: "REJECTED",
+          latencyMs: Date.now() - started
+        }).catch(() => {});
+        return developerError(reply, result.code, result.message, result.statusCode, requestId);
+      }
+      const { developer } = result;
+
+      // Meter the request: atomic per-user quota claim (D6-D §69-§70).
+      const quota = await developerAuth.checkAndClaimQuota(developer, { units: 1 });
+      if (!quota.allowed) {
+        await recordDeveloperUsage({
+          developer,
+          requestId,
+          operation: "developer.status",
+          status: "REJECTED",
+          latencyMs: Date.now() - started
+        });
+        return developerError(reply, "QUOTA_EXCEEDED", `Daily developer quota exceeded (limit ${quota.summary.limit}, resets ${quota.summary.resetAt})`, 429, requestId);
+      }
+
+      setQuotaHeaders(reply, quota.summary, { limit: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, remaining: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, resetAt: Math.floor(Date.now() / 1000) + 60 });
+      await recordDeveloperUsage({
+        developer,
+        requestId,
+        operation: "developer.status",
+        status: "SUCCESS",
+        latencyMs: Date.now() - started,
+        scope: "status"
+      });
+
+      logger.info("developer request", {
+        requestId,
+        developerUserId: developer.userId,
+        apiKeyId: developer.apiKeyId,
+        apiKeyPrefix: developer.apiKeyPrefix,
+        operation: "developer.status",
+        scope: "status",
+        quotaUsed: quota.summary.used,
+        quotaRemaining: quota.summary.remaining,
+        statusCode: 200,
+        durationMs: Date.now() - started
+      });
+
+      return developerSuccess(reply, { status: "ok", scopes: developer.scopes, keyPrefix: developer.apiKeyPrefix }, requestId, {
+        quota: { limit: quota.summary.limit, used: quota.summary.used, remaining: quota.summary.remaining, resetAt: quota.summary.resetAt }
+      });
+    }
+  );
+
+  // ---- D6-C: API key management (product-session auth, not API-key auth) ----
+
+  app.post<{ Body: { name: string; scopes?: string[]; expiresInDays?: number | null } }>(
+    "/v1/developer/keys",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 80 },
+            scopes: { type: "array", items: { type: "string" }, maxItems: 4 },
+            expiresInDays: { type: ["number", "null"], minimum: 1, maximum: 365 }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = developerGate(reply);
+      if (gate) return gate;
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+      await auth.ensureProfile(user, sql);
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+      const name = req.body.name.trim();
+      if (!name) {
+        return reply.code(400).send({ code: "INVALID_REQUEST", message: "Key name is required", requestId });
+      }
+      const requestedScopes = req.body.scopes ?? ["intelligence:read"];
+      const unknown = requestedScopes.filter((s) => !KNOWN_API_KEY_SCOPES.includes(s as ApiKeyScope));
+      if (unknown.length > 0) {
+        return reply.code(400).send({ code: "INVALID_REQUEST", message: `Unknown scope(s): ${unknown.join(", ")}. Valid scopes: ${KNOWN_API_KEY_SCOPES.join(", ")}`, requestId });
+      }
+      const scopes = [...new Set(requestedScopes)] as ApiKeyScope[];
+
+      const activeCount = await developerKeyRepo.countActiveForUser(user.id);
+      if (activeCount >= config.MAX_ACTIVE_API_KEYS_PER_USER) {
+        return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${config.MAX_ACTIVE_API_KEYS_PER_USER})`, requestId });
+      }
+
+      const { key, keyPrefix, keyHash } = generateApiKey();
+      const ttlDays = req.body.expiresInDays ?? (config.API_KEY_DEFAULT_TTL_DAYS > 0 ? config.API_KEY_DEFAULT_TTL_DAYS : null);
+      const expiresAt = ttlDays ? new Date(Date.now() + ttlDays * 86_400_000).toISOString() : null;
+
+      const row = await developerKeyRepo.create({ userId: user.id, name, keyPrefix, keyHash, scopes, expiresAt });
+
+      // The plaintext key is returned exactly once (D6-C §43, §87). The
+      // database row only ever contains the hash; there is no retrieval path.
+      return reply.code(201).send({
+        key: {
+          id: row.id,
+          name: row.name,
+          key,
+          keyPrefix: row.key_prefix,
+          scopes,
+          createdAt: row.created_at,
+          expiresAt
+        }
+      });
+    }
+  );
+
+  app.get("/v1/developer/keys", async (req, reply) => {
+    const gate = developerGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+
+    const rows = await developerKeyRepo.listForUser(user.id);
+    const keys: DeveloperApiKeyView[] = rows.map((r) => developerKeyToView(r));
+    return reply.send({ keys });
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/developer/keys/:id/revoke", async (req, reply) => {
+    const gate = developerGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+    const revoked = await developerKeyRepo.revokeForUser(user.id, req.params.id);
+    if (!revoked) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Active API key not found", requestId });
+    }
+    logger.info("developer api key revoked", { requestId, developerUserId: user.id, apiKeyId: revoked.id, apiKeyPrefix: `${revoked.key_prefix}…` });
+    return reply.send({ revoked: developerKeyToView(revoked) });
+  });
+
+  app.post<{ Params: { id: string } }>("/v1/developer/keys/:id/rotate", async (req, reply) => {
+    const gate = developerGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+
+    const existing = await developerKeyRepo.getForUser(user.id, req.params.id);
+    if (!existing || existing.status !== "ACTIVE") {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "Active API key not found", requestId });
+    }
+    if (existing.expires_at && new Date(existing.expires_at) < new Date()) {
+      return reply.code(400).send({ code: "INVALID_REQUEST", message: "Cannot rotate an expired key — create a new key instead", requestId });
+    }
+    const activeCount = await developerKeyRepo.countActiveForUser(user.id);
+    if (activeCount >= config.MAX_ACTIVE_API_KEYS_PER_USER) {
+      return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${config.MAX_ACTIVE_API_KEYS_PER_USER})`, requestId });
+    }
+
+    // Generate the new key first, then revoke the old one in the same
+    // transaction: persistence failure never leaves the user with no key
+    // (D6-C §48).
+    const { key, keyPrefix, keyHash } = generateApiKey();
+    const created = await sql.begin(async (tx) => {
+      const keyRepoTx = createDeveloperApiKeyRepo(tx);
+      const newKey = await keyRepoTx.create({
+        userId: user.id,
+        name: existing.name,
+        keyPrefix,
+        keyHash,
+        scopes: (existing.scopes as ApiKeyScope[]) ?? [],
+        expiresAt: existing.expires_at
+      });
+      await keyRepoTx.revokeForUser(user.id, existing.id);
+      return newKey;
+    });
+
+    logger.info("developer api key rotated", { requestId, developerUserId: user.id, apiKeyId: existing.id, apiKeyPrefix: `${existing.key_prefix}…` });
+    return reply.code(201).send({
+      key: {
+        id: created.id,
+        name: created.name,
+        key,
+        keyPrefix: created.key_prefix,
+        scopes: (created.scopes as ApiKeyScope[]) ?? [],
+        createdAt: created.created_at,
+        expiresAt: created.expires_at
+      }
+    });
+  });
+
+  // ---- D6-D: usage summary (requires usage:read scope) ----
+
+  app.get(
+    "/v1/developer/usage",
+    {
+      config: {
+        rateLimit: {
+          max: config.DEVELOPER_RATE_LIMIT_PER_MINUTE,
+          timeWindow: "1 minute"
+        }
+      }
+    },
+    async (req, reply) => {
+      const gate = developerGate(reply);
+      if (gate) return gate;
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+      const started = Date.now();
+
+      const developer = await developerAuth.requireScope(req, reply, "usage:read");
+      if (!developer) return;
+
+      const summary = await developerUsageRepo.summaryForUser(developer.userId, config.DEVELOPER_DAILY_QUOTA);
+      setQuotaHeaders(reply, { limit: summary.limit, remaining: summary.remaining, resetAt: summary.resetAt }, { limit: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, remaining: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, resetAt: Math.floor(Date.now() / 1000) + 60 });
+      await recordDeveloperUsage({
+        developer,
+        requestId,
+        operation: "developer.usage.read",
+        status: "SUCCESS",
+        latencyMs: Date.now() - started,
+        scope: "usage:read"
+      });
+
+      return developerSuccess(reply, summary, requestId);
+    }
+  );
 
   // ---- Privacy monitors, see milestone D4 (D4-A, D4-E, D4-F, D4-G) ----
   // All routes require a verified registered user (server-side auth, D3-D).
