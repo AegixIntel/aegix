@@ -8,7 +8,7 @@
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "echo \"no tests\""
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@solana/wallet-adapter-base": "^0.9.27",

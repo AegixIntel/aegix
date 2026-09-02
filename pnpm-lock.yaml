@@ -71,6 +71,9 @@ importers:
       '@aegix/cache':
         specifier: workspace:*
         version: link:../../packages/cache
+      '@aegix/commonality':
+        specifier: workspace:^
+        version: link:../../packages/commonality
       '@aegix/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -83,6 +86,9 @@ importers:
       '@aegix/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@aegix/monitor':
+        specifier: workspace:^
+        version: link:../../packages/monitor
       '@aegix/queue':
         specifier: workspace:*
         version: link:../../packages/queue

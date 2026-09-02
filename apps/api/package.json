@@ -16,10 +16,12 @@
   "dependencies": {
     "@aegix/blockchain": "workspace:*",
     "@aegix/cache": "workspace:*",
+    "@aegix/commonality": "workspace:^",
     "@aegix/config": "workspace:*",
     "@aegix/database": "workspace:*",
     "@aegix/explanation": "workspace:^",
     "@aegix/logging": "workspace:*",
+    "@aegix/monitor": "workspace:^",
     "@aegix/queue": "workspace:*",
     "@aegix/types": "workspace:*",
     "@aegix/webhook-delivery": "workspace:^",

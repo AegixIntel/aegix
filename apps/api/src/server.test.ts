@@ -98,3 +98,42 @@ test("compare: rejects when D5 intelligence is disabled (kill switch)", async ()
   assert.equal(res.json().code, "FEATURE_DISABLED");
   await app.close();
 });
+
+// ---- D6-J §62: request body limits ----
+
+test("body limit: payloads above the configured ceiling are rejected with 413 (not silently truncated)", async () => {
+  const app = await buildServer({
+    config: loadConfig({
+      NODE_ENV: "test",
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/aegix_test",
+      REDIS_URL: "redis://localhost:6379",
+      API_BODY_LIMIT_BYTES: "1024"
+    })
+  });
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/analyses",
+    payload: { address: "EH2qq6FqPHk1vbfLjaNceGADeKTTPEVuQmQyC9YtYMmj", padding: "x".repeat(5000) }
+  });
+  assert.equal(res.statusCode, 413);
+  await app.close();
+});
+
+test("body limit: legitimate large-ish bodies pass the raised ceiling (labels/notes supported)", async () => {
+  const app = await buildServer({
+    config: loadConfig({
+      NODE_ENV: "test",
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/aegix_test",
+      REDIS_URL: "redis://localhost:6379"
+    })
+  });
+  // Notes up to 2000 chars are allowed by schema; without auth this request
+  // must reach the auth gate (401), NOT be rejected at the body limit.
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/me/saved-comparisons",
+    payload: { walletA: "EH2qq6FqPHk1vbfLjaNceGADeKTTPEVuQmQyC9YtYMmj", walletB: "DpFKMQXG21YQTUsCKGusU6SuQpAnR87dqu5DJL8Hm8Eb", notes: "n".repeat(2000) }
+  });
+  assert.equal(res.statusCode, 401, `expected auth gate, got ${res.statusCode}`);
+  await app.close();
+});

@@ -48,6 +48,7 @@ import { createDeveloperAuth, developerError, developerSuccess, setQuotaHeaders 
 import { generateApiKey } from "./developer-keys.js";
 import { registerDeveloperIntelligence } from "./developer-intelligence.js";
 import { registerWebhookRoutes } from "./webhooks.js";
+import { registerNotificationEmailRoutes } from "./notification-email.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -126,8 +127,28 @@ async function checkAdmission(deps: {
 
 export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
-  const app = Fastify({ logger: { level: config.LOG_LEVEL }, bodyLimit: 1024 });
+  const app = Fastify({ logger: { level: config.LOG_LEVEL }, bodyLimit: config.API_BODY_LIMIT_BYTES });
   const logger = createLogger(config, { service: "api" });
+
+  // D6-J §65: production error responses never expose stack traces, SQL,
+  // internal hostnames or filesystem paths. Unexpected errors return a
+  // generic envelope; the detail goes to the server log only.
+  app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? "unknown";
+    if (err.statusCode && err.statusCode < 500) {
+      // Validation / 4xx errors carry safe messages from route schemas.
+      const message = err.message ?? "Invalid request";
+      return reply.code(err.statusCode).send({ error: { code: "INVALID_REQUEST", message }, meta: { requestId } });
+    }
+    logger.error("unhandled request error", {
+      requestId,
+      method: req.method,
+      path: req.routeOptions?.url ?? req.url,
+      error: err.message,
+      stack: config.NODE_ENV === "production" ? undefined : err.stack
+    });
+    return reply.code(500).send({ error: { code: "INTERNAL_ERROR", message: "Internal server error" }, meta: { requestId } });
+  });
 
   await app.register(cors, { origin: config.CORS_ORIGIN.split(",") });
   // Global baseline rate limit; per-route limits below override it, see D3-I §50-§51.
@@ -418,6 +439,41 @@ export async function buildServer(deps: ApiDeps) {
       return reply.code(200).send({ status: "degraded", checks });
     }
     return reply.code(503).send({ status: "unavailable", checks });
+  });
+
+  // D6-I2 §22: population-commonality health diagnostics. No raw wallet data
+  // is exposed — only aggregate counts + freshness, mirroring the engine's
+  // eligibility gate (enabled ≠ eligible).
+  app.get("/v1/health/commonality", async (req, reply) => {
+    const { commonalityStatus } = await import("@aegix/commonality");
+    try {
+      const status = await commonalityStatus({ sql }, {
+        version: config.COMMONALITY_VERSION,
+        minPopulation: config.COMMONALITY_MIN_POPULATION,
+        maxSnapshotAgeHours: config.COMMONALITY_MAX_SNAPSHOT_AGE_HOURS,
+        enabled: config.ENABLE_POPULATION_COMMONALITY
+      });
+      return reply.send({
+        data: {
+          enabled: status.enabled,
+          eligible: status.eligible,
+          source: status.source,
+          populationSize: status.populationSize,
+          minimumPopulation: status.minimumPopulation,
+          snapshotAgeHours: status.snapshotAgeHours === null ? null : Math.round(status.snapshotAgeHours * 10) / 10,
+          stale: status.stale,
+          version: status.version,
+          lastAggregationAt: status.lastAggregationAt,
+          reason: status.reason
+        },
+        meta: { requestId: (req.headers["x-request-id"] as string | undefined) ?? "unknown" }
+      });
+    } catch {
+      return reply.code(503).send({
+        error: { code: "COMMONALITY_HEALTH_UNAVAILABLE", message: "Commonality health check failed" },
+        meta: { requestId: (req.headers["x-request-id"] as string | undefined) ?? "unknown" }
+      });
+    }
   });
 
   app.post<{ Body: { address: string } }>(
@@ -1571,6 +1627,15 @@ export async function buildServer(deps: ApiDeps) {
   });
 
   // ---- Notifications inbox, see milestone D4 (D4-F §49) ----
+  // D6-I1: notification-email destination (optional, verified; email ≠ identity).
+
+  registerNotificationEmailRoutes({
+    app,
+    sql,
+    config,
+    logger,
+    requireUser
+  });
 
   app.get("/v1/me/notifications", async (req, reply) => {
     const gate = monitorGate(reply);

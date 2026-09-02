@@ -39,6 +39,8 @@ export interface PopulationCommonalityRepo {
   statsForKeys(keys: string[], version: string): Promise<PopulationObservationStatRow[]>;
   /** Current analyzed population size for a version (distinct wallets). */
   populationSize(version: string): Promise<number>;
+  /** Latest contribution timestamp for a version (snapshot freshness). */
+  lastAggregationAt(version: string): Promise<string | null>;
 }
 
 /** Population commonality repository, see docs/d6-block2.md (D6-G). */
@@ -158,6 +160,13 @@ export function createPopulationCommonalityRepo(sql: Sql): PopulationCommonality
         select count(*)::text as count from population_contribution_state where version = ${version}
       `;
       return row ? Number(row.count) : 0;
+    },
+
+    async lastAggregationAt(version) {
+      const [row] = await sql<Array<{ at: string | null }>>`
+        select max(contributed_at)::text as at from population_contribution_state where version = ${version}
+      `;
+      return row?.at ?? null;
     }
   };
 }

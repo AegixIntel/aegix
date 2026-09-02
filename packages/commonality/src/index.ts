@@ -108,6 +108,106 @@ export async function aggregatePopulation(ctx: CommonalityContext, input: { wall
 }
 
 /**
+ * Population commonality availability/resolution (D6-I2 §16-§22).
+ *
+ * The feature flag turning the SUBSYSTEM on is NOT the same as the empirical
+ * penalty being active (§19). The engine only applies population frequencies
+ * when ALL of the following hold:
+ *   - the feature is enabled (ENABLE_POPULATION_COMMONALITY)
+ *   - the analyzed population is large enough (>= COMMONALITY_MIN_POPULATION)
+ *   - the snapshot is fresh enough (COMMONALITY_MAX_SNAPSHOT_AGE_HOURS)
+ *   - the aggregation exists (rows for the configured version)
+ * Otherwise the caller falls back to the D5 static common-activity penalties
+ * — correlation never fails because commonality is unavailable, and the
+ * fallback is explicit and observable (commonalitySource).
+ */
+
+export type CommonalitySource = "POPULATION" | "STATIC" | "FALLBACK";
+
+export interface CommonalityStatus {
+  enabled: boolean;
+  /** True when population data may influence this calculation. */
+  eligible: boolean;
+  source: CommonalitySource;
+  populationSize: number;
+  minimumPopulation: number;
+  version: string;
+  lastAggregationAt: string | null;
+  /** Snapshot age in hours (null when no aggregation exists). */
+  snapshotAgeHours: number | null;
+  /** True when the snapshot is too old to trust (fallback reason). */
+  stale: boolean;
+  reason: string;
+}
+
+/** Resolves the commonality availability state for a version. */
+export async function commonalityStatus(
+  ctx: CommonalityContext,
+  opts: { version?: string; minPopulation?: number; maxSnapshotAgeHours?: number; enabled: boolean }
+): Promise<CommonalityStatus> {
+  const { sql } = ctx;
+  const version = opts.version ?? POPULATION_COMMONALITY_ENGINE_VERSION;
+  const minPopulation = opts.minPopulation ?? 20;
+  const maxAgeHours = opts.maxSnapshotAgeHours ?? 336;
+  const populationRepo = createPopulationCommonalityRepo(sql);
+
+  const base: CommonalityStatus = {
+    enabled: opts.enabled,
+    eligible: false,
+    source: opts.enabled ? "STATIC" : "STATIC",
+    populationSize: 0,
+    minimumPopulation: minPopulation,
+    version,
+    lastAggregationAt: null,
+    snapshotAgeHours: null,
+    stale: false,
+    reason: "population commonality disabled"
+  };
+  if (!opts.enabled) return base;
+
+  const populationSize = await populationRepo.populationSize(version);
+  const lastAggregationAt = await populationRepo.lastAggregationAt(version);
+  const snapshotAgeHours = lastAggregationAt
+    ? Math.max(0, (Date.now() - new Date(lastAggregationAt).getTime()) / 3_600_000)
+    : null;
+  const stale = snapshotAgeHours !== null && snapshotAgeHours > maxAgeHours;
+
+  if (populationSize === 0 || !lastAggregationAt) {
+    return { ...base, populationSize, lastAggregationAt, snapshotAgeHours: null, source: "FALLBACK", reason: "no population aggregation exists yet" };
+  }
+  if (populationSize < minPopulation) {
+    return {
+      ...base,
+      populationSize,
+      lastAggregationAt,
+      snapshotAgeHours,
+      source: "FALLBACK",
+      reason: `population too small (${populationSize} < ${minPopulation})`
+    };
+  }
+  if (stale) {
+    return {
+      ...base,
+      populationSize,
+      lastAggregationAt,
+      snapshotAgeHours,
+      stale: true,
+      source: "FALLBACK",
+      reason: `population snapshot is stale (${Math.round(snapshotAgeHours ?? 0)}h > ${maxAgeHours}h)`
+    };
+  }
+  return {
+    ...base,
+    populationSize,
+    lastAggregationAt,
+    snapshotAgeHours,
+    eligible: true,
+    source: "POPULATION",
+    reason: "population commonality eligible"
+  };
+}
+
+/**
  * Loads commonality stats for a set of addresses. Returns a map keyed by
  * address with frequency/population info (missing addresses → sampleAdequate
  * false, frequency 0).

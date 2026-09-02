@@ -449,6 +449,16 @@ export interface CompareCluster {
   limitations: string[];
 }
 
+export interface CompareCommonalityNote {
+  key: string;
+  name?: string;
+  kind: "COUNTERPARTY" | "ENTITY";
+  frequency: number | null;
+  distinctWallets: number | null;
+  populationSize: number | null;
+  treatment: "MEANINGFUL" | "DISCOUNTED" | "HEAVILY_DISCOUNTED" | "STATIC";
+}
+
 export interface CompareResult {
   walletA: string;
   walletB: string;
@@ -469,6 +479,15 @@ export interface CompareResult {
   relationshipPaths: ComparePath[];
   clusters: CompareCluster[];
   dataQuality: { a: Record<string, unknown> | null; b: Record<string, unknown> | null };
+  commonality?: {
+    source: "POPULATION" | "STATIC" | "FALLBACK";
+    eligible: boolean;
+    populationSize: number;
+    minimumPopulation: number;
+    version: string;
+    stale: boolean;
+    notes: CompareCommonalityNote[];
+  };
   limitations: string[];
   engineVersions: Record<string, string>;
   cached?: boolean;

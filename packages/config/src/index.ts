@@ -173,6 +173,10 @@ const envSchema = z.object({
   COMMONALITY_MIN_POPULATION: z.coerce.number().int().positive().default(20),
   COMMONALITY_AGGREGATION_BATCH: z.coerce.number().int().positive().default(50),
   COMMONALITY_VERSION: z.string().default("population-commonality-v1.0.0"),
+  /** Stale snapshot fallback: aggregates older than this are not trusted
+   *  (D6-I2 §21): the engine falls back to static commonality instead of
+   *  treating old statistics as current truth. */
+  COMMONALITY_MAX_SNAPSHOT_AGE_HOURS: z.coerce.number().int().positive().default(336),
 
   ENABLE_CORRELATION_MONITOR_ALERTS: z.preprocess(boolEnv, z.boolean()).default(true),
   MAX_MONITOR_CORRELATION_CANDIDATES: z.coerce.number().int().positive().default(20),
@@ -189,6 +193,11 @@ const envSchema = z.object({
   WEBHOOK_PAYLOAD_MAX_BYTES: z.coerce.number().int().positive().default(65536),
   WEBHOOK_ALLOWED_PORTS: z.string().default("80,443"),
   WEBHOOK_DEV_ALLOW_PRIVATE: z.preprocess(boolEnv, z.boolean()).default(false),
+
+  /** API request body cap (D6-J §62): field-level limits in route schemas
+   *  remain the real bounds; this is a coarse ceiling against oversized
+   *  payloads (labels/notes are far smaller). */
+  API_BODY_LIMIT_BYTES: z.coerce.number().int().positive().default(65536),
 
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
@@ -226,6 +235,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_KEY) {
       throw new Error("Production configuration error: SUPABASE_URL and SUPABASE_SERVICE_KEY are required");
+    }
+
+    // D6-J §66: fail fast on dangerous production combinations. Email
+    // notifications must never silently run with a broken provider, and the
+    // wallet-auth domain must not be the localhost default.
+    if (config.EMAIL_ENABLED && config.EMAIL_PROVIDER === "smtp" && !config.EMAIL_SMTP_HOST) {
+      throw new Error("Production configuration error: EMAIL_ENABLED with EMAIL_PROVIDER=smtp requires EMAIL_SMTP_HOST");
+    }
+    if (config.AUTH_DOMAIN.includes("localhost") || config.AUTH_APP_URI.includes("localhost")) {
+      throw new Error("Production configuration error: AUTH_DOMAIN and AUTH_APP_URI must be production origins (no localhost defaults)");
+    }
+    if (config.ENABLE_WEBHOOK_DELIVERY && config.WEBHOOK_DEV_ALLOW_PRIVATE) {
+      throw new Error("Production configuration error: WEBHOOK_DEV_ALLOW_PRIVATE must be false in production (SSRF policy)");
     }
   }
 

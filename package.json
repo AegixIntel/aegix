@@ -23,6 +23,7 @@
     "test:e2e-d5": "node --import tsx tests/e2e-d5.ts",
     "test:e2e-d6-block1": "node --import tsx tests/e2e-d6-block1.ts",
     "test:e2e-d6-block2": "node --import tsx tests/e2e-d6-block2.ts",
+    "test:e2e-d6": "node --import tsx tests/e2e-d6.ts",
     "loadtest:analysis": "node --import tsx tests/load-test.ts",
     "loadtest:correlation": "node --import tsx tests/load-test-correlation.ts",
     "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts"

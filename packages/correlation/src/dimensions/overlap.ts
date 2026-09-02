@@ -38,6 +38,9 @@ export interface OverlapInput {
   commonalityByAddress?: Map<string, number>;
   /** D6-G §84: minimum analyzed population before commonality applies. */
   commonalityMinPopulation?: number;
+  /** D6-G §84: actual analyzed population size (the engine's gate). When
+   *  absent the penalty applies purely from the frequency map. */
+  populationSize?: number;
 }
 
 function counterpartySet(transfers: TransferRow[], self: string, other: string): Map<string, number> {
@@ -82,10 +85,14 @@ export function evaluateCounterpartyOverlap(input: OverlapInput): EvidenceFamily
   // D6-G §89: population-aware rarity (correlation penalty v2). When the
   // analyzed population provides a frequency for a shared counterparty, a
   // very common address is heavily discounted; a rare one keeps its value.
+  // The population-size gate (D6-I2 §17-§19) is enforced HERE: frequencies
+  // are only trusted when the observed population reached the configured
+  // minimum — below it the static D5 rarity heuristic applies unchanged.
   const population = input.commonalityByAddress;
   const minPopulation = input.commonalityMinPopulation ?? 20;
   const populationPenalty = (address: string): number => {
     if (!population || !population.has(address)) return 0;
+    if ((input.populationSize ?? 0) > 0 && input.populationSize! < minPopulation) return 0;
     const freq = Math.min(1, Math.max(0, population.get(address) ?? 0));
     // Below the rarity floor: no penalty. Above it: smooth ramp to 0.9.
     if (freq < 0.05) return 0;
@@ -98,6 +105,10 @@ export function evaluateCounterpartyOverlap(input: OverlapInput): EvidenceFamily
   for (const [cp, countA] of cpsA) {
     const countB = cpsB.get(cp);
     if (!countB) continue;
+    // Global appearances across BOTH wallets' transfers: 1 when a single
+    // wallet pair shares it once... note counterpartySet dedupes per wallet,
+    // so countA/countB are the per-wallet totals; a hub that a wallet pays
+    // many times is not a distinctive shared signal (D5-B §12-§13).
     const appearances = globalCount.get(cp) ?? (countA + countB);
     // Rarity: 1 for addresses seen once per wallet; decays fast for hubs.
     const rarity = Math.min(1, 3 / (1 + appearances));

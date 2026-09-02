@@ -52,6 +52,17 @@ test("resolveWebhookDestination: rejects private literal IPv4", async () => {
   await assert.rejects(() => resolveWebhookDestination("http://169.254.169.254/latest/meta-data", TEST_CONFIG), SsrfBlockedError);
 });
 
+test("resolveWebhookDestination: DNS resolving to a private address is blocked (rebinding)", async () => {
+  // "localhost" resolves to 127.0.0.1/::1 at delivery time — a hostname that
+  // points at private space must be rejected exactly like a literal IP.
+  await assert.rejects(() => resolveWebhookDestination("http://localhost/hook", TEST_CONFIG), SsrfBlockedError);
+  // IPv4-mapped IPv6 private form.
+  await assert.rejects(() => resolveWebhookDestination("http://[::ffff:127.0.0.1]/hook", TEST_CONFIG), SsrfBlockedError);
+  // 0.0.0.0 and other reserved/unspecified forms.
+  await assert.rejects(() => resolveWebhookDestination("http://0.0.0.0/hook", TEST_CONFIG), SsrfBlockedError);
+  await assert.rejects(() => resolveWebhookDestination("http://[::]/hook", TEST_CONFIG), SsrfBlockedError);
+});
+
 test("resolveWebhookDestination: rejects private literal IPv6 (loopback/ULA)", async () => {
   await assert.rejects(() => resolveWebhookDestination("http://[::1]/hook", TEST_CONFIG), SsrfBlockedError);
   await assert.rejects(() => resolveWebhookDestination("http://[fd00::1]/hook", TEST_CONFIG), SsrfBlockedError);

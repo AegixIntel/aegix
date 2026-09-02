@@ -71,8 +71,11 @@ export interface WebhookRepo {
     nextRetryAt: string | null;
     errorExcerpt: string | null;
   }): Promise<void>;
-  /** Marks a delivery outcome on the webhook row (success/failure/disable). */
-  markOutcome(webhookId: string, outcome: { ok: boolean; disable?: boolean; reason?: string }): Promise<void>;
+  /** Marks a delivery outcome on the webhook row (success/failure/disable).
+   *  Transient failures increment failure_count and degrade at 3; when the
+   *  count reaches `disableAfterFailures` the webhook is DISABLED so a
+   *  persistently broken endpoint stops consuming retries (D6-J §56). */
+  markOutcome(webhookId: string, outcome: { ok: boolean; disable?: boolean; reason?: string; disableAfterFailures?: number }): Promise<void>;
   activeDeliverableWebhooks(): Promise<DeveloperWebhookRow[]>;
 }
 
@@ -217,6 +220,18 @@ export function createWebhookRepo(sql: Sql): WebhookRepo {
             updated_at = now()
         where id = ${webhookId}
       `;
+      // D6-J §56: a persistently broken endpoint must not retry forever.
+      // Once failure_count reaches the configured cap the webhook is
+      // disabled outright (bounded failure storm).
+      if (outcome.disableAfterFailures && outcome.disableAfterFailures > 0) {
+        await sql`
+          update developer_webhooks
+          set status = 'DISABLED', disabled_at = now(),
+              disabled_reason = 'disabled after repeated failures',
+              updated_at = now()
+          where id = ${webhookId} and failure_count >= ${outcome.disableAfterFailures}
+        `;
+      }
     },
 
     async activeDeliverableWebhooks() {

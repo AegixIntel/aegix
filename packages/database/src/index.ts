@@ -1,4 +1,9 @@
 export { createDb, type Sql, type JsonValue } from "./client.js";
+export {
+  createProfileRepo,
+  type ProfileRepo,
+  type ProfileEmailRow
+} from "./repositories/profiles.js";
 export { createWalletRepo, type WalletRepo, type WalletRow } from "./repositories/wallets.js";
 export {
   createAnalysisJobRepo,

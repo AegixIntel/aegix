@@ -9,6 +9,7 @@ import {
   createMonitorCorrelationRepo,
   createMonitorRepo,
   createNotificationRepo,
+  createProfileRepo,
   createThreatEventRepo,
   createWalletRepo
 } from "@aegix/database";
@@ -19,6 +20,7 @@ import { buildExposureDiff, type DiffInputs } from "@aegix/diff";
 import { applyRules, evaluateThreats } from "./threat.js";
 import { applyCorrelationRules, evaluateCorrelationChanges, CORRELATION_MONITOR_ENGINE_VERSION, type CorrelationSnapshot } from "./correlation.js";
 import { createEmailProvider, PermanentEmailError, type EmailProvider } from "./email.js";
+import { buildCorrelationEmail, correlationEmailEligibility } from "./notification-email.js";
 
 /** D6-H §106: maps internal event types to the webhook event vocabulary. */
 const WEBHOOK_EVENT_MAP: Record<string, string> = {
@@ -365,6 +367,8 @@ async function processCorrelationChanges(
   const notificationRepo = createNotificationRepo(sql);
   const rulesRepo = createMonitorAlertRulesRepo(sql);
   const walletRepo = createWalletRepo(sql);
+  const emailProvider = createEmailProvider(config, logger);
+  const profileRepo = createProfileRepo(sql);
 
   const wallet = await walletRepo.findByAddress("solana", input.walletAddress);
   if (!wallet) return;
@@ -469,7 +473,7 @@ async function processCorrelationChanges(
           evidence: candidate.evidence
         });
         const baseKey = createHash("sha256").update(`${candidate.fingerprint}|`).digest("hex");
-        await notificationRepo.insert({
+        const inApp = await notificationRepo.insert({
           userId: input.monitorUserId,
           monitorId: input.monitorId,
           eventId: persisted.id,
@@ -481,6 +485,69 @@ async function processCorrelationChanges(
           idempotencyKey: `${baseKey}IN_APP`,
           status: "SENT"
         });
+        if (inApp) {
+          logger.info("correlation in-app notification created", {
+            monitorId: input.monitorId,
+            notificationId: inApp.id,
+            correlationEventId: persisted.id
+          });
+        }
+
+        // D6-I1: EMAIL fan-out for correlation alerts. One logical event
+        // yields at most one EMAIL notification (same fingerprint-derived
+        // idempotency key as IN_APP). Email eligibility requires the global
+        // email switches, a configured provider, and a VERIFIED notification
+        // email destination (wallet-only auth: email ≠ identity, §7-§8).
+        // The pipeline only persists + enqueues; the worker resolves the
+        // current recipient at delivery time.
+        const emailProfile = await profileRepo.getEmailForUser(input.monitorUserId);
+        const eligibility = correlationEmailEligibility({
+          config,
+          providerConfigured: emailProvider.isConfigured(),
+          recipient: emailProfile
+            ? { email: emailProfile.notification_email, verifiedAt: emailProfile.notification_email_verified_at }
+            : null
+        });
+        if (eligibility.eligible) {
+          const content = buildCorrelationEmail({
+            candidate,
+            monitoredWallet: input.walletAddress,
+            appUri: config.AUTH_APP_URI
+          });
+          const email = await notificationRepo.insert({
+            userId: input.monitorUserId,
+            monitorId: input.monitorId,
+            eventId: persisted.id,
+            channel: "EMAIL",
+            type: candidate.eventType,
+            title: content.subject,
+            body: content.body,
+            severity: candidate.severity,
+            idempotencyKey: `${baseKey}EMAIL`
+          });
+          if (email) {
+            await ctx.queues.monitoring.add(
+              "notify-deliver",
+              { kind: "deliver", notificationId: email.id },
+              { jobId: `notif-deliver-${email.id}`, attempts: 3, backoff: { type: "exponential", delay: 5000 } }
+            );
+            logger.info("correlation email notification queued", {
+              monitorId: input.monitorId,
+              notificationId: email.id,
+              correlationEventId: persisted.id,
+              eventType: candidate.eventType
+            });
+          }
+        } else if (config.EMAIL_ENABLED && config.ENABLE_EMAIL_NOTIFICATIONS) {
+          // Email is enabled globally but this event cannot be emailed
+          // (provider or verified recipient missing) — log once, never fake
+          // a delivery.
+          logger.debug("correlation email skipped", {
+            monitorId: input.monitorId,
+            reason: eligibility.reason ?? "unknown",
+            eventType: candidate.eventType
+          });
+        }
         logger.info("correlation alert created", {
           monitorId: input.monitorId,
           correlationResultId: persisted.id,
@@ -533,11 +600,16 @@ async function walletIdFor(sql: ProcessorContext["sql"], monitorId: string, user
   return row.wallet_id;
 }
 
-/** Notification delivery worker handler, see D4-F §53-§54. */
+/** Notification delivery worker handler, see D4-F §53-§54 and D6-I1.
+ *  The recipient is the profile's VERIFIED notification email, resolved at
+ *  delivery time (never the user id, never an unverified address, D6-I1 §8).
+ *  A stale/missing verified destination suppresses the delivery — email is
+ *  never silently faked. */
 export async function deliverNotification(ctx: ProcessorContext, notificationId: string): Promise<void> {
   const { sql, config, logger: baseLogger } = ctx;
   const logger = baseLogger.child({ notificationId });
   const notificationRepo = createNotificationRepo(sql);
+  const profileRepo = createProfileRepo(sql);
   const emailProvider = createEmailProvider(config, logger);
 
   const notification = await notificationRepo.getById(notificationId);
@@ -545,18 +617,37 @@ export async function deliverNotification(ctx: ProcessorContext, notificationId:
     logger.warn("notification not found");
     return;
   }
+  if (notification.channel !== "EMAIL") {
+    await notificationRepo.markSuppressed(notificationId, "not an email channel");
+    return;
+  }
   if (notification.status !== "PENDING") {
     logger.debug("notification not pending, skipping delivery", { status: notification.status });
     return;
   }
-  if (!config.ENABLE_EMAIL_NOTIFICATIONS) {
+  if (!config.EMAIL_ENABLED || !config.ENABLE_EMAIL_NOTIFICATIONS) {
     await notificationRepo.markSuppressed(notificationId, "email notifications disabled");
+    return;
+  }
+  if (!emailProvider.isConfigured()) {
+    await notificationRepo.markSuppressed(notificationId, "email provider not configured");
+    return;
+  }
+
+  // Verified destination only (§8): the profile email must exist AND be
+  // verified at delivery time. If the user removed/unverified their email
+  // after the notification was queued, suppress instead of sending.
+  const profileEmail = await profileRepo.getEmailForUser(notification.user_id);
+  const to = profileEmail?.notification_email && profileEmail.notification_email_verified_at ? profileEmail.notification_email : null;
+  if (!to) {
+    await notificationRepo.markSuppressed(notificationId, "no verified notification email destination");
+    logger.debug("email notification suppressed: no verified destination", { notificationId });
     return;
   }
 
   try {
     await emailProvider.send({
-      to: notification.user_id,
+      to,
       subject: `${notification.title} — AEGIX`,
       body: notification.body
     });

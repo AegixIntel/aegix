@@ -8,6 +8,44 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 8)}…${address.slice(-6)}`;
 }
 
+/** D6-I3: population-commonality copy. Exposed so the UI logic is testable
+ *  without a DOM; every empirical percentage carries the AEGIX-population
+ *  disclaimer (§30) and never claims ownership. */
+export function commonalityLabel(treatment: "MEANINGFUL" | "DISCOUNTED" | "HEAVILY_DISCOUNTED" | "STATIC"): string {
+  switch (treatment) {
+    case "MEANINGFUL": return "MEANINGFUL";
+    case "DISCOUNTED": return "DISCOUNTED";
+    case "HEAVILY_DISCOUNTED": return "HEAVILY DISCOUNTED";
+    default: return "STATIC TREATMENT";
+  }
+}
+
+export function commonalityFrequencyLabel(note: {
+  frequency: number | null;
+  populationSize: number | null;
+  treatment: "MEANINGFUL" | "DISCOUNTED" | "HEAVILY_DISCOUNTED" | "STATIC";
+}): string {
+  if (note.frequency === null || note.populationSize === null) return "Not enough AEGIX-observed population to estimate this overlap reliably.";
+  return `Observed in ${Math.round(note.frequency * 1000) / 10}% of eligible AEGIX-analyzed wallets (${note.populationSize} wallets).`;
+}
+
+export function commonalityWhy(note: {
+  treatment: "MEANINGFUL" | "DISCOUNTED" | "HEAVILY_DISCOUNTED" | "STATIC";
+  kind: "COUNTERPARTY" | "ENTITY";
+}): string {
+  switch (note.treatment) {
+    case "MEANINGFUL":
+      return "This overlap is uncommon in the currently observed AEGIX population, so it contributes meaningfully to the correlation evidence.";
+    case "DISCOUNTED":
+    case "HEAVILY_DISCOUNTED":
+      return note.kind === "ENTITY"
+        ? "This entity is common across the observed AEGIX population, so interacting with it provides little evidence of a distinctive relationship."
+        : "This counterparty is common across the observed AEGIX population, so the overlap provides little evidence of a distinctive relationship.";
+    default:
+      return "Population statistics are not available for this key; the static common-activity treatment applies.";
+  }
+}
+
 function familyLabel(family: string): string {
   const labels: Record<string, string> = {
     FUNDING: "Funding",
@@ -274,6 +312,77 @@ function SaveComparisonButton({ result }: { result: CompareResult }) {
   );
 }
 
+// ---- D6-I3: population commonality in the compare UI ----
+
+function CommonalitySection({ commonality }: { commonality?: CompareResult["commonality"] }) {
+  if (!commonality) return null;
+
+  const notes = commonality.notes ?? [];
+  const populationActive = commonality.eligible && commonality.source === "POPULATION" && !commonality.stale;
+
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      <h2 className="text-sm font-semibold">Why this shared activity matters</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        Common counterparties and entities carry less correlation weight than rare ones.
+      </p>
+
+      {!populationActive && (
+        <div className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/20 p-3 text-xs text-amber-200/90">
+          <p className="font-semibold">Population commonality unavailable</p>
+          <p className="mt-1 text-amber-200/70">
+            {commonality.source === "STATIC"
+              ? "AEGIX does not yet have enough eligible observations to estimate this overlap reliably — static common-activity treatment applies."
+              : "AEGIX population statistics are not fresh or large enough yet — static common-activity treatment applies."}
+          </p>
+        </div>
+      )}
+
+      {notes.length === 0 && populationActive && (
+        <p className="mt-3 text-xs text-slate-500">No shared counterparties or entities with population observations in this comparison.</p>
+      )}
+
+      {notes.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {notes.map((note) => (
+            <li key={`${note.kind}-${note.key}`} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="break-all text-sm font-medium text-slate-200">
+                  {note.kind === "ENTITY" && note.name ? note.name : shortAddress(note.key)}
+                </span>
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                    note.treatment === "MEANINGFUL"
+                      ? "bg-emerald-900/50 text-emerald-300"
+                      : note.treatment === "HEAVILY_DISCOUNTED"
+                        ? "bg-red-950/60 text-red-300"
+                        : note.treatment === "DISCOUNTED"
+                          ? "bg-amber-900/40 text-amber-300"
+                          : "bg-slate-800 text-slate-400"
+                  }`}
+                >
+                  {commonalityLabel(note.treatment)}
+                </span>
+              </div>
+              <p className="mt-2 break-words text-xs text-slate-400">
+                {note.frequency !== null && note.populationSize !== null
+                  ? `Observed in ${Math.round(note.frequency * 1000) / 10}% of eligible AEGIX-analyzed wallets (${note.distinctWallets ?? 0} of ${note.populationSize}).`
+                  : "No population observation for this key."}
+              </p>
+              <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-500">{commonalityWhy(note)}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-3 rounded border border-slate-800 bg-slate-950/40 p-2 text-[10px] leading-relaxed text-slate-500">
+        Population statistics are based on wallets analyzed by AEGIX and do not represent the entire Solana network. Correlation evidence
+        describes observable relationships — it never establishes common ownership or real-world identity.
+      </p>
+    </section>
+  );
+}
+
 function CompareResultView({ result, onRetry }: { result: CompareResult; onRetry: () => void }) {
   const { correlation } = result;
   const score = correlation.correlationScore;
@@ -342,6 +451,11 @@ function CompareResultView({ result, onRetry }: { result: CompareResult; onRetry
           {correlation.evidenceFamilies.length === 0 && <p className="text-sm text-slate-500">No overlapping evidence dimensions observed.</p>}
         </div>
       </section>
+
+      {/* D6-I3: population commonality (why does this shared counterparty
+          contribute weakly/strongly?). Mobile-friendly cards; every empirical
+          percentage carries the AEGIX-population disclaimer (§30). */}
+      <CommonalitySection commonality={result.commonality} />
 
       {/* Relationship paths (D5-I §38-§42). */}
       <section>

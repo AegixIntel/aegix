@@ -85,6 +85,11 @@ export interface CorrelationInput {
   commonalityByAddress?: Map<string, number>;
   /** D6-G: minimum analyzed population for commonality to be trusted (§84). */
   commonalityMinPopulation?: number;
+  /** D6-G/D6-I2: actual analyzed population size. Frequencies only influence
+   *  the engine once populationSize >= commonalityMinPopulation (the
+   *  data-quality gate lives in the caller: feature flag ON ≠ penalty active,
+   *  D6-I2 §19). */
+  populationSize?: number;
 }
 
 export function computeCorrelation(input: CorrelationInput): CorrelationResult {
@@ -115,7 +120,8 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
     interactionsB,
     knownEntityAddresses,
     commonalityByAddress: input.commonalityByAddress,
-    commonalityMinPopulation: input.commonalityMinPopulation
+    commonalityMinPopulation: input.commonalityMinPopulation,
+    populationSize: input.populationSize
   };
   const behaviorInput: BehaviorInput = {
     walletA,

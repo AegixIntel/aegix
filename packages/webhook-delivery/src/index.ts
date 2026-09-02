@@ -17,6 +17,10 @@ import type { AegixLogger } from "@aegix/logging";
 import type { AegixQueues } from "@aegix/queue";
 import { decryptWebhookSecret, signWebhookPayload, WEBHOOK_HEADERS } from "./webhook-crypto.js";
 
+export { decryptWebhookSecret, signWebhookPayload, verifyWebhookSignature, createWebhookSecret, WEBHOOK_HEADERS, WebhookSecretError, WEBHOOK_SECRET_KEY_VERSION } from "./webhook-crypto.js";
+export { verifyWebhookRequest, CONSUMER_WEBHOOK_HEADERS } from "./consumer-verify.js";
+export type { VerifyWebhookSignatureInput, WebhookVerificationResult } from "./consumer-verify.js";
+
 export interface WebhookDeliveryContext {
   sql: Sql;
   config: AppConfig;
@@ -147,7 +151,9 @@ export async function resolveWebhookDestination(url: string, config: AppConfig):
 
 /**
  * Performs one signed delivery attempt. Returns the HTTP status code
- * (0 for network-level failure). Redirects are NOT followed (§117).
+ * (0 for network-level failure). Redirects are NOT followed (§117); the
+ * response body is read with a hard cap so a hostile endpoint cannot make
+ * the worker buffer an unbounded response (D6-J §58).
  */
 export async function deliverWebhookOnce(ctx: WebhookDeliveryContext, webhook: DeveloperWebhookRow, payload: WebhookEventPayload): Promise<{ statusCode: number; durationMs: number; rawBody: string }> {
   const { config } = ctx;
@@ -183,8 +189,25 @@ export async function deliverWebhookOnce(ctx: WebhookDeliveryContext, webhook: D
       signal: controller.signal,
       redirect: "manual"
     });
-    // Read a bounded response body (§121).
-    const body = await res.text().catch(() => "");
+    // Read a BOUNDED response body (§121 / D6-J §58): never buffer an
+    // unlimited response from a customer endpoint.
+    const maxBodyBytes = 64 * 1024;
+    let body = "";
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          body += decoder.decode(value, { stream: true });
+          if (Buffer.byteLength(body, "utf8") >= maxBodyBytes) break;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+    await res.body?.cancel().catch(() => {});
     return { statusCode: res.status, durationMs: Date.now() - started, rawBody: body.slice(0, 500) };
   } finally {
     clearTimeout(timeout);
@@ -231,15 +254,27 @@ export async function enqueueWebhookDelivery(ctx: WebhookDeliveryContext, input:
   }
 }
 
+export interface WebhookDeliveryAttemptMeta {
+  /** Real attempt number (BullMQ attemptsMade + 1). Defaults to 1 for the
+   *  API enqueue path / tests. */
+  attempt?: number;
+}
+
 /**
  * Worker processor: one delivery attempt with retry/disable bookkeeping.
  * Throws only for transient failures (BullMQ retries with backoff);
- * permanent failures mark the webhook and stop.
+ * permanent failures mark the webhook and stop. The audit trail records the
+ * REAL attempt number (D6-J): repeated transient failures show up as
+ * attempt 2..N instead of being collapsed into attempt 1, and a webhook
+ * that keeps failing is degraded then disabled once failure_count reaches
+ * WEBHOOK_DISABLE_AFTER_FAILURES — one broken endpoint can never retry
+ * forever or starve other work.
  */
-export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobData: { webhookId: string; eventId: string; eventType: string; payload: WebhookEventPayload }): Promise<void> {
+export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobData: { webhookId: string; eventId: string; eventType: string; payload: WebhookEventPayload }, meta: WebhookDeliveryAttemptMeta = {}): Promise<void> {
   const { sql, config, logger: baseLogger } = ctx;
   const logger = baseLogger.child({ webhookId: jobData.webhookId, eventId: jobData.eventId });
   const webhookRepo = createWebhookRepo(sql);
+  const attempt = Math.max(1, meta.attempt ?? 1);
 
   const webhook = await webhookRepo.getById(jobData.webhookId);
   if (!webhook || webhook.status === "DISABLED") {
@@ -259,7 +294,7 @@ export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobDat
     logger.info("webhook delivery attempted", {
       webhookId: webhook.id,
       eventId: jobData.eventId,
-      attempt: 1,
+      attempt,
       destinationHostSafe: hostSafe(webhook.url),
       status: statusCode,
       durationMs: result.durationMs
@@ -267,6 +302,14 @@ export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobDat
 
     if (statusCode >= 200 && statusCode < 300) {
       await webhookRepo.markOutcome(webhook.id, { ok: true });
+    } else if (statusCode >= 300 && statusCode < 400) {
+      // Redirects are never followed (§117) — treat as a permanent failure:
+      // a 3xx destination is misconfigured for delivery and would otherwise
+      // retry forever.
+      status = "FAILED";
+      errorExcerpt = `redirect HTTP ${statusCode} (redirects are not followed)`;
+      await webhookRepo.markOutcome(webhook.id, { ok: false, disable: true, reason: `redirect HTTP ${statusCode}` });
+      logger.error("webhook permanently failed (redirect)", { webhookId: webhook.id, eventId: jobData.eventId, statusCode });
     } else if (isPermanentStatus(statusCode)) {
       status = "FAILED";
       errorExcerpt = `permanent HTTP ${statusCode}`;
@@ -275,10 +318,10 @@ export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobDat
     } else {
       status = "RETRY";
       errorExcerpt = `transient HTTP ${statusCode}`;
-      await webhookRepo.markOutcome(webhook.id, { ok: false });
+      await webhookRepo.markOutcome(webhook.id, { ok: false, disableAfterFailures: config.WEBHOOK_DISABLE_AFTER_FAILURES });
       // Bounded retry: let BullMQ backoff handle it; compute next_retry_at.
       nextRetryAt = new Date(Date.now() + 60_000).toISOString();
-      logger.warn("webhook transient failure, will retry", { webhookId: webhook.id, eventId: jobData.eventId, statusCode });
+      logger.warn("webhook transient failure, will retry", { webhookId: webhook.id, eventId: jobData.eventId, statusCode, attempt });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -288,9 +331,9 @@ export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobDat
       await webhookRepo.markOutcome(webhook.id, { ok: false, disable: true, reason: "SSRF blocked" });
       logger.error("webhook SSRF blocked", { webhookId: webhook.id, eventId: jobData.eventId, destinationHostSafe: hostSafe(webhook.url) });
     } else {
-      await webhookRepo.markOutcome(webhook.id, { ok: false });
+      await webhookRepo.markOutcome(webhook.id, { ok: false, disableAfterFailures: config.WEBHOOK_DISABLE_AFTER_FAILURES });
       nextRetryAt = new Date(Date.now() + 60_000).toISOString();
-      logger.warn("webhook delivery error, will retry", { webhookId: webhook.id, eventId: jobData.eventId, error: message.slice(0, 200) });
+      logger.warn("webhook delivery error, will retry", { webhookId: webhook.id, eventId: jobData.eventId, attempt, error: message.slice(0, 200) });
     }
   }
 
@@ -298,7 +341,7 @@ export async function processWebhookDelivery(ctx: WebhookDeliveryContext, jobDat
     webhookId: webhook.id,
     eventId: jobData.eventId,
     eventType: jobData.eventType,
-    attempt: 1,
+    attempt,
     status,
     statusCode: statusCode || null,
     durationMs: Date.now() - started,
