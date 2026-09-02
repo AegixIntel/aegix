@@ -109,3 +109,35 @@ export {
   type DeveloperUsageEventRow,
   type DeveloperUsageSummary
 } from "./repositories/developer-usage.js";
+export {
+  createWalletAuthRepo,
+  type WalletAuthRepo,
+  type WalletAuthChallengeRow,
+  type UserWalletIdentityRow
+} from "./repositories/wallet-auth.js";
+export {
+  createSessionRepo,
+  type SessionRepo,
+  type SessionRow
+} from "./repositories/sessions.js";
+export {
+  createPopulationCommonalityRepo,
+  type PopulationCommonalityRepo,
+  type PopulationObservationStatRow,
+  type PopulationObservationType
+} from "./repositories/population-commonality.js";
+export {
+  createMonitorCorrelationRepo,
+  type MonitorCorrelationRepo,
+  type CorrelationBaselineRow,
+  type CorrelationThreatEventRow
+} from "./repositories/correlation-monitor.js";
+export {
+  createWebhookRepo,
+  WEBHOOK_EVENT_TYPES,
+  type WebhookRepo,
+  type DeveloperWebhookRow,
+  type WebhookDeliveryRow,
+  type WebhookEventType,
+  type WebhookStatus
+} from "./repositories/webhooks.js";

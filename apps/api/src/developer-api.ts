@@ -38,6 +38,12 @@ export type DeveloperErrorCode =
   | "QUOTA_EXCEEDED"
   | "INVALID_REQUEST"
   | "FEATURE_DISABLED"
+  | "SERVICE_BUSY"
+  | "ACCOUNT_NOT_ANALYZABLE"
+  | "ACCOUNT_NOT_COMPARABLE"
+  | "ANALYSIS_REQUIRED"
+  | "COMPARISON_IN_PROGRESS"
+  | "NOT_FOUND"
   | "INTERNAL_ERROR";
 
 export interface DeveloperContext {

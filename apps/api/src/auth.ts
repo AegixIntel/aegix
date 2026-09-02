@@ -19,6 +19,8 @@ export interface AuthUser {
   id: string;
   email: string | null;
   isAnonymous: boolean;
+  /** Login wallet when authenticated via wallet session (D6-P). */
+  wallet?: string | null;
 }
 
 declare module "fastify" {

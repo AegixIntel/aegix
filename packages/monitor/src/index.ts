@@ -3,3 +3,13 @@ export type { EmailProvider, EmailInput } from "./email.js";
 export { createEmailProvider, classifyEmailError, TransientEmailError, PermanentEmailError } from "./email.js";
 export { runMonitorPipeline, deliverNotification } from "./pipeline.js";
 export type { ProcessorContext } from "./types.js";
+export {
+  evaluateCorrelationChanges,
+  applyCorrelationRules,
+  correlationEventFingerprint,
+  CORRELATION_MONITOR_ENGINE_VERSION,
+  type CorrelationSnapshot,
+  type CorrelationChangeCandidate,
+  type CorrelationAlertConfig,
+  type CorrelationEventType
+} from "./correlation.js";

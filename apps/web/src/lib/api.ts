@@ -177,10 +177,12 @@ export interface SavedAnalysis {
   fresh_until: string | null;
 }
 
-/** Reads the Supabase access token from localStorage (set by the auth UI). */
+/** Reads the wallet session token from localStorage (set by the wallet
+ *  auth flow, D6-P). Supabase access tokens are no longer the product
+ *  login mechanism. */
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("aegix_access_token");
+  return window.localStorage.getItem("aegix_session_token");
 }
 
 function authHeaders(): Record<string, string> {

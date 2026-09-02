@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -23,6 +23,7 @@ import {
   createMonitorAlertRulesRepo,
   createMonitorCheckRepo,
   createMonitorRepo,
+  createMonitorCorrelationRepo,
   createNotificationRepo,
   createSavedAnalysisRepo,
   createSavedComparisonRepo,
@@ -40,10 +41,13 @@ import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
+import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
 import { cachedComparison, canonicalComparePair, compareCacheKey, compareLockKey, loadFreshAnalysis, runComparison, type CompareResult } from "./compare.js";
 import { createDeveloperAuth, developerError, developerSuccess, setQuotaHeaders } from "./developer-api.js";
 import { generateApiKey } from "./developer-keys.js";
+import { registerDeveloperIntelligence } from "./developer-intelligence.js";
+import { registerWebhookRoutes } from "./webhooks.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -132,9 +136,30 @@ export async function buildServer(deps: ApiDeps) {
     timeWindow: "1 minute"
   });
 
+  const sql = createDb(config.DATABASE_URL);
+  const walletRepo = createWalletRepo(sql);
+  const jobRepo = createAnalysisJobRepo(sql);
+  const intelligenceRepo = createIntelligenceRepo(sql);
+  const savedRepo = createSavedAnalysisRepo(sql);
+  const savedComparisonRepo = createSavedComparisonRepo(sql);
+  const developerKeyRepo = createDeveloperApiKeyRepo(sql);
+  const developerUsageRepo = createDeveloperUsageRepo(sql);
+  const correlationRepo = createCorrelationRepo(sql);
+  const monitorRepo = createMonitorRepo(sql);
+  const monitorCheckRepo = createMonitorCheckRepo(sql);
+  const diffRepo = createExposureDiffRepo(sql);
+  const threatEventRepo = createThreatEventRepo(sql);
+  const alertRulesRepo = createMonitorAlertRulesRepo(sql);
+  const notificationRepo = createNotificationRepo(sql);
+  const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
+  const queues = createQueues(config);
+  const provider = createProviderPoolFromConfig(config);
+  const developerAuth = createDeveloperAuth({ sql, config, logger });
+
   // Analysis trace, see D2 §56: every API request carries a request_id that
   // flows into job records. Full wallet addresses are never logged.
   const auth = createAuth(config);
+  const walletAuth = createWalletAuth({ sql, config });
   app.addHook("onRequest", async (req) => {
     const requestId = randomUUID();
     req.headers["x-request-id"] = requestId;
@@ -142,7 +167,24 @@ export async function buildServer(deps: ApiDeps) {
     const ctx = { requestId, method: req.method, path: req.routeOptions?.url ?? req.url, ...(address ? walletRef(address) : {}) };
     logger.info("request started", ctx);
     // Server-side auth resolution, see D3-D §29: never trust frontend claims.
-    req.user = await auth.resolveUser(req);
+    // Wallet sessions first (D6-P); Supabase JWT is a temporary legacy
+    // bridge for pre-wallet identities, gated by ENABLE_LEGACY_AUTH (§35).
+    const header = req.headers.authorization;
+    if (header?.startsWith("Bearer ")) {
+      const token = header.slice("Bearer ".length).trim();
+      if (token) {
+        const sessionUser = await walletAuth.resolveSession(token);
+        if (sessionUser) {
+          req.user = { id: sessionUser.id, email: null, isAnonymous: false, wallet: sessionUser.wallet };
+          return;
+        }
+      }
+    }
+    if (config.ENABLE_LEGACY_AUTH) {
+      req.user = await auth.resolveUser(req);
+    } else {
+      req.user = null;
+    }
   });
 
   app.addHook("onResponse", async (req, reply) => {
@@ -175,26 +217,6 @@ export async function buildServer(deps: ApiDeps) {
     xFrameOptions: { action: "deny" }
   });
 
-  const sql = createDb(config.DATABASE_URL);
-  const walletRepo = createWalletRepo(sql);
-  const jobRepo = createAnalysisJobRepo(sql);
-  const intelligenceRepo = createIntelligenceRepo(sql);
-  const savedRepo = createSavedAnalysisRepo(sql);
-  const savedComparisonRepo = createSavedComparisonRepo(sql);
-  const developerKeyRepo = createDeveloperApiKeyRepo(sql);
-  const developerUsageRepo = createDeveloperUsageRepo(sql);
-  const correlationRepo = createCorrelationRepo(sql);
-  const monitorRepo = createMonitorRepo(sql);
-  const monitorCheckRepo = createMonitorCheckRepo(sql);
-  const diffRepo = createExposureDiffRepo(sql);
-  const threatEventRepo = createThreatEventRepo(sql);
-  const alertRulesRepo = createMonitorAlertRulesRepo(sql);
-  const notificationRepo = createNotificationRepo(sql);
-  const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
-  const queues = createQueues(config);
-  const provider = createProviderPoolFromConfig(config);
-  const developerAuth = createDeveloperAuth({ sql, config, logger });
-
   app.addHook("onClose", async () => {
     await queues.close();
     await cache.close();
@@ -202,6 +224,114 @@ export async function buildServer(deps: ApiDeps) {
   });
 
   app.get("/health/live", async () => ({ status: "ok" }));
+
+  // ---- D6-P: wallet-only authentication (challenge-response, signMessage) ----
+  // No email/password/magic-link/OAuth login exists anywhere in the product.
+
+  app.post<{ Body: { wallet: string } }>(
+    "/v1/auth/wallet/challenge",
+    {
+      config: {
+        rateLimit: { max: config.WALLET_AUTH_RATE_LIMIT_CHALLENGE, timeWindow: "1 minute" }
+      },
+      schema: {
+        body: {
+          type: "object",
+          required: ["wallet"],
+          properties: { wallet: { type: "string", minLength: 32, maxLength: 44 } }
+        }
+      }
+    },
+    async (req, reply) => {
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+      const started = Date.now();
+      const result = await walletAuth.issueChallenge({ wallet: req.body.wallet, ip: req.ip });
+      if (!result.ok) {
+        logger.warn("wallet auth challenge rejected", {
+          requestId,
+          walletHash: hashWalletForLog(req.body.wallet),
+          authResult: result.code,
+          durationMs: Date.now() - started
+        });
+        return reply.code(result.statusCode).send({ error: { code: result.code, message: result.message }, meta: { requestId } });
+      }
+      logger.info("wallet auth challenge issued", {
+        requestId,
+        authChallengeId: result.challenge.challengeId,
+        walletHash: hashWalletForLog(req.body.wallet),
+        durationMs: Date.now() - started
+      });
+      return reply.send({ data: result.challenge, meta: { requestId } });
+    }
+  );
+
+  app.post<{ Body: { challengeId: string; wallet: string; signature: string; nonce: string } }>(
+    "/v1/auth/wallet/verify",
+    {
+      config: {
+        rateLimit: { max: config.WALLET_AUTH_RATE_LIMIT_VERIFY, timeWindow: "1 minute" }
+      },
+      schema: {
+        body: {
+          type: "object",
+          required: ["challengeId", "wallet", "signature", "nonce"],
+          properties: {
+            challengeId: { type: "string" },
+            wallet: { type: "string", minLength: 32, maxLength: 44 },
+            signature: { type: "string", minLength: 86, maxLength: 88 },
+            nonce: { type: "string", minLength: 20, maxLength: 64 }
+          }
+        }
+      }
+    },
+    async (req, reply) => {
+      const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+      const started = Date.now();
+      const result = await walletAuth.verify(req.body);
+      if (!result.ok) {
+        logger.warn("wallet auth verify rejected", {
+          requestId,
+          authChallengeId: req.body.challengeId,
+          walletHash: hashWalletForLog(req.body.wallet),
+          authResult: result.code,
+          durationMs: Date.now() - started
+        });
+        return reply.code(result.statusCode).send({ error: { code: result.code, message: result.message }, meta: { requestId } });
+      }
+      logger.info("wallet auth success", {
+        requestId,
+        authChallengeId: req.body.challengeId,
+        walletHash: hashWalletForLog(req.body.wallet),
+        authResult: "SUCCESS",
+        isNewUser: result.isNewUser,
+        sessionId: result.session.id,
+        durationMs: Date.now() - started
+      });
+      return reply.send({
+        data: { token: result.token, user: { id: result.user.id, wallet: result.user.wallet }, expiresAt: result.session.expires_at },
+        meta: { requestId }
+      });
+    }
+  );
+
+  app.post("/v1/auth/logout", async (req, reply) => {
+    const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
+    const header = req.headers.authorization;
+    const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length).trim() : "";
+    const revoked = token ? await walletAuth.logout(token) : false;
+    logger.info("wallet auth logout", { requestId, revoked });
+    return reply.send({ data: { revoked }, meta: { requestId } });
+  });
+
+  // ---- D6-P: session identity ----
+
+  app.get("/v1/auth/me", async (req, reply) => {
+    const user = req.user;
+    if (!user || user.isAnonymous) {
+      return reply.code(401).send({ error: { code: "UNAUTHENTICATED", message: "Authentication required" }, meta: { requestId: (req.headers["x-request-id"] as string) ?? "unknown" } });
+    }
+    return reply.send({ data: { id: user.id, wallet: user.wallet ?? null, email: user.email }, meta: { requestId: (req.headers["x-request-id"] as string) ?? "unknown" } });
+  });
 
   // Account classification, see milestone D3-A §14: exposes evidence-backed
   // classification so the frontend can render program/mint/sysvar accounts
@@ -1175,6 +1305,26 @@ export async function buildServer(deps: ApiDeps) {
     }
   );
 
+  // ---- D6-E: developer intelligence API (thin orchestration, D6-E §43) ----
+  registerDeveloperIntelligence({
+    app,
+    sql,
+    config,
+    logger,
+    queues,
+    developerAuth,
+    recordUsage: recordDeveloperUsage
+  });
+
+  // ---- D6-H: webhook management (product session, §124) ----
+  registerWebhookRoutes({
+    app,
+    sql,
+    config,
+    logger,
+    requireUser
+  });
+
   // ---- Privacy monitors, see milestone D4 (D4-A, D4-E, D4-F, D4-G) ----
   // All routes require a verified registered user (server-side auth, D3-D).
   // Monitor work is scheduled by the worker; the API only manages state.
@@ -1338,6 +1488,10 @@ export async function buildServer(deps: ApiDeps) {
         if (typeof alertRules.notifyBehaviorChange === "boolean") patch.notify_behavior_change = alertRules.notifyBehaviorChange;
         if (typeof alertRules.notifyDataQualityDegraded === "boolean") patch.notify_data_quality_degraded = alertRules.notifyDataQualityDegraded;
         if (typeof alertRules.cooldownHours === "number") patch.cooldown_hours = alertRules.cooldownHours;
+        // D6-F §76: correlation alert knobs.
+        if (typeof alertRules.notifyCorrelationChange === "boolean") patch.notify_correlation_change = alertRules.notifyCorrelationChange;
+        if (typeof alertRules.correlationMinScore === "number") patch.correlation_min_score = Math.max(0, Math.min(100, alertRules.correlationMinScore));
+        if (typeof alertRules.correlationMinConfidence === "number") patch.correlation_min_confidence = String(Math.min(1, Math.max(0, alertRules.correlationMinConfidence)));
         await alertRulesRepo.updateForMonitor(monitor.id, patch);
       }
 
@@ -1368,13 +1522,14 @@ export async function buildServer(deps: ApiDeps) {
     if (!monitor) {
       return reply.code(404).send({ code: "NOT_FOUND", message: "Monitor not found", requestId: randomUUID() });
     }
-    const [rules, events, checks, diffs] = await Promise.all([
+    const [rules, events, checks, diffs, correlationEvents] = await Promise.all([
       alertRulesRepo.getForMonitor(monitor.id),
       threatEventRepo.listForMonitor(monitor.id, 20),
       monitorCheckRepo.listForMonitor(monitor.id, 20),
-      diffRepo.listForMonitor(monitor.id, 20)
+      diffRepo.listForMonitor(monitor.id, 20),
+      createMonitorCorrelationRepo(sql).listEventsForMonitor(monitor.id, 20)
     ]);
-    return reply.send({ monitor, rules, events, checks, diffs });
+    return reply.send({ monitor, rules, events, checks, diffs, correlationEvents });
   });
 
   app.get<{ Params: { id: string } }>("/v1/me/monitors/:id/events", async (req, reply) => {
@@ -1574,4 +1729,9 @@ function coverageDays(dataQuality: Record<string, unknown>): number | null {
   const end = dataQuality.historyEnd;
   if (typeof start !== "string" || typeof end !== "string") return null;
   return Math.max(1, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000));
+}
+
+/** Deterministic, non-reversible wallet reference for logs (§127). */
+function hashWalletForLog(wallet: string): string {
+  return createHash("sha256").update(wallet, "utf8").digest("hex").slice(0, 16);
 }

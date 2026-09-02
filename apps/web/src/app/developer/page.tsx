@@ -11,6 +11,8 @@ import {
   type CreatedDeveloperKey,
   type DeveloperUsageSummary
 } from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
+import WalletAuthButton from "@/components/wallet-auth-button";
 
 const SCOPE_LABELS: Record<string, string> = {
   "intelligence:read": "Read wallet intelligence",
@@ -29,10 +31,10 @@ function keyStatus(key: DeveloperApiKey): "ACTIVE" | "REVOKED" | "EXPIRED" {
 }
 
 export default function DeveloperPage() {
+  const { user } = useAuth();
   const [keys, setKeys] = useState<DeveloperApiKey[] | null>(null);
   const [usage, setUsage] = useState<DeveloperUsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
 
   // Create-key form
   const [name, setName] = useState("");
@@ -57,8 +59,6 @@ export default function DeveloperPage() {
   }, []);
 
   useEffect(() => {
-    const t = window.localStorage.getItem("aegix_access_token");
-    setToken(t);
     void load();
   }, [load]);
 
@@ -115,12 +115,15 @@ export default function DeveloperPage() {
           <h1 className="mt-1 text-2xl font-bold">Developer API</h1>
           <p className="text-sm text-slate-400">Manage API keys and usage for the AEGIX developer platform.</p>
         </div>
+        <div className="flex gap-2">
+          <WalletAuthButton />
+        </div>
       </header>
 
-      {!token && (
+      {!user && (
         <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
-          You are browsing anonymously.{" "}
-          <a href="/?login=1" className="underline">Sign in</a> to create API keys.
+          You are browsing anonymously. Connect a Solana wallet to create API keys and manage webhooks.
+          Signing in is free — it does not create a transaction and does not cost SOL.
         </div>
       )}
 

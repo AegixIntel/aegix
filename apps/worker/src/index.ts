@@ -5,6 +5,7 @@ import { classifyError, createQueues, publishToDeadLetter, type DeadLetterRecord
 import { createWorker, type ProcessorContext } from "./worker.js";
 import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
+import { processWebhookJob } from "./processors/webhooks.js";
 import { registerMonitorScheduler } from "./scheduler.js";
 
 const config = loadConfig();
@@ -24,7 +25,11 @@ const monitorWorkers = [
   createWorker({ name: "monitoring", concurrency: Math.max(1, config.MONITOR_WORKER_CONCURRENCY) }, processMonitorJob, ctx)
 ];
 
-const allWorkers = [...analysisWorkers, ...monitorWorkers];
+const webhookWorkers = config.ENABLE_WEBHOOK_DELIVERY
+  ? [createWorker({ name: "webhooks", concurrency: Math.max(1, config.WEBHOOK_WORKER_CONCURRENCY) }, processWebhookJob, ctx)]
+  : [];
+
+const allWorkers = [...analysisWorkers, ...monitorWorkers, ...webhookWorkers];
 
 let shuttingDown = false;
 

@@ -17,7 +17,7 @@ export {
 } from "./provider-pool.js";
 export { createProviderPoolFromConfig } from "./factory.js";
 export { SolanaRpcProvider } from "./solana/provider.js";
-export { isValidSolanaAddress } from "./solana/address.js";
+export { isValidSolanaAddress, decodeSolanaPublicKey, decodeSolanaSignature } from "./solana/address.js";
 export {
   classifyAccount,
   classifyAddress,

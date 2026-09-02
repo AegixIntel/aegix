@@ -11,6 +11,10 @@ export interface AlertRulesRow {
   notify_behavior_change: boolean;
   notify_data_quality_degraded: boolean;
   cooldown_hours: number;
+  /** D6-F §76: correlation alert knobs. */
+  notify_correlation_change: boolean;
+  correlation_min_score: number;
+  correlation_min_confidence: string;
   created_at: string;
   updated_at: string;
 }

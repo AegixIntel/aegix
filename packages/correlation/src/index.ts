@@ -76,6 +76,15 @@ export interface CorrelationInput {
   activityB?: TemporalInput["activityB"];
   /** Optional overrides (tests/ablation). */
   disabledFamilies?: Set<string>;
+  /**
+   * D6-G: population commonality index (address -> observed frequency).
+   * When present, overlap evidence discounts shared keys by their observed
+   * population frequency (correlation penalty v2, §89). Absent → the D5
+   * static common-activity penalties apply unchanged.
+   */
+  commonalityByAddress?: Map<string, number>;
+  /** D6-G: minimum analyzed population for commonality to be trusted (§84). */
+  commonalityMinPopulation?: number;
 }
 
 export function computeCorrelation(input: CorrelationInput): CorrelationResult {
@@ -104,7 +113,9 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
     transfersB,
     interactionsA,
     interactionsB,
-    knownEntityAddresses
+    knownEntityAddresses,
+    commonalityByAddress: input.commonalityByAddress,
+    commonalityMinPopulation: input.commonalityMinPopulation
   };
   const behaviorInput: BehaviorInput = {
     walletA,

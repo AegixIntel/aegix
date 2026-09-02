@@ -665,6 +665,28 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       dataQuality
     );
 
+    // D6-G §92: incremental population aggregation (opt-in). Idempotent per
+    // (wallet, version) — re-analysis replaces the wallet's contribution.
+    // Best-effort: aggregation failure must never fail the analysis.
+    if (config.ENABLE_POPULATION_COMMONALITY) {
+      try {
+        const { aggregatePopulation } = await import("@aegix/commonality");
+        const agg = await aggregatePopulation(ctx, {
+          walletId: wallet.id,
+          analysisId,
+          version: config.COMMONALITY_VERSION
+        });
+        logger.info("population aggregation complete", {
+          walletId: wallet.id,
+          populationSize: agg.populationSize,
+          observations: agg.observations,
+          version: config.COMMONALITY_VERSION
+        });
+      } catch (err) {
+        logger.error("population aggregation failed", { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
     // D4-B §14 / D4-I §75: fan out to monitors watching this wallet. One
     // analysis serves every monitor — the monitoring worker runs the
     // diff/rules pipeline per monitor. Best-effort: a queue failure must

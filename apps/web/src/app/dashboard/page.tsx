@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { listSavedAnalyses, deleteSavedAnalysis, listMonitors, listSavedComparisons, deleteSavedComparison, type SavedAnalysis, type Monitor, type SavedComparison } from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
+import WalletAuthButton from "@/components/wallet-auth-button";
 
 function shortAddress(address: string): string {
   if (address.length <= 16) return address;
@@ -26,11 +28,11 @@ function statusBadge(status: string): string {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [saved, setSaved] = useState<SavedAnalysis[] | null>(null);
   const [monitors, setMonitors] = useState<Monitor[] | null>(null);
   const [comparisons, setComparisons] = useState<SavedComparison[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -45,8 +47,6 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const t = window.localStorage.getItem("aegix_access_token");
-    setToken(t);
     void load();
   }, [load]);
 
@@ -68,6 +68,7 @@ export default function DashboardPage() {
           <p className="text-sm text-slate-400">Your saved wallets and their latest analysis state.</p>
         </div>
         <div className="flex gap-2">
+          <WalletAuthButton />
           <a href="/dashboard/notifications" className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent">
             Notifications
           </a>
@@ -80,13 +81,10 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {!token && (
+      {!user && (
         <div className="mt-6 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
-          You are browsing anonymously.{" "}
-          <a href="/?login=1" className="underline">
-            Sign in
-          </a>{" "}
-          to save wallets and see your dashboard.
+          You are browsing anonymously. Connect a Solana wallet to save wallets, monitor them, and see your
+          dashboard. Signing in is free — it does not create a transaction and does not cost SOL.
         </div>
       )}
 

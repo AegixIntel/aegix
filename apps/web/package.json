@@ -11,6 +11,11 @@
     "test": "echo \"no tests\""
   },
   "dependencies": {
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-wallets": "^0.19.38",
+    "@solana/web3.js": "^1.95.8",
+    "bs58": "^6.0.0",
     "next": "^15.5.24",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

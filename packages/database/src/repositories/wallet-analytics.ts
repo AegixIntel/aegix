@@ -55,6 +55,8 @@ export interface WalletAnalyticsRepo {
   transactionsForWallet(walletId: string, limit?: number): Promise<TransactionRow[]>;
   transfersForWallet(walletId: string, limit?: number): Promise<TransferRow[]>;
   counterpartiesForWallet(walletId: string, limit?: number): Promise<{ counterparty: string; txCount: number; totalValue: number }[]>;
+  /** Program interactions for a wallet (population aggregation, D6-G). */
+  programInteractionsForWallet(walletId: string, limit?: number): Promise<ProgramInteractionRow[]>;
 }
 
 export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
@@ -147,6 +149,17 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
         where t.from_address = w.address or t.to_address = w.address
         group by counterparty
         order by "txCount" desc
+        limit ${limit}
+      `;
+    },
+
+    async programInteractionsForWallet(walletId, limit = 5000) {
+      return sql<ProgramInteractionRow[]>`
+        select id::text, wallet_id::text, transaction_id::text, program_id,
+          program_label, protocol_category, action_type, block_time
+        from program_interactions
+        where wallet_id = ${walletId}
+        order by block_time desc
         limit ${limit}
       `;
     }

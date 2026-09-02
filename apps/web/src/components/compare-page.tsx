@@ -208,14 +208,22 @@ export default function ComparePage({ initialA, initialB }: { initialA?: string;
 // ---- D6-A: save/unsave a comparison (authenticated) ----
 
 function SaveComparisonButton({ result }: { result: CompareResult }) {
-  const [token, setToken] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedComparison | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setToken(getAccessToken());
-  }, []);
+    // Refresh saved state when the session changes.
+    void (async () => {
+      if (!getAccessToken()) return;
+      try {
+        const row = await saveComparison(result.walletA, result.walletB).catch(() => null);
+        if (row) setSaved(row);
+      } catch {
+        // anonymous: nothing to restore
+      }
+    })();
+  }, [result.walletA, result.walletB]);
 
   async function toggle() {
     setBusy(true);
@@ -235,10 +243,10 @@ function SaveComparisonButton({ result }: { result: CompareResult }) {
     }
   }
 
-  if (!token) {
+  if (!getAccessToken()) {
     return (
       <p className="text-xs text-slate-500">
-        <a href="/?login=1" className="underline">Sign in</a> to save this comparison.
+        Connect a wallet to save this comparison.
       </p>
     );
   }

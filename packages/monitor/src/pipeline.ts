@@ -2,9 +2,11 @@ import { createHash } from "node:crypto";
 import type { AppConfig } from "@aegix/config";
 import {
   createAnalysisJobRepo,
+  createCorrelationRepo,
   createExposureDiffRepo,
   createIntelligenceRepo,
   createMonitorAlertRulesRepo,
+  createMonitorCorrelationRepo,
   createMonitorRepo,
   createNotificationRepo,
   createThreatEventRepo,
@@ -15,7 +17,47 @@ import type { AegixLogger } from "@aegix/logging";
 import type { ProcessorContext } from "./types.js";
 import { buildExposureDiff, type DiffInputs } from "@aegix/diff";
 import { applyRules, evaluateThreats } from "./threat.js";
+import { applyCorrelationRules, evaluateCorrelationChanges, CORRELATION_MONITOR_ENGINE_VERSION, type CorrelationSnapshot } from "./correlation.js";
 import { createEmailProvider, PermanentEmailError, type EmailProvider } from "./email.js";
+
+/** D6-H §106: maps internal event types to the webhook event vocabulary. */
+const WEBHOOK_EVENT_MAP: Record<string, string> = {
+  PRIVACY_EXPOSURE_INCREASED: "monitor.threat.created",
+  IDENTITY_LINKABILITY_INCREASED: "monitor.threat.created",
+  NEW_ENTITY_EXPOSURE: "monitor.threat.created",
+  NEW_REPEATED_FUNDER: "monitor.threat.created",
+  NEW_STRONG_COUNTERPARTY_LINK: "monitor.threat.created",
+  NEW_ATTACK_PATH: "monitor.threat.created",
+  ATTACK_PATH_STRENGTHENED: "monitor.threat.created",
+  DATA_QUALITY_DEGRADED: "monitor.threat.created",
+  CORRELATION_APPEARED: "correlation.appeared",
+  CORRELATION_INCREASED: "correlation.increased",
+  CORRELATION_DECREASED: "correlation.decreased",
+  CORRELATION_DISAPPEARED: "correlation.disappeared"
+};
+
+/** Best-effort webhook fan-out for a monitor event (§107: async, never
+ *  blocks the pipeline; a queue failure is logged, not thrown). */
+export async function fanOutWebhook(ctx: ProcessorContext, eventType: string, data: Record<string, unknown>): Promise<void> {
+  const { config, logger } = ctx;
+  if (!config.ENABLE_WEBHOOK_DELIVERY) return;
+  const webhookType = WEBHOOK_EVENT_MAP[eventType];
+  if (!webhookType) return;
+  try {
+    const { enqueueWebhookDelivery } = await import("@aegix/webhook-delivery");
+    await enqueueWebhookDelivery(ctx, {
+      eventType: webhookType,
+      payload: {
+        id: crypto.randomUUID(),
+        type: webhookType,
+        createdAt: new Date().toISOString(),
+        data
+      }
+    });
+  } catch (err) {
+    logger.error("webhook fan-out failed", { eventType, error: err instanceof Error ? err.message : String(err) });
+  }
+}
 
 /**
  * Monitor pipeline, see docs/milestone-d4.md (D4-D §34, D4-E §47, D4-I §75).
@@ -226,6 +268,18 @@ async function processMonitorDiff(
 
     if (decision.action !== "NOTIFY") continue;
 
+    // D6-H §105-§107: fan out to subscribed webhooks (async, best-effort).
+    await fanOutWebhook(ctx, event.eventType, {
+      monitorId: input.monitorId,
+      eventId: persisted.id,
+      eventType: event.eventType,
+      severity: event.severity,
+      confidence: event.confidence,
+      subject: event.subject,
+      summary: event.summary,
+      evidence: event.evidence
+    });
+
     // One notification per channel, keyed by (fingerprint|channel): retries
     // can never duplicate (D4-F §52).
     const baseKey = createHash("sha256").update(`${event.fingerprint}|`).digest("hex");
@@ -270,6 +324,205 @@ async function processMonitorDiff(
   // Bookkeeping + opportunistic event expiry (D4-H §68).
   await monitorRepo.touchCheck(input.monitorId, input.currentAnalysisId);
   await eventRepo.expireOld(new Date(Date.now() - config.MONITOR_EVENT_EXPIRY_DAYS * 86_400_000).toISOString()).catch(() => {});
+
+  // D6-F §64-§77: correlation change detection for this monitor (opt-in via
+  // ENABLE_CORRELATION_MONITOR_ALERTS; per-monitor rules gate notifications).
+  if (config.ENABLE_CORRELATION_MONITOR_ALERTS) {
+    try {
+      await processCorrelationChanges(ctx, {
+        monitorId: input.monitorId,
+        monitorUserId: input.monitorUserId,
+        walletAddress: input.walletAddress,
+        currentAnalysisId: input.currentAnalysisId
+      });
+    } catch (err) {
+      // Correlation alerts are additive: a failure here must not break the
+      // exposure pipeline outcome already persisted.
+      ctx.logger.error("correlation alert stage failed", { monitorId: input.monitorId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+}
+
+/**
+ * D6-F: compares the monitor's persisted correlation baselines against the
+ * current persisted correlation results for the monitored wallet. Bounded
+ * candidates (§69): only wallets already in correlation_results for the
+ * monitored wallet (capped by MAX_MONITOR_CORRELATION_CANDIDATES).
+ */
+async function processCorrelationChanges(
+  ctx: ProcessorContext,
+  input: {
+    monitorId: string;
+    monitorUserId: string;
+    walletAddress: string;
+    currentAnalysisId: string;
+  }
+): Promise<void> {
+  const { sql, config, logger: baseLogger } = ctx;
+  const logger = baseLogger.child({ monitorId: input.monitorId });
+  const correlationRepo = createCorrelationRepo(sql);
+  const monitorCorrRepo = createMonitorCorrelationRepo(sql);
+  const notificationRepo = createNotificationRepo(sql);
+  const rulesRepo = createMonitorAlertRulesRepo(sql);
+  const walletRepo = createWalletRepo(sql);
+
+  const wallet = await walletRepo.findByAddress("solana", input.walletAddress);
+  if (!wallet) return;
+
+  // Current persisted correlations for the monitored wallet (bounded).
+  const rows = await correlationRepo.listForWallet(input.walletAddress, config.MAX_MONITOR_CORRELATION_CANDIDATES);
+  const current: CorrelationSnapshot[] = rows.map((r) => ({
+    walletA: r.wallet_a,
+    walletB: r.wallet_b,
+    pairId: [r.wallet_a, r.wallet_b].sort().join("|"),
+    correlationScore: r.correlation_score,
+    confidence: Number(r.confidence),
+    classification: r.classification,
+    evidenceFamilies: ((r.evidence_families ?? []) as Array<{ family: string; strength: number }>).map((f) => ({ family: f.family, strength: Number(f.strength) })),
+    engineVersion: r.engine_version,
+    correlationResultId: r.id
+  }));
+
+  // Previous baselines.
+  const baselines = await monitorCorrRepo.listBaselines(input.monitorId);
+  const baselineByPair = new Map(baselines.map((b) => [b.wallet_a === input.walletAddress ? [input.walletAddress, b.wallet_b].sort().join("|") : [b.wallet_a, input.walletAddress].sort().join("|"), b]));
+  const currentByPair = new Map(current.map((c) => [c.pairId, c]));
+
+  const rulesRow = await rulesRepo.getForMonitor(input.monitorId);
+  const alertConfig = {
+    enterStrongScore: config.CORRELATION_ALERT_ENTER_STRONG,
+    exitStrongScore: config.CORRELATION_ALERT_EXIT_STRONG,
+    minDelta: config.CORRELATION_ALERT_MIN_DELTA,
+    minScore: rulesRow ? Number(rulesRow.correlation_min_score) : 40,
+    minConfidence: rulesRow ? Number(rulesRow.correlation_min_confidence) : 0.5,
+    cooldownHours: rulesRow ? rulesRow.cooldown_hours : config.MONITOR_EVENT_COOLDOWN_HOURS,
+    notifyCorrelationChange: rulesRow ? rulesRow.notify_correlation_change : true
+  };
+
+  const cooldownSince = new Date(Date.now() - alertConfig.cooldownHours * 3600_000).toISOString();
+
+  for (const currentSnapshot of current) {
+    const previousSnapshot = baselineByPair.get(currentSnapshot.pairId);
+    const candidates = evaluateCorrelationChanges(
+      input.monitorId,
+      input.walletAddress,
+      previousSnapshot
+        ? {
+            walletA: previousSnapshot.wallet_a,
+            walletB: previousSnapshot.wallet_b,
+            pairId: currentSnapshot.pairId,
+            correlationScore: previousSnapshot.correlation_score,
+            confidence: previousSnapshot.confidence,
+            classification: previousSnapshot.classification,
+            evidenceFamilies: ((previousSnapshot.evidence_families ?? []) as Array<{ family: string; strength: number }>).map((f) => ({ family: f.family, strength: Number(f.strength) })),
+            engineVersion: previousSnapshot.engine_version,
+            correlationResultId: previousSnapshot.correlation_result_id
+          }
+        : null,
+      currentSnapshot,
+      alertConfig
+    );
+    if (candidates.length === 0) continue;
+
+    for (const candidate of candidates) {
+      const recent = await monitorCorrRepo.recentEvent(input.monitorId, candidate.fingerprint, cooldownSince);
+      const lastEvent = await monitorCorrRepo.recentEvent(input.monitorId, candidate.fingerprint, "1970-01-01T00:00:00Z");
+      const decisions = applyCorrelationRules([candidate], alertConfig, {
+        recentSameFingerprint: recent ? { fingerprint: recent.fingerprint, lastSeenAt: recent.last_seen_at, occurrenceCount: recent.occurrence_count } : null,
+        lastScore: candidate.eventType === "CORRELATION_INCREASED" ? lastEvent?.new_score ?? previousSnapshot?.correlation_score ?? null : null
+      });
+      const decision = decisions[0];
+      if (!decision) continue;
+
+      const persisted = await monitorCorrRepo.upsertEvent({
+        monitorId: input.monitorId,
+        userId: input.monitorUserId,
+        walletId: wallet.id,
+        relatedWallet: candidate.relatedWallet,
+        eventType: candidate.eventType,
+        severity: candidate.severity,
+        confidence: candidate.confidence,
+        previousScore: candidate.previousScore,
+        newScore: candidate.newScore,
+        previousConfidence: candidate.previousConfidence,
+        newConfidence: candidate.newConfidence,
+        evidence: candidate.evidence as Record<string, unknown>,
+        limitations: candidate.limitations,
+        engineVersion: CORRELATION_MONITOR_ENGINE_VERSION,
+        fingerprint: candidate.fingerprint
+      });
+
+      if (decision.action === "NOTIFY") {
+        // D6-H §105-§107: fan out to subscribed webhooks (async, best-effort).
+        await fanOutWebhook(ctx, candidate.eventType, {
+          monitorId: input.monitorId,
+          eventId: persisted.id,
+          eventType: candidate.eventType,
+          severity: candidate.severity,
+          confidence: candidate.confidence,
+          relatedWallet: candidate.relatedWallet,
+          previousScore: candidate.previousScore,
+          newScore: candidate.newScore,
+          previousConfidence: candidate.previousConfidence,
+          newConfidence: candidate.newConfidence,
+          summary: candidate.summary,
+          evidence: candidate.evidence
+        });
+        const baseKey = createHash("sha256").update(`${candidate.fingerprint}|`).digest("hex");
+        await notificationRepo.insert({
+          userId: input.monitorUserId,
+          monitorId: input.monitorId,
+          eventId: persisted.id,
+          channel: "IN_APP",
+          type: candidate.eventType,
+          title: candidate.title,
+          body: candidate.summary,
+          severity: candidate.severity,
+          idempotencyKey: `${baseKey}IN_APP`,
+          status: "SENT"
+        });
+        logger.info("correlation alert created", {
+          monitorId: input.monitorId,
+          correlationResultId: persisted.id,
+          eventType: candidate.eventType,
+          previousScore: candidate.previousScore,
+          newScore: candidate.newScore,
+          previousConfidence: candidate.previousConfidence,
+          newConfidence: candidate.newConfidence,
+          suppressed: false
+        });
+      } else {
+        logger.info("correlation alert suppressed", {
+          monitorId: input.monitorId,
+          eventType: candidate.eventType,
+          suppressionReason: decision.reasons.join("; ")
+        });
+      }
+    }
+  }
+
+  // Update baselines to the current persisted set (snapshot semantics:
+  // pairs no longer present are dropped; new pairs become baselines).
+  const seen = new Set<string>();
+  for (const currentSnapshot of current) {
+    const existing = baselineByPair.get(currentSnapshot.pairId);
+    await monitorCorrRepo.upsertBaseline({
+      monitorId: input.monitorId,
+      walletA: currentSnapshot.walletA,
+      walletB: currentSnapshot.walletB,
+      correlationScore: currentSnapshot.correlationScore,
+      confidence: currentSnapshot.confidence,
+      classification: currentSnapshot.classification,
+      correlationResultId: currentSnapshot.correlationResultId,
+      evidenceFamilies: currentSnapshot.evidenceFamilies,
+      engineVersion: currentSnapshot.engineVersion
+    });
+    seen.add(currentSnapshot.pairId);
+  }
+  // Pairs no longer in the persisted set keep their baseline row (history);
+  // the next cycle compares against it and produces DISAPPEARED only when
+  // evidence is conclusive.
+  void seen;
 }
 
 async function walletIdFor(sql: ProcessorContext["sql"], monitorId: string, userId: string): Promise<string> {

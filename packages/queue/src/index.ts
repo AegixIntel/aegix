@@ -37,7 +37,7 @@ export function classifyError(err: unknown): ErrorCode {
   return "INTERNAL_ERROR";
 }
 
-export type QueueName = "analysis.high" | "analysis.standard" | "analysis.free" | "refresh" | "monitoring" | "entity-refresh" | "report-generation" | "maintenance" | "dead-letter";
+export type QueueName = "analysis.high" | "analysis.standard" | "analysis.free" | "refresh" | "monitoring" | "entity-refresh" | "report-generation" | "maintenance" | "webhooks" | "dead-letter";
 
 export interface AnalysisJobData {
   analysisId: string;
@@ -62,6 +62,19 @@ export type MonitoringJobData =
   | { kind: "diff"; analysisId: string; walletId: string }
   | { kind: "deliver"; notificationId: string };
 
+/** D6-H §107: webhook delivery (async, dedicated queue). */
+export interface WebhookJobData {
+  webhookId: string;
+  eventId: string;
+  eventType: string;
+  payload: {
+    id: string;
+    type: string;
+    createdAt: string;
+    data: Record<string, unknown>;
+  };
+}
+
 export type QueueDataMap = {
   "analysis.high": AnalysisJobData;
   "analysis.standard": AnalysisJobData;
@@ -71,6 +84,7 @@ export type QueueDataMap = {
   "entity-refresh": never;
   "report-generation": { analysisId: string };
   maintenance: never;
+  webhooks: WebhookJobData;
   "dead-letter": {
     jobId: string;
     analysisId: string | null;
@@ -95,6 +109,7 @@ export interface AegixQueues {
   refresh: Queue<RefreshJobData>;
   monitoring: Queue<MonitoringJobData>;
   reportGeneration: Queue<{ analysisId: string }>;
+  webhooks: Queue<WebhookJobData>;
   deadLetter: Queue<QueueDataMap["dead-letter"]>;
   close(): Promise<void>;
 }
@@ -117,6 +132,7 @@ export function createQueues(config: AppConfig): AegixQueues {
   const refresh = new Queue<RefreshJobData>("refresh", defaults);
   const monitoring = new Queue<MonitoringJobData>("monitoring", defaults);
   const reportGeneration = new Queue<{ analysisId: string }>("report-generation", defaults);
+  const webhooks = new Queue<WebhookJobData>("webhooks", defaults);
   const deadLetter = new Queue<QueueDataMap["dead-letter"]>("dead-letter", defaults);
 
   return {
@@ -126,9 +142,10 @@ export function createQueues(config: AppConfig): AegixQueues {
     refresh,
     monitoring,
     reportGeneration,
+    webhooks,
     deadLetter,
     async close() {
-      await Promise.all([analysisHigh, analysisStandard, analysisFree, refresh, monitoring, reportGeneration, deadLetter].map((q) => q.close()));
+      await Promise.all([analysisHigh, analysisStandard, analysisFree, refresh, monitoring, reportGeneration, webhooks, deadLetter].map((q) => q.close()));
     }
   };
 }

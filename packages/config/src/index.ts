@@ -152,6 +152,44 @@ const envSchema = z.object({
   /** Daily developer quota per user (D6-D §66-§69); keys cannot multiply it. */
   DEVELOPER_DAILY_QUOTA: z.coerce.number().int().positive().default(500),
 
+  // D6 Block 2: wallet-only auth (D6-P), developer intelligence (D6-E),
+  // population commonality (D6-G), correlation alerts (D6-F), webhooks (D6-H).
+  // See docs/d6-block2.md.
+  AUTH_DOMAIN: z.string().default("http://localhost:3000"),
+  AUTH_APP_URI: z.string().default("http://localhost:3000"),
+  WALLET_AUTH_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  WALLET_AUTH_MAX_PENDING_PER_WALLET: z.coerce.number().int().positive().default(5),
+  WALLET_AUTH_RATE_LIMIT_CHALLENGE: z.coerce.number().int().positive().default(10),
+  WALLET_AUTH_RATE_LIMIT_VERIFY: z.coerce.number().int().positive().default(20),
+  SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  /** Temporary Supabase JWT bridge for pre-wallet identities (D6-P §35). */
+  ENABLE_LEGACY_AUTH: z.preprocess(boolEnv, z.boolean()).default(true),
+
+  ENABLE_DEVELOPER_INTELLIGENCE_API: z.preprocess(boolEnv, z.boolean()).default(true),
+  DEVELOPER_INTELLIGENCE_QUOTA_UNITS_WALLET: z.coerce.number().int().positive().default(1),
+  DEVELOPER_INTELLIGENCE_QUOTA_UNITS_COMPARE: z.coerce.number().int().positive().default(2),
+
+  ENABLE_POPULATION_COMMONALITY: z.preprocess(boolEnv, z.boolean()).default(false),
+  COMMONALITY_MIN_POPULATION: z.coerce.number().int().positive().default(20),
+  COMMONALITY_AGGREGATION_BATCH: z.coerce.number().int().positive().default(50),
+  COMMONALITY_VERSION: z.string().default("population-commonality-v1.0.0"),
+
+  ENABLE_CORRELATION_MONITOR_ALERTS: z.preprocess(boolEnv, z.boolean()).default(true),
+  MAX_MONITOR_CORRELATION_CANDIDATES: z.coerce.number().int().positive().default(20),
+  CORRELATION_ALERT_ENTER_STRONG: z.coerce.number().int().nonnegative().default(60),
+  CORRELATION_ALERT_EXIT_STRONG: z.coerce.number().int().nonnegative().default(45),
+  CORRELATION_ALERT_MIN_DELTA: z.coerce.number().int().positive().default(10),
+
+  ENABLE_WEBHOOK_DELIVERY: z.preprocess(boolEnv, z.boolean()).default(true),
+  WEBHOOK_ENCRYPTION_KEY: z.string().default(""),
+  WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
+  WEBHOOK_DISABLE_AFTER_FAILURES: z.coerce.number().int().positive().default(10),
+  WEBHOOK_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
+  WEBHOOK_PAYLOAD_MAX_BYTES: z.coerce.number().int().positive().default(65536),
+  WEBHOOK_ALLOWED_PORTS: z.string().default("80,443"),
+  WEBHOOK_DEV_ALLOW_PRIVATE: z.preprocess(boolEnv, z.boolean()).default(false),
+
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
 
@@ -175,6 +213,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ["CORS_ORIGIN", config.CORS_ORIGIN]
     ];
     const missing = required.filter(([, v]) => !v || v.includes("localhost") && v.startsWith("postgres://postgres:postgres"));
+    // Webhook delivery is ON by default and its signing secrets are
+    // encrypted at rest with this key — running without it silently
+    // disables webhook creation in production.
+    if (config.ENABLE_WEBHOOK_DELIVERY && !config.WEBHOOK_ENCRYPTION_KEY) {
+      missing.push(["WEBHOOK_ENCRYPTION_KEY", ""]);
+    }
     if (missing.length > 0) {
       throw new Error(
         `Production configuration error: ${missing.map(([k]) => k).join(", ")} must be explicitly set (no unsafe defaults)`

@@ -24,6 +24,7 @@
     "@aegix/logging": "workspace:*",
     "@aegix/queue": "workspace:*",
     "@aegix/types": "workspace:*",
+    "@aegix/webhook-delivery": "workspace:^",
     "nodemailer": "^6.9.14"
   },
   "devDependencies": {

@@ -32,6 +32,12 @@ export interface OverlapInput {
   entityNamesByAddress?: Map<string, string>;
   /** D5-F §28: entity record verification confidence per address. */
   entityConfidenceByAddress?: Map<string, number>;
+  /** D6-G §89: observed population frequency per address (0-1). When
+   *  present, shared-key rarity uses population frequency instead of the
+   *  two-wallet-local count (correlation penalty v2). */
+  commonalityByAddress?: Map<string, number>;
+  /** D6-G §84: minimum analyzed population before commonality applies. */
+  commonalityMinPopulation?: number;
 }
 
 function counterpartySet(transfers: TransferRow[], self: string, other: string): Map<string, number> {
@@ -73,6 +79,20 @@ export function evaluateCounterpartyOverlap(input: OverlapInput): EvidenceFamily
     globalCount.set(cp, (globalCount.get(cp) ?? 0) + 1);
   }
 
+  // D6-G §89: population-aware rarity (correlation penalty v2). When the
+  // analyzed population provides a frequency for a shared counterparty, a
+  // very common address is heavily discounted; a rare one keeps its value.
+  const population = input.commonalityByAddress;
+  const minPopulation = input.commonalityMinPopulation ?? 20;
+  const populationPenalty = (address: string): number => {
+    if (!population || !population.has(address)) return 0;
+    const freq = Math.min(1, Math.max(0, population.get(address) ?? 0));
+    // Below the rarity floor: no penalty. Above it: smooth ramp to 0.9.
+    if (freq < 0.05) return 0;
+    const t = Math.min(1, (freq - 0.05) / 0.95);
+    return Math.round(0.9 * (t * t * (3 - 2 * t)) * 100) / 100;
+  };
+
   // Shared intersection with rarity weighting.
   const shared: Array<{ address: string; rarity: number; countA: number; countB: number }> = [];
   for (const [cp, countA] of cpsA) {
@@ -81,7 +101,8 @@ export function evaluateCounterpartyOverlap(input: OverlapInput): EvidenceFamily
     const appearances = globalCount.get(cp) ?? (countA + countB);
     // Rarity: 1 for addresses seen once per wallet; decays fast for hubs.
     const rarity = Math.min(1, 3 / (1 + appearances));
-    shared.push({ address: cp, rarity, countA, countB });
+    const penalty = populationPenalty(cp);
+    shared.push({ address: cp, rarity: Math.max(0, rarity - penalty), countA, countB });
   }
 
   if (shared.length === 0) return null;
