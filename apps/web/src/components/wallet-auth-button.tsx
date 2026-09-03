@@ -171,9 +171,19 @@ function WalletPickerModal({
               className="flex w-full items-center justify-between rounded-md border border-white/10 px-4 py-3 text-left transition hover:border-accent disabled:opacity-40"
             >
               <span className="flex items-center gap-3">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-sm bg-white/[0.04] font-display text-sm font-bold text-marble">
-                  {w.adapter.name.slice(0, 1)}
-                </span>
+                {w.adapter.icon ? (
+                  <img
+                    src={w.adapter.icon}
+                    alt=""
+                    className="inline-flex h-7 w-7 shrink-0 rounded-sm"
+                    width={28}
+                    height={28}
+                  />
+                ) : (
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm bg-white/[0.04] font-display text-sm font-bold text-marble">
+                    {w.adapter.name.slice(0, 1)}
+                  </span>
+                )}
                 <span className="text-sm font-medium text-marble">{w.adapter.name}</span>
               </span>
               {w.adapter.readyState === "Unsupported" ? (
