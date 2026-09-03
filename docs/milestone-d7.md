@@ -405,9 +405,22 @@ portal and documented. It is intentionally not a marketing/consumer surface.
   `"type": "module"`, so running `tsc` over it directly reports the
   pre-existing `TS1295` (module-format) artifact; tests run correctly via
   `tsx`, identical to the existing `tests/e2e-d6.ts`.
+- **Environment-only limitation (documented, not a code defect)**: the local
+  CI/dev shell runs with `NODE_ENV=production`, which makes `loadConfig()`
+  fail-fast on the default localhost `DATABASE_URL`. Harnesses that hit the
+  config guard (e.g. `e2e-d6`, `golden-monitors`) must be run with
+  `NODE_ENV=test` (as `e2e-d7` and `developer-api.test.ts` already do). With
+  `NODE_ENV=test` these suites are green: `e2e-d6` (51/51),
+  `e2e-d6-block1` (42/42), `e2e-d6-block2` (36/36), `e2e-monitor` (14/14),
+  `golden-correlation` (31/31), `golden-monitors` (9/9),
+  `account-classification` (14/14). No code was weakened to obtain green.
+- **Load-test DB**: `loadtest:public` uses a dedicated `aegix_loadtest`
+  database (created once) so it never clobbers the shared `aegix` /
+  `aegix_test` databases used by the pull-based E2E suites.
 
 ## 24. Git log / commits
 
 D7 commits:
 - `ada9742` — feat(web): D7 public product frontend — landing, app shell, docs, developer portal.
-- (D7-R/D7-S commits for `e2e-d7` / `loadtest:public` are appended below as they land.)
+- `16c88ea` — test: D7 public product E2E, load harness, and milestone doc
+  (`test:e2e-d7` 68/68, `loadtest:public` all scenarios PASS, `docs/milestone-d7.md`).
