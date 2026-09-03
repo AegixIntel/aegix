@@ -827,12 +827,15 @@ async function sharedCounterpartiesForWallet(
   }
   if (myCounterparties.size === 0) return new Map();
 
-  // Other wallets that share at least one of our counterparties.
+  // Other wallets that share at least one of our counterparties. The
+  // wallet_id lives on `transactions`, not `transfers`, so join through
+  // the owning transaction.
   const rows = await sql<Array<{ wallet_id: string }>>`
-    select distinct t.wallet_id::text as wallet_id
+    select distinct tx.wallet_id::text as wallet_id
     from transfers t
-    join analysis_jobs aj on aj.wallet_id = t.wallet_id and aj.status = 'READY'
-    where t.wallet_id <> ${walletId}
+    join transactions tx on tx.id = t.transaction_id
+    join analysis_jobs aj on aj.wallet_id = tx.wallet_id and aj.status = 'READY'
+    where tx.wallet_id <> ${walletId}
       and (t.from_address = any(${[...myCounterparties]}) or t.to_address = any(${[...myCounterparties]}))
     limit ${maxCandidates}
   `;
