@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { PublicNavbar } from "@/components/layout/public-navbar";
-import { PublicFooter } from "@/components/layout/public-footer";
 
 const DOC_SECTIONS = [
   {
@@ -83,7 +81,6 @@ const DOC_SECTIONS = [
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-ink-deep">
-      <PublicNavbar />
       <div className="flex flex-1">
         <aside className="hidden w-64 flex-none border-r border-white/10 bg-ink-deep lg:block">
           <nav className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto px-4 py-6" aria-label="Documentation">
@@ -112,7 +109,6 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           <main className="container-narrow py-12">{children}</main>
         </div>
       </div>
-      <PublicFooter />
     </div>
   );
 }
