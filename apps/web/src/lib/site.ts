@@ -51,6 +51,7 @@ export const appNavGroups: AppNavGroup[] = [
     label: "Intelligence",
     items: [
       { label: "Wallet X-Ray", href: "/app/analyze" },
+      { label: "Attack My Wallet", href: "/app/attack" },
       { label: "Compare", href: "/app/compare" },
       { label: "Monitors", href: "/app/monitors" }
     ]

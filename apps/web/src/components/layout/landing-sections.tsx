@@ -126,7 +126,7 @@ export function LiveIntelligenceSection() {
             title="Attack My Wallet"
             body="Follow observable paths through your on-chain activity."
             detail={["Relationship Graph", "Funding Paths", "Entity Exposure", "Linkability Signals"]}
-            href="/privacy#attack"
+            href="/app/attack"
             cta="Attack My Wallet"
           />
           <FeatureRow
