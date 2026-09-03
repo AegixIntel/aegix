@@ -10,8 +10,8 @@
  * `compact` hides the explanatory copy and disconnect link so it fits a
  * navbar; it still shows the connect / sign / sign-out action.
  *
- * A custom AEGIX wallet-picker modal opens on Connect (there is no
- * WalletModalProvider), listing the registered wallets (Phantom, Solflare)
+ * The wallet picker is a dropdown anchored below the Connect button (there
+ * is no WalletModalProvider), listing registered wallets (Phantom, Solflare)
  * and calling wallet-adapter's select() on the chosen wallet.
  */
 
@@ -28,19 +28,18 @@ function shortWallet(wallet: string): string {
 export default function WalletAuthButton({ compact = false }: { compact?: boolean }) {
   const { select, wallets, connected, publicKey, connecting, disconnect } = useWallet();
   const auth = useAegixAuth();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = useCallback(() => {
     setError(null);
-    // Open the custom picker (there is no WalletModalProvider installed).
-    setModalOpen(true);
+    setOpen((v) => !v);
   }, []);
 
   const chooseWallet = useCallback(
     (name: string) => {
       try {
-        setModalOpen(false);
+        setOpen(false);
         void select(name as WalletName);
       } catch {
         setError("Unable to open that wallet. Is the extension installed?");
@@ -49,9 +48,15 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
     [select]
   );
 
+  const close = useCallback(() => setOpen(false), []);
+
+  const picker = open ? (
+    <WalletPickerPopover wallets={wallets} onClose={close} onSelect={chooseWallet} />
+  ) : null;
+
   if (auth.user) {
     return (
-      <div className="flex items-center gap-3">
+      <div className="relative flex items-center gap-3">
         <span className="font-mono text-xs text-muted-foreground">
           {auth.user.wallet ? shortWallet(auth.user.wallet) : "Authenticated"}
         </span>
@@ -61,16 +66,14 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
         >
           Sign out
         </button>
-        {modalOpen && (
-          <WalletPickerModal wallets={wallets} onClose={() => setModalOpen(false)} onSelect={chooseWallet} />
-        )}
+        {picker}
       </div>
     );
   }
 
   if (connected && publicKey) {
     return (
-      <div className={cn("flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
+      <div className={cn("relative flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
         <button
           onClick={() => void auth.signIn()}
           disabled={auth.busy}
@@ -89,15 +92,13 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
           </>
         )}
         {auth.error && <span className="text-xs text-red-400">{auth.error}</span>}
-        {modalOpen && (
-          <WalletPickerModal wallets={wallets} onClose={() => setModalOpen(false)} onSelect={chooseWallet} />
-        )}
+        {picker}
       </div>
     );
   }
 
   return (
-    <div className={cn("flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
+    <div className={cn("relative flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
       <button
         onClick={handleConnect}
         disabled={connecting}
@@ -111,15 +112,13 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
         </span>
       )}
       {(auth.error || error) && <span className="text-xs text-red-400">{auth.error ?? error}</span>}
-      {modalOpen && (
-        <WalletPickerModal wallets={wallets} onClose={() => setModalOpen(false)} onSelect={chooseWallet} />
-      )}
+      {picker}
     </div>
   );
 }
 
-/** Accessible custom wallet picker. */
-function WalletPickerModal({
+/** Dropdown anchored below the Connect button. */
+function WalletPickerPopover({
   wallets,
   onClose,
   onSelect
@@ -130,78 +129,71 @@ function WalletPickerModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+      className="absolute right-0 top-full z-[100] mt-2 w-72 rounded-lg border border-white/10 bg-ink-deep p-4 shadow-2xl shadow-black/60"
       role="dialog"
-      aria-modal="true"
       aria-label="Select a wallet"
-      onClick={onClose}
     >
-      <div
-        className="w-full max-w-sm rounded-lg border border-white/10 bg-ink-deep p-6 shadow-2xl shadow-black/60"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="section-label-accent">Connect to AEGIX</p>
-            <h2 className="mt-2 font-display text-xl font-semibold text-marble">Select a wallet</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-sm p-1 text-muted-2 hover:text-marble"
-          >
-            <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
-            </svg>
-          </button>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="section-label-accent">Connect to AEGIX</p>
+          <h2 className="mt-1.5 font-display text-base font-semibold text-marble">Select a wallet</h2>
         </div>
-
-        <p className="mt-3 text-xs leading-relaxed text-muted-2">
-          Authenticate using your Solana wallet. No transaction. No SOL required.
-        </p>
-
-        <div className="mt-5 space-y-2">
-          {wallets.map((w) => (
-            <button
-              key={w.adapter.name}
-              type="button"
-              onClick={() => onSelect(w.adapter.name)}
-              disabled={!w.adapter.readyState || w.adapter.readyState === "Unsupported"}
-              className="flex w-full items-center justify-between rounded-md border border-white/10 px-4 py-3 text-left transition hover:border-accent disabled:opacity-40"
-            >
-              <span className="flex items-center gap-3">
-                {w.adapter.icon ? (
-                  <img
-                    src={w.adapter.icon}
-                    alt=""
-                    className="inline-flex h-7 w-7 shrink-0 rounded-sm"
-                    width={28}
-                    height={28}
-                  />
-                ) : (
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-sm bg-white/[0.04] font-display text-sm font-bold text-marble">
-                    {w.adapter.name.slice(0, 1)}
-                  </span>
-                )}
-                <span className="text-sm font-medium text-marble">{w.adapter.name}</span>
-              </span>
-              {w.adapter.readyState === "Unsupported" ? (
-                <span className="font-mono text-[10px] uppercase tracking-wide text-muted-2">Unsupported</span>
-              ) : (
-                <span className="text-accent-bright">→</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-5 text-center text-xs text-muted-2">
-          Don&apos;t have a wallet?{" "}
-          <a href="https://phantom.app/" target="_blank" rel="noreferrer" className="text-marble underline underline-offset-4">
-            Get Phantom
-          </a>
-        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-sm p-1 text-muted-2 hover:text-marble"
+        >
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
+
+      <p className="mt-2 text-xs leading-relaxed text-muted-2">
+        Authenticate using your Solana wallet. No transaction. No SOL required.
+      </p>
+
+      <div className="mt-4 space-y-1.5">
+        {wallets.map((w) => (
+          <button
+            key={w.adapter.name}
+            type="button"
+            onClick={() => onSelect(w.adapter.name)}
+            disabled={!w.adapter.readyState || w.adapter.readyState === "Unsupported"}
+            className="flex w-full items-center justify-between rounded-md border border-white/10 px-3 py-2.5 text-left transition hover:border-accent disabled:opacity-40"
+          >
+            <span className="flex items-center gap-2.5">
+              {w.adapter.icon ? (
+                <img
+                  src={w.adapter.icon}
+                  alt=""
+                  className="inline-flex h-6 w-6 shrink-0 rounded-sm"
+                  width={24}
+                  height={24}
+                />
+              ) : (
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-white/[0.04] font-display text-sm font-bold text-marble">
+                  {w.adapter.name.slice(0, 1)}
+                </span>
+              )}
+              <span className="text-sm font-medium text-marble">{w.adapter.name}</span>
+            </span>
+            {w.adapter.readyState === "Unsupported" ? (
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-2">Unsupported</span>
+            ) : (
+              <span className="text-accent-bright">→</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <p className="mt-4 text-center text-xs text-muted-2">
+        Don&apos;t have a wallet?{" "}
+        <a href="https://phantom.app/" target="_blank" rel="noreferrer" className="text-marble underline underline-offset-4">
+          Get Phantom
+        </a>
+      </p>
     </div>
   );
 }
