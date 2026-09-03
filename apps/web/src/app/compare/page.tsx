@@ -1,6 +1,9 @@
-import ComparePage from "@/components/compare-page";
+import { redirect } from "next/navigation";
 
-export default async function CompareRoute({ searchParams }: { searchParams: Promise<{ a?: string; b?: string }> }) {
+export default async function LegacyCompareRoute({ searchParams }: { searchParams: Promise<{ a?: string; b?: string }> }) {
   const { a, b } = await searchParams;
-  return <ComparePage initialA={a ?? ""} initialB={b ?? ""} />;
+  const qs = new URLSearchParams();
+  if (a) qs.set("a", a);
+  if (b) qs.set("b", b);
+  redirect(`/app/compare${qs.size ? `?${qs.toString()}` : ""}`);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createAnalysis, getAccountClassification } from "@/lib/api";
 
 interface AccountInfoState {
@@ -10,10 +11,10 @@ interface AccountInfoState {
 }
 
 export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: string }) {
+  const router = useRouter();
   const [address, setAddress] = useState(initialAddress);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resultAddress, setResultAddress] = useState<string | null>(null);
   const [accountInfo, setAccountInfo] = useState<AccountInfoState | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -47,7 +48,9 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
         }
         throw err;
       }
-      setResultAddress(trimmed);
+      // Navigate to the wallet X-Ray route, which renders the live analysis
+      // tracker (real backend stages) and then the full report.
+      router.push(`/app/analyze/${trimmed}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis request failed");
     } finally {
@@ -102,16 +105,6 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
         </div>
       )}
 
-      {resultAddress && (
-        <div className="mt-6 rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <p className="text-sm text-slate-300">
-            Analysis requested.{" "}
-            <a href={`/analyze/${resultAddress}`} className="text-accent underline">
-              Open Wallet X-Ray
-            </a>
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { compareWallets, getAccessToken, saveComparison, deleteSavedComparison, type CompareClusterMember, type CompareEvidenceFamily, type ComparePath, type CompareResult, type SavedComparison } from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
+import { useRequireAuth } from "@/lib/auth-guard";
 
 function shortAddress(address: string): string {
   if (address.length <= 16) return address;
@@ -246,6 +249,8 @@ export default function ComparePage({ initialA, initialB }: { initialA?: string;
 // ---- D6-A: save/unsave a comparison (authenticated) ----
 
 function SaveComparisonButton({ result }: { result: CompareResult }) {
+  const { user } = useAuth();
+  const { requireAuth } = useRequireAuth();
   const [saved, setSaved] = useState<SavedComparison | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -281,11 +286,18 @@ function SaveComparisonButton({ result }: { result: CompareResult }) {
     }
   }
 
-  if (!getAccessToken()) {
+  function handleClick() {
+    void requireAuth(() => toggle());
+  }
+
+  if (!user) {
     return (
-      <p className="text-xs text-slate-500">
-        Connect a wallet to save this comparison.
-      </p>
+      <button
+        onClick={handleClick}
+        className="rounded-lg border border-accent/50 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/20"
+      >
+        Sign in to save this comparison
+      </button>
     );
   }
 
@@ -303,9 +315,9 @@ function SaveComparisonButton({ result }: { result: CompareResult }) {
         {saved ? "Saved" : "Save Comparison"}
       </button>
       {saved && (
-        <a href="/dashboard" className="text-xs text-slate-500 underline hover:text-accent">
+        <Link href="/app/dashboard" className="text-xs text-muted-foreground underline hover:text-accent">
           View in dashboard
-        </a>
+        </Link>
       )}
       {message && <p className="text-xs text-red-400">{message}</p>}
     </div>

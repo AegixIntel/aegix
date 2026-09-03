@@ -19,7 +19,7 @@ const STAGE_LABELS: Record<string, string> = {
   FAILED: "Failed"
 };
 
-export default function AnalysisTracker({ analysisId }: { analysisId: string }) {
+export default function AnalysisTracker({ analysisId, onComplete }: { analysisId: string; onComplete?: () => void }) {
   const [status, setStatus] = useState<string>("CREATED");
   const [progress, setProgress] = useState(0);
 
@@ -35,6 +35,8 @@ export default function AnalysisTracker({ analysisId }: { analysisId: string }) 
         setProgress(result.progress);
         if (result.status !== "READY" && result.status !== "FAILED") {
           timer = setTimeout(poll, 3000);
+        } else {
+          onComplete?.();
         }
       } catch {
         if (!cancelled) timer = setTimeout(poll, 5000);
@@ -46,7 +48,7 @@ export default function AnalysisTracker({ analysisId }: { analysisId: string }) 
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [analysisId]);
+  }, [analysisId, onComplete]);
 
   const stageLabel = STAGE_LABELS[status] ?? status;
 

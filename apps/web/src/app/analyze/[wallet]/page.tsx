@@ -1,6 +1,6 @@
-import WalletXRayPage from "@/components/wallet-x-ray";
+import { redirect } from "next/navigation";
 
-export default async function WalletAnalysisPage({ params }: { params: Promise<{ wallet: string }> }) {
+export default async function LegacyWalletAnalysisPage({ params }: { params: Promise<{ wallet: string }> }) {
   const { wallet } = await params;
-  return <WalletXRayPage wallet={wallet} />;
+  redirect(`/app/analyze/${wallet}`);
 }

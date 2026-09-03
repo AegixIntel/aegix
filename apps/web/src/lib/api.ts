@@ -655,3 +655,126 @@ export async function getDeveloperUsage(): Promise<DeveloperUsageSummary> {
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
   return res.json() as Promise<DeveloperUsageSummary>;
 }
+
+// ---- D6-H: webhook management (developer portal) ----
+
+export interface Webhook {
+  id: string;
+  url: string;
+  status: "ACTIVE" | "DISABLED";
+  eventTypes: string[];
+  createdAt: string;
+  updatedAt: string;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  failureCount: number;
+  disabledAt: string | null;
+  disabledReason: string | null;
+}
+
+export interface CreatedWebhook {
+  webhook: Webhook;
+  secret: string;
+}
+
+export async function listWebhooks(): Promise<Webhook[]> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhooks`, { headers: authHeaders() });
+  if (res.status === 401) return [];
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { data: Webhook[] };
+  return body.data;
+}
+
+export async function createWebhook(url: string, eventTypes: string[]): Promise<CreatedWebhook> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhooks`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ url, eventTypes })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body.error?.message ?? `Create failed with status ${res.status}`);
+  }
+  return res.json() as Promise<CreatedWebhook>;
+}
+
+export async function updateWebhook(
+  id: string,
+  patch: { url?: string; eventTypes?: string[]; status?: "ACTIVE" | "DISABLED" }
+): Promise<Webhook> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhooks/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify(patch)
+  });
+  if (!res.ok) throw new Error(`Update failed with status ${res.status}`);
+  const body = (await res.json()) as { data: Webhook };
+  return body.data;
+}
+
+export async function rotateWebhookSecret(id: string): Promise<{ id: string; secret: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhooks/${id}/rotate`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Rotate failed with status ${res.status}`);
+  const body = (await res.json()) as { data: { id: string; secret: string } };
+  return body.data;
+}
+
+export async function deleteWebhook(id: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/v1/webhooks/${id}`, { method: "DELETE", headers: authHeaders() });
+}
+
+export async function testWebhook(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/v1/webhooks/${id}/test`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Test failed with status ${res.status}`);
+}
+
+// ---- D6-I1: notification-email destination (optional, verified) ----
+
+export interface NotificationEmailState {
+  email: string | null;
+  verified: boolean;
+  verificationPending: boolean;
+}
+
+export async function getNotificationEmail(): Promise<NotificationEmailState> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/email`, { headers: authHeaders() });
+  if (res.status === 401) return { email: null, verified: false, verificationPending: false };
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { data: NotificationEmailState };
+  return body.data;
+}
+
+export async function setNotificationEmail(email: string): Promise<NotificationEmailState> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/email`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ email })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body.error?.message ?? `Set email failed with status ${res.status}`);
+  }
+  const body = (await res.json()) as { data: NotificationEmailState };
+  return body.data;
+}
+
+export async function verifyNotificationEmail(code: string): Promise<NotificationEmailState> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/email/verify`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ code })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(body.error?.message ?? `Verify failed with status ${res.status}`);
+  }
+  const body = (await res.json()) as { data: NotificationEmailState };
+  return body.data;
+}
+
+export async function deleteNotificationEmail(): Promise<NotificationEmailState> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/email`, { method: "DELETE", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Delete failed with status ${res.status}`);
+  const body = (await res.json()) as { data: NotificationEmailState };
+  return body.data;
+}

@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getWalletXRay, saveAnalysis, type WalletXRay, type XRaySignal } from "@/lib/api";
+import Link from "next/link";
+import { getWalletXRay, getLatestAnalysis, saveAnalysis, type WalletXRay, type XRaySignal } from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
+import { useRequireAuth } from "@/lib/auth-guard";
+import AnalysisTracker from "@/components/analysis-tracker";
+
+const IN_PROGRESS_STAGES = new Set([
+  "CREATED", "QUEUED", "FETCHING", "NORMALIZING", "ENTITY_ANALYSIS",
+  "RELATIONSHIP_ANALYSIS", "BEHAVIOR_ANALYSIS", "SCORING", "GRAPH_ANALYSIS",
+  "EXPLANATION", "PERSISTING"
+]);
 
 function severityLabel(score: number): { label: string; color: string } {
   if (score < 20) return { label: "MINIMAL", color: "text-emerald-400" };
@@ -17,6 +27,8 @@ function shortAddress(address: string): string {
 }
 
 export default function WalletXRayPage({ wallet }: { wallet: string }) {
+  const { user } = useAuth();
+  const { requireAuth } = useRequireAuth();
   const [data, setData] = useState<WalletXRay | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +36,7 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,9 +44,23 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
     try {
       const xray = await getWalletXRay(wallet);
       setData(xray);
+      setTrackingId(null);
       setSelectedSignal((cur) => cur ?? xray.topSignals[0] ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load analysis");
+      const message = err instanceof Error ? err.message : "Failed to load analysis";
+      if (message === "NO_ANALYSIS") {
+        // Report isn't ready yet — check whether an analysis is running.
+        const latest = await getLatestAnalysis(wallet).catch(() => null);
+        const status = latest?.status;
+        if (status && IN_PROGRESS_STAGES.has(status)) {
+          setError(null);
+          setTrackingId(latest.latestAnalysisId ?? null);
+        } else {
+          setError(message);
+        }
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -53,18 +80,39 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
     }
   }
 
-  async function save() {
-    setSaveError(null);
-    try {
-      await saveAnalysis(wallet);
-      setSaved(true);
-    } catch {
-      setSaveError("Sign in to save this wallet to your dashboard.");
-    }
+  function handleSave() {
+    void requireAuth(async () => {
+      setSaveError(null);
+      try {
+        await saveAnalysis(wallet);
+        setSaved(true);
+      } catch {
+        setSaveError("Failed to save this wallet to your dashboard.");
+      }
+    });
   }
+
+  const handleTrackerComplete = useCallback(() => {
+    void load();
+  }, [load]);
 
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-slate-400">Loading analysis…</div>;
+  }
+
+  if (trackingId) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+        <h1 className="font-display text-2xl font-semibold text-marble">Analyzing wallet…</h1>
+        <p className="mt-3 max-w-md text-muted-foreground">
+          AEGIX is fetching and analyzing this wallet&apos;s public activity. This is the real pipeline —
+          status reflects the backend stage.
+        </p>
+        <div className="mt-6 w-full max-w-md">
+          <AnalysisTracker analysisId={trackingId} onComplete={handleTrackerComplete} />
+        </div>
+      </main>
+    );
   }
 
   if (error === "NO_ANALYSIS") {
@@ -74,12 +122,12 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
         <p className="mt-3 max-w-md text-slate-400">
           This wallet has not been analyzed. Start an analysis to generate a Wallet X-Ray report.
         </p>
-        <a
-          href={`/?address=${encodeURIComponent(wallet)}`}
-          className="mt-6 rounded-lg bg-accent px-5 py-2.5 font-semibold text-white hover:opacity-90"
+        <Link
+          href={`/app/analyze?address=${encodeURIComponent(wallet)}`}
+          className="btn-primary mt-6"
         >
           Analyze this wallet
-        </a>
+        </Link>
       </main>
     );
   }
@@ -118,18 +166,18 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={`/?address=${encodeURIComponent(wallet)}`}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent"
+          <Link
+            href={`/app/analyze?address=${encodeURIComponent(wallet)}`}
+            className="btn-secondary px-4 py-2 text-xs"
           >
             Refresh Analysis
-          </a>
+          </Link>
           <button
-            onClick={() => void save()}
+            onClick={handleSave}
             disabled={saved}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:border-accent disabled:opacity-40"
+            className="btn-secondary px-4 py-2 text-xs disabled:opacity-40"
           >
-            {saved ? "Saved" : "Save Wallet"}
+            {saved ? "Saved" : user ? "Save Wallet" : "Sign in to save"}
           </button>
         </div>
       </header>
@@ -334,7 +382,7 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
                   <p className="mt-0.5 text-[11px] text-slate-600">{c.families.join(" + ")}</p>
                 </div>
                 <a
-                  href={`/compare?a=${encodeURIComponent(wallet)}&b=${encodeURIComponent(c.wallet)}`}
+                  href={`/app/compare?a=${encodeURIComponent(wallet)}&b=${encodeURIComponent(c.wallet)}`}
                   className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Compare

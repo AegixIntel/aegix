@@ -2,6 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: theme("colors.ink-deep");
+    color: theme("colors.marble");
+    font-family: theme("fontFamily.sans");
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: theme("colors.accent");
+    color: theme("colors.marble");
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-6 lg:px-8;
+  }
+
+  .marketing-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-accent-bright;
+  }
+
+  .marketing-h2 {
+    @apply font-display text-3xl font-semibold tracking-tight text-marble md:text-5xl;
+  }
+
+  .marketing-body {
+    @apply text-base leading-relaxed text-muted-foreground md:text-lg;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright disabled:opacity-40;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-6 py-3 text-sm font-semibold text-marble transition hover:border-white/30 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+  }
+
+  .card-surface {
+    @apply rounded-2xl border border-white/10 bg-white/[0.03] p-6;
+  }
+
+  .mono-address {
+    @apply font-mono text-xs tracking-tight text-muted-foreground;
+  }
 }
