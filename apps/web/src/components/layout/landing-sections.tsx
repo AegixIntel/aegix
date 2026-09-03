@@ -1,116 +1,59 @@
 import Image from "next/image";
 import Link from "next/link";
+import {
+  SectionLabel,
+  EditorialHeading,
+  StatusBadge,
+  FeatureRow,
+  InlineArrowLink,
+  TechnicalMetric,
+  CodePreview,
+  PipelineDiagram,
+  ProductStatus
+} from "@/components/ui/primitives";
 
-function SectionHeading({
-  eyebrow,
-  title,
-  lead,
-  id
-}: {
-  eyebrow: string;
-  title: string;
-  lead?: string;
-  id?: string;
-}) {
-  return (
-    <div className="mx-auto max-w-2xl text-center">
-      <p className="marketing-eyebrow">{eyebrow}</p>
-      <h2 id={id} className="marketing-h2 mt-4">
-        {title}
-      </h2>
-      {lead && <p className="marketing-body mt-4">{lead}</p>}
-    </div>
-  );
-}
-
-function CheckItem({ children }: { children: React.ReactNode }) {
-  return (
-    <li className="flex items-start gap-3">
-      <span className="mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded-full bg-accent/20 text-accent-bright">
-        <svg viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <path d="M4 10l4 4 8-8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      <span className="text-sm leading-relaxed text-muted-foreground">{children}</span>
-    </li>
-  );
-}
-
-export function PrincipleStrip() {
-  const principles = [
-    { k: "EVIDENCE FIRST", v: "Every claim traces to observable transaction data." },
-    { k: "CONFIDENCE QUANTIFIED", v: "Correlation strength and confidence are reported separately." },
-    { k: "LIMITATIONS EXPOSED", v: "Counter-evidence and data-quality limits are shown, not hidden." }
-  ];
-  return (
-    <section className="border-y border-white/10 bg-ink-raised/40">
-      <div className="container-page grid gap-8 py-14 md:grid-cols-3 md:gap-6">
-        {principles.map((p) => (
-          <div key={p.k} className="flex flex-col gap-2">
-            <span className="marketing-eyebrow">{p.k}</span>
-            <p className="text-sm leading-relaxed text-muted-foreground">{p.v}</p>
-          </div>
-        ))}
-      </div>
-      <div className="container-page -mt-6 pb-10">
-        <p className="text-center font-display text-lg font-semibold tracking-tight text-marble/90">
-          Correlation <span className="text-accent-bright">≠</span> Ownership{" "}
-          <span className="text-accent-bright">≠</span> Identity
-        </p>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          AEGIX surfaces observable linkability between public wallets. It never identifies the person behind one.
-        </p>
-      </div>
-    </section>
-  );
-}
-
+/* ------------------------------------------------------------------ */
+/* HERO — statement dominant, restrained visual below.                */
+/* ------------------------------------------------------------------ */
 export function HeroSection() {
   return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-hero-glow" aria-hidden="true" />
-      <div className="container-page relative grid items-center gap-10 py-20 md:grid-cols-2 md:py-28">
-        <div>
-          <p className="marketing-eyebrow">On-chain privacy intelligence · Solana</p>
-          <h1 className="mt-4 font-display text-5xl font-semibold leading-[1.05] tracking-tightest text-marble md:text-7xl">
-            Know What the
+    <section className="border-b border-white/10">
+      <div className="container-wide py-20 md:py-32">
+        <div className="max-w-4xl">
+          <p className="section-label-accent">Financial &amp; On-Chain Intelligence</p>
+          <h1 className="mt-6 statement-lg">
+            See what
             <br />
-            Blockchain Knows.
+            others don&apos;t.
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Understand what your public on-chain activity can reveal before someone else does. AEGIX turns
-            observable Solana data into evidence-based privacy intelligence, with confidence and limitations
-            made explicit.
+          <p className="mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+            AEGIX transforms public on-chain and financial data into relationships, patterns, signals and
+            intelligence.
           </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <p className="mt-2 text-sm text-muted-2">Starting with privacy intelligence on Solana.</p>
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Link href="/app/analyze" className="btn-primary">
-              Analyze Your Wallet
+              Launch AEGIX <span className="text-white/70">→</span>
             </Link>
-            <Link href="/app/compare" className="btn-secondary">
-              Compare Wallets
-            </Link>
-            <Link href="/methodology" className="btn-secondary border-transparent text-muted-foreground hover:text-marble">
-              Explore Methodology
+            <Link href="/intelligence" className="btn-secondary">
+              Explore the intelligence layer
             </Link>
           </div>
-          <p className="mt-6 text-xs text-muted-foreground">
-            Signing in never costs SOL and creates no blockchain transaction.
-          </p>
         </div>
 
-        <div className="relative">
-          <div className="card-surface overflow-hidden p-0">
+        <div className="mt-16 md:mt-20">
+          <div className="aspect-video overflow-hidden rounded-lg border border-white/10">
             <Image
               src="/assets/aegix-wallet-intelligence.jpg"
               alt="AEGIX Wallet Intelligence interface showing a privacy exposure score, evidence breakdown, and linked entities"
               width={1280}
               height={720}
               priority
-              className="h-auto w-full object-cover"
+              className="h-full w-full object-cover"
             />
           </div>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Wallet X-Ray — privacy exposure, evidence, and linked entities on public data.
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">
+            Wallet X-Ray · Privacy exposure on public data
           </p>
         </div>
       </div>
@@ -118,53 +61,130 @@ export function HeroSection() {
   );
 }
 
-export function ProductSection() {
-  const features = [
-    {
-      title: "Wallet X-Ray",
-      body: "A Privacy Exposure Score, seven dimensions of observable exposure, and the evidence behind each signal.",
-      cta: { label: "Analyze a Wallet", href: "/app/analyze" }
-    },
-    {
-      title: "Attack My Wallet",
-      body: "Simulated paths an observer could follow: target → funding → related wallet → entity → observable linkability.",
-      cta: { label: "Explore Attack Paths", href: "/app/analyze" }
-    },
-    {
-      title: "Compare Wallets",
-      body: "Correlation strength reported separately from confidence, across funding, transfers, counterparties, entities, and behavior.",
-      cta: { label: "Compare Wallets", href: "/app/compare" }
-    },
-    {
-      title: "Privacy Monitor",
-      body: "Continuous re-analysis, exposure and correlation changes, threat events, alert rules, in-app and email notifications.",
-      cta: { label: "Start Monitoring", href: "/app/monitors" }
-    }
-  ];
+/* ------------------------------------------------------------------ */
+/* INTRODUCTION                                                       */
+/* ------------------------------------------------------------------ */
+export function IntroductionSection() {
   return (
-    <section id="product" className="scroll-mt-16 py-20 md:py-28">
-      <div className="container-page">
-        <SectionHeading
-          eyebrow="Product"
-          title="Intelligence you can act on — and verify."
-          lead="Every product surface is driven by real analysis, real evidence, and an explicit epistemic model."
-        />
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
-          {features.map((f) => (
-            <div key={f.title} className="card-surface flex flex-col justify-between gap-6">
-              <div>
-                <h3 className="font-display text-xl font-semibold text-marble">{f.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+    <section className="border-b border-white/10">
+      <div className="container-narrow py-20 md:py-28">
+        <SectionLabel>What AEGIX is</SectionLabel>
+        <EditorialHeading className="mt-6">
+          Information is everywhere.
+          <br />
+          Intelligence isn&apos;t.
+        </EditorialHeading>
+        <div className="mt-10 space-y-4 text-lg leading-relaxed text-muted-foreground">
+          <p>
+            Markets and blockchains generate enormous public datasets. AEGIX focuses on understanding the
+            relationships and patterns inside them.
+          </p>
+          <p>
+            The result is an intelligence layer: not raw data, not a dashboard, but structured insight with
+            evidence, confidence and limitations made explicit.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* LIVE INTELLIGENCE — product rows                                   */
+/* ------------------------------------------------------------------ */
+export function LiveIntelligenceSection() {
+  return (
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-28">
+        <div className="max-w-2xl">
+          <SectionLabel status="LIVE">Live Intelligence</SectionLabel>
+          <EditorialHeading className="mt-6">See your wallet from the outside.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            Privacy intelligence turns public wallet activity into an evidence-based exposure model — built
+            from the ground up.
+          </p>
+        </div>
+
+        <div className="mt-12">
+          <ProductStatus
+            live={["Wallet X-Ray", "Attack My Wallet", "Compare Wallets", "Privacy Monitor", "Developer Intelligence API"]}
+            inDevelopment={["Market Intelligence"]}
+          />
+        </div>
+
+        <div className="mt-14">
+          <FeatureRow
+            index="01"
+            title="Wallet X-Ray"
+            body="Understand what your public wallet activity may reveal."
+            detail={["Privacy Exposure Score", "7 Exposure Dimensions", "Evidence", "Confidence"]}
+            href="/privacy"
+            cta="Explore Wallet X-Ray"
+          />
+          <FeatureRow
+            index="02"
+            title="Attack My Wallet"
+            body="Follow observable paths through your on-chain activity."
+            detail={["Relationship Graph", "Funding Paths", "Entity Exposure", "Linkability Signals"]}
+            href="/privacy#attack"
+            cta="Attack My Wallet"
+          />
+          <FeatureRow
+            index="03"
+            title="Compare Wallets"
+            body="Two wallets. One relationship model."
+            detail={["Funding", "Counterparties", "Entities", "Temporal Correlation"]}
+            href="/app/compare"
+            cta="Compare Wallets"
+          />
+          <FeatureRow
+            index="04"
+            title="Privacy Monitor"
+            body="Exposure changes. AEGIX notices."
+            detail={["Exposure Diff", "Correlation Alerts", "Threat Events", "Email + Webhooks"]}
+            href="/app/monitors"
+            cta="Start Monitoring"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* INTELLIGENCE PRIMITIVES                                            */
+/* ------------------------------------------------------------------ */
+const PRIMITIVES = [
+  { n: "01", key: "Funding", body: "Traces observable funding provenance while filtering dust and low-quality relationships." },
+  { n: "02", key: "Counterparties", body: "Maps the wallets a target interacts with, weighted by how distinctive each is." },
+  { n: "03", key: "Entities", body: "Binds activity to known entities (exchanges, protocols) from a verified registry." },
+  { n: "04", key: "Behavior", body: "Compares behavioral fingerprints to detect resemblance between wallets." },
+  { n: "05", key: "Temporal Activity", body: "Looks for meaningful co-occurrence in transaction timing." },
+  { n: "06", key: "Relationships", body: "Builds a bounded graph of observable and inferred edges between wallets." },
+  { n: "07", key: "Commonality", body: "Weights overlap against the AEGIX-observed population, not the whole network." }
+];
+
+export function PrimitivesSection() {
+  return (
+    <section id="intelligence" className="border-b border-white/10">
+      <div className="container-wide py-20 md:py-28">
+        <div className="max-w-2xl">
+          <SectionLabel>Intelligence Primitives</SectionLabel>
+          <EditorialHeading className="mt-6">Public activity becomes observable intelligence.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            Every AEGIX result is composed from a small set of deterministic primitives — each backed by a real
+            engine, each traceable to evidence.
+          </p>
+        </div>
+
+        <div className="mt-14 grid gap-x-12 gap-y-0 sm:grid-cols-2 lg:grid-cols-4">
+          {PRIMITIVES.map((p) => (
+            <div key={p.key} className="border-t border-white/10 py-6">
+              <div className="flex items-baseline gap-3">
+                <span className="font-mono text-xs text-muted-2">{p.n}</span>
+                <h3 className="font-display text-lg font-semibold text-marble">{p.key}</h3>
               </div>
-              <Link
-                href={f.cta.href}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-accent-bright transition hover:text-marble"
-              >
-                {f.cta.label}
-                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 10h12m0 0l-4-4m4 4l-4 4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </Link>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
             </div>
           ))}
         </div>
@@ -173,64 +193,96 @@ export function ProductSection() {
   );
 }
 
-export function IntelligenceSection() {
-  const dimensions = [
-    "Identity Linkability",
-    "Funding Exposure",
-    "Exchange / Entity Exposure",
-    "Wallet Cluster Exposure",
-    "Behavioral Fingerprint",
-    "Counterparty Exposure",
-    "Transaction Pattern Exposure"
-  ];
+/* ------------------------------------------------------------------ */
+/* SYSTEM PIPELINE                                                    */
+/* ------------------------------------------------------------------ */
+export function PipelineSection() {
   return (
-    <section id="intelligence" className="scroll-mt-16 border-t border-white/10 bg-ink-raised/30 py-20 md:py-28">
-      <div className="container-page grid items-center gap-12 lg:grid-cols-2">
-        <div>
-          <p className="marketing-eyebrow">Intelligence Engine</p>
-          <h2 className="marketing-h2 mt-4">Deterministic. Evidence-backed. Bounded.</h2>
-          <p className="marketing-body mt-4">
-            AEGIX derives signals from normalized on-chain data through a deterministic pipeline — not
-            generative guessing. Each stage is versioned and inspectable.
-          </p>
-
-          <div className="mt-8 space-y-2 font-mono text-sm text-muted-foreground">
-            {["ON-CHAIN DATA", "NORMALIZATION", "SIGNALS", "CORRELATION", "GRAPH", "EXPOSURE"].map((step, i, arr) => (
-              <div key={step} className="flex items-center gap-3">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-white/10 text-xs text-muted-foreground">
-                  {i + 1}
-                </span>
-                <span className="text-marble/90">{step}</span>
-                {i < arr.length - 1 && <span className="text-accent-bright">↓</span>}
-              </div>
-            ))}
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-24">
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
+          <div>
+            <SectionLabel>System Pipeline</SectionLabel>
+            <EditorialHeading className="mt-6">How public activity becomes exposure.</EditorialHeading>
+            <p className="mt-6 editorial-body">
+              A deterministic, versioned pipeline. Each stage is inspectable and bounded — not a generator
+              producing confident guesses.
+            </p>
+          </div>
+          <div className="border border-white/10 p-8">
+            <PipelineDiagram
+              steps={["Public Activity", "Normalization", "Signals", "Relationships", "Correlation", "Confidence", "Exposure"]}
+            />
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="card-surface">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Wallet X-Ray dimensions
-          </h3>
-          <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-            {dimensions.map((d) => (
-              <CheckItem key={d}>{d}</CheckItem>
-            ))}
-          </ul>
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Engine features
+/* ------------------------------------------------------------------ */
+/* EPISTEMIC PRINCIPLE — signature statement                          */
+/* ------------------------------------------------------------------ */
+export function EpistemicSection() {
+  return (
+    <section className="border-b border-white/10 bg-white/[0.015]">
+      <div className="container-narrow py-24 text-center md:py-32">
+        <div className="mx-auto max-w-3xl">
+          <p className="section-label">A Core Principle</p>
+          <h2 className="mt-8 statement">
+            Correlation
+            <br />
+            is not
+            <br />
+            identity.
+          </h2>
+          <p className="mx-auto mt-10 max-w-xl text-lg leading-relaxed text-muted-foreground">
+            AEGIX reports observable relationships, evidence and confidence. It does not turn correlation into
+            unsupported claims about real-world ownership.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* COMPARE — strength vs confidence                                   */
+/* ------------------------------------------------------------------ */
+export function CompareSection() {
+  const families = ["Funding", "Counterparties", "Entities", "Behavior", "Protocol Sequences", "Temporal Correlation", "Population Commonality"];
+  return (
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-28">
+        <div className="grid gap-12 lg:grid-cols-2">
+          <div className="max-w-xl">
+            <SectionLabel>Compare</SectionLabel>
+            <EditorialHeading className="mt-6">Two wallets. One relationship model.</EditorialHeading>
+            <p className="mt-6 editorial-body">
+              Compare measures how much two wallets look alike, across evidence families — and how much you
+              should trust that measurement.
             </p>
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {[
-                "Funding Provenance",
-                "Behavioral Similarity",
-                "Temporal Correlation",
-                "Entity Intelligence",
-                "Multi-Hop Graph",
-                "Cluster Hypothesis",
-                "Population Commonality"
-              ].map((f) => (
-                <CheckItem key={f}>{f}</CheckItem>
+            <div className="mt-10 grid grid-cols-2 gap-6">
+              <TechnicalMetric label="Strength" value="0.78" />
+              <TechnicalMetric label="Confidence" value="0.82" />
+            </div>
+            <p className="mt-4 text-xs text-muted-2">
+              Strength answers &quot;how strong are the signals?&quot; Confidence answers &quot;how reliable is
+              the evidence?&quot; They are never conflated.
+            </p>
+            <div className="mt-8">
+              <InlineArrowLink href="/app/compare">Open Compare</InlineArrowLink>
+            </div>
+          </div>
+
+          <div className="border border-white/10 p-8">
+            <p className="mono-label">Evidence Families</p>
+            <ul className="mt-4 divide-y divide-white/10">
+              {families.map((f) => (
+                <li key={f} className="flex items-center justify-between py-3 text-sm text-muted-foreground">
+                  <span>{f}</span>
+                  <span className="font-mono text-xs text-muted-2">observed</span>
+                </li>
               ))}
             </ul>
           </div>
@@ -240,43 +292,153 @@ export function IntelligenceSection() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* MONITORING                                                         */
+/* ------------------------------------------------------------------ */
+export function MonitoringSection() {
+  return (
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-28">
+        <div className="max-w-2xl">
+          <SectionLabel>Privacy Monitor</SectionLabel>
+          <EditorialHeading className="mt-6">Exposure changes. AEGIX notices.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            Continuous privacy monitoring re-analyzes a wallet, computes an exposure diff, and alerts you to
+            meaningful change.
+          </p>
+        </div>
+        <div className="mt-12 grid gap-8 md:grid-cols-3">
+          {[
+            { t: "Exposure Diff", b: "Baseline vs latest exposure, per dimension." },
+            { t: "Correlation Alerts", b: "New or changed correlation evidence, deduped." },
+            { t: "Threat Events", b: "In-app notifications, verified email, signed webhooks." }
+          ].map((c) => (
+            <div key={c.t} className="border-t border-white/10 pt-6">
+              <h3 className="font-display text-lg font-semibold text-marble">{c.t}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.b}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10">
+          <InlineArrowLink href="/app/monitors">Start Monitoring</InlineArrowLink>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* DEVELOPER INFRASTRUCTURE                                           */
+/* ------------------------------------------------------------------ */
 export function DeveloperSection() {
-  const items = ["Wallet Intelligence API", "Compare Intelligence API", "API Keys & Scopes", "Metered Quota", "Usage & Webhooks"];
   return (
-    <section className="py-20 md:py-28">
-      <div className="container-page grid items-center gap-12 lg:grid-cols-2">
-        <div className="order-2 lg:order-1">
-          <Image
-            src="/assets/aegix-intelligence-infrastructure.jpg"
-            alt="AEGIX intelligence infrastructure — servers and API layers, including signals, privacy, and data-layer APIs"
-            width={1280}
-            height={720}
-            loading="lazy"
-            className="h-auto w-full rounded-2xl border border-white/10"
-          />
-          <p className="mt-3 text-xs text-muted-foreground">
-            Vision asset — the labelled API surface includes future-facing infrastructure.
+    <section className="border-b border-white/10">
+      <div className="container-wide py-20 md:py-28">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div>
+            <SectionLabel>Developers</SectionLabel>
+            <EditorialHeading className="mt-6">Intelligence is infrastructure.</EditorialHeading>
+            <p className="mt-6 editorial-body">
+              Applications can consume AEGIX intelligence programmatically — scoped keys, metered quota, usage
+              reporting, and signed webhooks.
+            </p>
+            <ul className="mt-8 space-y-2">
+              {["Wallet Intelligence API", "Compare Intelligence API", "API Keys & Scopes", "Usage & Quotas", "Webhooks"].map((i) => (
+                <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="h-1 w-1 rounded-full bg-accent-bright" aria-hidden="true" />
+                  {i}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+              <Link href="/developers" className="btn-primary">
+                Open developer platform
+              </Link>
+              <Link href="/docs" className="btn-secondary">
+                Read the docs
+              </Link>
+            </div>
+          </div>
+
+          <div>
+            <CodePreview>{`POST /v1/developer/intelligence/wallet
+
+Authorization: Bearer aegix_live_...
+
+{
+  "wallet": "<SOLANA_ADDRESS>"
+}
+
+→ analysisId
+→ status
+→ pollUrl`}</CodePreview>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">
+              Scoped · Metered · Signed webhooks
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-16">
+          <div className="aspect-video overflow-hidden rounded-lg border border-white/10">
+            <Image
+              src="/assets/aegix-intelligence-infrastructure.jpg"
+              alt="AEGIX intelligence infrastructure — servers and API layers"
+              width={1280}
+              height={720}
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">
+            Intelligence Is Infrastructure
           </p>
         </div>
-        <div className="order-1 lg:order-2">
-          <p className="marketing-eyebrow">For Developers</p>
-          <h2 className="marketing-h2 mt-4">Intelligence is infrastructure.</h2>
-          <p className="marketing-body mt-4">
-            Integrate AEGIX intelligence into your own tooling with scoped API keys, metered quota, usage
-            reporting, and signed webhooks.
-          </p>
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-            {items.map((it) => (
-              <CheckItem key={it}>{it}</CheckItem>
-            ))}
-          </ul>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/developers" className="btn-primary">
-              Explore Developer API
-            </Link>
-            <Link href="/docs" className="btn-secondary">
-              Read API Docs
-            </Link>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* MARKET INTELLIGENCE — IN DEVELOPMENT                               */
+/* ------------------------------------------------------------------ */
+export function MarketSection() {
+  return (
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-28">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
+          <div>
+            <SectionLabel status="IN DEVELOPMENT">Market Intelligence</SectionLabel>
+            <EditorialHeading className="mt-6">Markets beyond the surface.</EditorialHeading>
+            <p className="mt-6 editorial-body">
+              AEGIX is expanding into market intelligence — detecting narratives, anomalies, and emerging
+              signals before they become consensus.
+            </p>
+            <ul className="mt-8 space-y-2">
+              {["Narrative Radar", "Anomaly Detection", "Cross-Market Intelligence", "Signal Engine"].map((i) => (
+                <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="h-1 w-1 rounded-full bg-muted-2" aria-hidden="true" />
+                  {i}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-10">
+              <Link href="/roadmap" className="btn-secondary">
+                Explore the roadmap
+              </Link>
+            </div>
+          </div>
+
+          <div>
+            <div className="aspect-video overflow-hidden rounded-lg border border-white/10 opacity-80">
+              <Image
+                src="/assets/aegix-market-structure.jpg"
+                alt="AEGIX market structure concept — aspirational research direction, in development"
+                width={1280}
+                height={720}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -284,79 +446,110 @@ export function DeveloperSection() {
   );
 }
 
-export function VisionSection() {
+/* ------------------------------------------------------------------ */
+/* HOW AEGIX THINKS + NETWORK + ROADMAP TEASER                        */
+/* ------------------------------------------------------------------ */
+export function HowSection() {
   return (
-    <section className="border-t border-white/10 py-20 md:py-28">
-      <div className="container-page">
-        <SectionHeading
-          eyebrow="Vision"
-          title="The future we build."
-          lead="These directions represent AEGIX's long-term research roadmap, not products available today. Some concepts remain aspirational."
-        />
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          <div className="card-surface overflow-hidden p-0">
-            <Image
-              src="/assets/aegix-market-structure.jpg"
-              alt="AEGIX market structure concept — aspirational research direction"
-              width={1280}
-              height={720}
-              loading="lazy"
-              className="h-auto w-full object-cover"
-            />
-            <div className="p-5">
-              <h3 className="font-display text-lg font-semibold text-marble">Market intelligence</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Brand / vision asset — not yet a live product.</p>
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-28">
+        <div className="max-w-2xl">
+          <SectionLabel>How AEGIX Thinks</SectionLabel>
+          <EditorialHeading className="mt-6">Structure, not decoration.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            Intelligence should communicate through structure, typography, evidence and hierarchy. AEGIX is
+            built to clarify the on-chain world — not to decorate it.
+          </p>
+        </div>
+        <div className="mt-10 grid gap-8 md:grid-cols-3">
+          {[
+            { t: "Evidence first", b: "Every claim traces to observable transaction data." },
+            { t: "Confidence quantified", b: "Strength and confidence are reported separately." },
+            { t: "Limitations exposed", b: "Counter-evidence and data-quality limits are shown, not hidden." }
+          ].map((c) => (
+            <div key={c.t} className="border-t border-white/10 pt-6">
+              <h3 className="font-display text-lg font-semibold text-marble">{c.t}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.b}</p>
             </div>
-          </div>
-          <div className="card-surface overflow-hidden p-0">
-            <Image
-              src="/assets/aegix-intelligence-layer.jpg"
-              alt="AEGIX intelligence layer sketch — research direction"
-              width={1280}
-              height={720}
-              loading="lazy"
-              className="h-auto w-full object-cover"
-            />
-            <div className="p-5">
-              <h3 className="font-display text-lg font-semibold text-marble">Intelligence layer</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Research direction — not yet a live product.</p>
-            </div>
-          </div>
-          <div className="card-surface overflow-hidden p-0">
-            <Image
-              src="/assets/aegix-ecosystem-vision.jpg"
-              alt="AEGIX ecosystem vision — aspirational future direction"
-              width={1280}
-              height={720}
-              loading="lazy"
-              className="h-auto w-full object-cover"
-            />
-            <div className="p-5">
-              <h3 className="font-display text-lg font-semibold text-marble">AEGIX ecosystem</h3>
-              <p className="mt-2 text-sm text-muted-foreground">Brand / vision asset — not yet a live product.</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
+export function NetworkSection() {
+  return (
+    <section id="network" className="border-b border-white/10">
+      <div className="container-page py-20">
+        <div className="max-w-2xl">
+          <SectionLabel>Network</SectionLabel>
+          <EditorialHeading className="mt-6">Built for the real-time on-chain economy.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            AEGIX starts on Solana — a network with the throughput and low cost to surface real-time
+            relationships across public activity.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function RoadmapTeaserSection() {
+  const groups = [
+    { label: "Shipped", items: ["Intelligence Core", "Wallet X-Ray", "Attack My Wallet", "Compare Intelligence", "Privacy Monitor", "Developer Intelligence API"], tone: "SHIPPED" },
+    { label: "Current", items: ["Public Product Launch", "Multi-User Production", "Documentation", "Infrastructure Hardening"], tone: "CURRENT" },
+    { label: "Next", items: ["Market Intelligence", "Narrative Radar", "Anomaly Detection", "Signal Engine"], tone: "NEXT" },
+    { label: "Later", items: ["AI Intelligence Copilot", "Wallet Reputation", "Intelligence Network", "$AEX Economic Layer", "Multi-Chain"], tone: "LATER" }
+  ] as const;
+  return (
+    <section className="border-b border-white/10">
+      <div className="container-page py-20 md:py-24">
+        <div className="max-w-2xl">
+          <SectionLabel>Roadmap</SectionLabel>
+          <EditorialHeading className="mt-6">Status-driven, not date-driven.</EditorialHeading>
+          <p className="mt-6 editorial-body">
+            AEGIX has shipped an intelligence core. What follows is built on the real repository state — not an
+            aspirational timeline.
+          </p>
+        </div>
+        <div className="mt-12 grid gap-x-12 gap-y-0 md:grid-cols-4">
+          {groups.map((g) => (
+            <div key={g.label} className="border-t border-white/10 py-6">
+              <StatusBadge label={g.label} className="mb-4" />
+              <ul className="space-y-2">
+                {g.items.map((i) => (
+                  <li key={i} className="text-sm text-muted-foreground">
+                    {i}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-10">
+          <InlineArrowLink href="/roadmap">View the roadmap</InlineArrowLink>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* FINAL CTA                                                          */
+/* ------------------------------------------------------------------ */
 export function FinalCtaSection() {
   return (
-    <section className="border-t border-white/10 bg-ink-raised/30 py-20 md:py-24">
-      <div className="container-page text-center">
-        <h2 className="marketing-h2">See what your wallet reveals.</h2>
-        <p className="marketing-body mt-4 mx-auto max-w-xl">
-          Analyze public blockchain exposure before someone else does — with evidence, confidence, and
-          limitations made explicit.
-        </p>
-        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+    <section>
+      <div className="container-narrow py-24 text-center md:py-32">
+        <h2 className="statement-lg">See what others don&apos;t.</h2>
+        <p className="mx-auto mt-8 max-w-md text-lg text-muted-foreground">Start with your wallet.</p>
+        <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <Link href="/app/analyze" className="btn-primary">
-            Launch AEGIX
+            Launch AEGIX <span className="text-white/70">→</span>
           </Link>
           <Link href="/docs" className="btn-secondary">
-            Read the Docs
+            Read the docs
           </Link>
         </div>
       </div>

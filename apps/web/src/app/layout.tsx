@@ -25,13 +25,14 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "AEGIX — On-Chain Privacy Intelligence for Solana",
+    default: "AEGIX — Financial & On-Chain Intelligence",
     template: "%s · AEGIX"
   },
   description:
-    "AEGIX turns public Solana blockchain activity into evidence-based privacy intelligence. Wallet X-Ray, cross-wallet correlation, attack path analysis, and privacy monitoring. Know what the blockchain knows.",
+    "AEGIX turns public on-chain and financial data into relationships, patterns, signals and intelligence. Starting with privacy intelligence on Solana — Wallet X-Ray, cross-wallet correlation, attack-path analysis, and privacy monitoring.",
   keywords: [
     "on-chain intelligence",
+    "financial intelligence",
     "Solana privacy",
     "wallet x-ray",
     "blockchain analytics",
@@ -46,9 +47,9 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "AEGIX",
-    title: "AEGIX — Know What the Blockchain Knows.",
+    title: "AEGIX — See What Others Don't.",
     description:
-      "Evidence-based on-chain privacy intelligence for Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring.",
+      "Financial & on-chain intelligence on Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring. See what others don't.",
     images: [
       {
         url: "/assets/aegix-wallet-intelligence.jpg",
@@ -60,9 +61,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AEGIX — Know What the Blockchain Knows.",
+    title: "AEGIX — See What Others Don't.",
     description:
-      "Evidence-based on-chain privacy intelligence for Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring.",
+      "Financial & on-chain intelligence on Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring.",
     images: ["/assets/aegix-wallet-intelligence.jpg"]
   },
   robots: {

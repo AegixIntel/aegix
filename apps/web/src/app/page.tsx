@@ -2,11 +2,18 @@ import { PublicNavbar } from "@/components/layout/public-navbar";
 import { PublicFooter } from "@/components/layout/public-footer";
 import {
   HeroSection,
-  PrincipleStrip,
-  ProductSection,
-  IntelligenceSection,
+  IntroductionSection,
+  LiveIntelligenceSection,
+  PrimitivesSection,
+  PipelineSection,
+  EpistemicSection,
+  CompareSection,
+  MonitoringSection,
   DeveloperSection,
-  VisionSection,
+  MarketSection,
+  HowSection,
+  NetworkSection,
+  RoadmapTeaserSection,
   FinalCtaSection
 } from "@/components/layout/landing-sections";
 
@@ -16,11 +23,18 @@ export default function Home() {
       <PublicNavbar />
       <main className="flex-1">
         <HeroSection />
-        <PrincipleStrip />
-        <ProductSection />
-        <IntelligenceSection />
+        <IntroductionSection />
+        <LiveIntelligenceSection />
+        <PrimitivesSection />
+        <PipelineSection />
+        <EpistemicSection />
+        <CompareSection />
+        <MonitoringSection />
         <DeveloperSection />
-        <VisionSection />
+        <MarketSection />
+        <HowSection />
+        <NetworkSection />
+        <RoadmapTeaserSection />
         <FinalCtaSection />
       </main>
       <PublicFooter />

@@ -5,13 +5,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0b1020",
-        "ink-deep": "#05070d",
-        "ink-raised": "#111832",
+        // Near-black neutral institutional base.
+        ink: "#0a0a0a",
+        "ink-deep": "#050505",
+        "ink-raised": "#111111",
+        // Foreground.
+        marble: "#f2f2f2",
+        "muted-foreground": "#9ca3af",
+        "muted-2": "#6b7280",
+        // AEGIX violet accent — used sparingly.
         accent: "#6c5ce7",
         "accent-bright": "#8b7cff",
-        marble: "#f5f6f7",
-        "muted-foreground": "#9aa3b5"
+        "accent-dim": "rgba(108, 92, 231, 0.14)"
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
@@ -21,10 +26,14 @@ const config: Config = {
       letterSpacing: {
         tightest: "-0.04em"
       },
-      backgroundImage: {
-        "accent-gradient": "linear-gradient(135deg, #6c5ce7 0%, #8b7cff 100%)",
-        "hero-glow":
-          "radial-gradient(ellipse 80% 50% at 20% 10%, rgba(108,92,231,0.18), transparent 60%)"
+      maxWidth: {
+        content: "72rem",
+        narrow: "44rem",
+        wide: "86rem"
+      },
+      spacing: {
+        section: "7rem",
+        "section-sm": "5rem"
       }
     }
   },

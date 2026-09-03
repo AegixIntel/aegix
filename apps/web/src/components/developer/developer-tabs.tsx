@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/developers", label: "API Keys" },
-  { href: "/developers/usage", label: "Usage" },
-  { href: "/developers/webhooks", label: "Webhooks" }
+  { href: "/developers", label: "API Keys", match: ["/developers", "/developers/api-keys"] },
+  { href: "/developers/usage", label: "Usage", match: ["/developers/usage"] },
+  { href: "/developers/webhooks", label: "Webhooks", match: ["/developers/webhooks"] }
 ];
 
 export function DeveloperTabs() {
@@ -18,7 +18,7 @@ export function DeveloperTabs() {
           key={t.href}
           href={t.href}
           className={`-mb-px border-b-2 px-4 py-2 text-sm transition ${
-            pathname === t.href ? "border-accent text-marble" : "border-transparent text-muted-foreground hover:text-marble"
+            t.match.includes(pathname) ? "border-accent text-marble" : "border-transparent text-muted-foreground hover:text-marble"
           }`}
         >
           {t.label}

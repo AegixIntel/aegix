@@ -3,50 +3,116 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegix.app";
 
 export const NAV_BRAND = "AEGIX";
 
-export type MarketingLink = { label: string; href: string };
+export type NavLinkItem = { label: string; href: string; status?: string };
+export type NavGroup = { label: string; items: NavLinkItem[]; href?: string };
 
-export const marketingNav: MarketingLink[] = [
-  { label: "Product", href: "/#product" },
-  { label: "Intelligence", href: "/#intelligence" },
-  { label: "Developers", href: "/developers" },
-  { label: "Methodology", href: "/methodology" },
-  { label: "Docs", href: "/docs" }
+export const primaryNav: NavGroup[] = [
+  {
+    label: "Product",
+    items: [
+      { label: "Privacy Intelligence", href: "/privacy", status: "LIVE" },
+      { label: "Market Intelligence", href: "/markets", status: "IN DEVELOPMENT" },
+      { label: "Wallet X-Ray", href: "/app/analyze" },
+      { label: "Compare", href: "/app/compare" },
+      { label: "Monitor", href: "/app/monitors" }
+    ]
+  },
+  {
+    label: "Intelligence",
+    items: [
+      { label: "Methodology", href: "/methodology" },
+      { label: "Relationship Intelligence", href: "/intelligence" },
+      { label: "Funding Provenance", href: "/intelligence#funding" },
+      { label: "Behavioral Intelligence", href: "/intelligence#behavior" },
+      { label: "Temporal Intelligence", href: "/intelligence#temporal" },
+      { label: "Entity Intelligence", href: "/intelligence#entities" },
+      { label: "Population Commonality", href: "/intelligence#commonality" }
+    ]
+  },
+  {
+    label: "Developers",
+    items: [
+      { label: "Developer Platform", href: "/developers" },
+      { label: "API Reference", href: "/docs" },
+      { label: "Webhooks", href: "/developers/webhooks" },
+      { label: "Usage & Quotas", href: "/developers/usage" }
+    ]
+  }
 ];
+
+export const docsNavLink: NavLinkItem = { label: "Docs", href: "/docs" };
+export const roadmapNavLink: NavLinkItem = { label: "Roadmap", href: "/roadmap" };
 
 export type AppNavItem = { label: string; href: string };
+export type AppNavGroup = { label: string; items: AppNavItem[] };
 
-export const appOverviewNav: AppNavItem[] = [
-  { label: "Wallet X-Ray", href: "/app/analyze" },
-  { label: "Compare", href: "/app/compare" },
-  { label: "Monitors", href: "/app/monitors" },
-  { label: "Saved", href: "/app/saved" },
-  { label: "Notifications", href: "/app/notifications" }
+export const appNavGroups: AppNavGroup[] = [
+  {
+    label: "Intelligence",
+    items: [
+      { label: "Wallet X-Ray", href: "/app/analyze" },
+      { label: "Compare", href: "/app/compare" },
+      { label: "Monitors", href: "/app/monitors" }
+    ]
+  },
+  {
+    label: "Library",
+    items: [
+      { label: "Saved", href: "/app/saved" },
+      { label: "Notifications", href: "/app/notifications" }
+    ]
+  },
+  {
+    label: "Developers",
+    items: [
+      { label: "API Keys", href: "/developers/api-keys" },
+      { label: "Usage", href: "/developers/usage" },
+      { label: "Webhooks", href: "/developers/webhooks" }
+    ]
+  }
 ];
 
-export const appDeveloperNav: AppNavItem[] = [
-  { label: "API Keys", href: "/developers/api-keys" },
-  { label: "Usage", href: "/developers/usage" },
-  { label: "Webhooks", href: "/developers/webhooks" }
-];
-
-export const footerProductLinks: MarketingLink[] = [
-  { label: "Wallet X-Ray", href: "/app/analyze" },
-  { label: "Compare", href: "/app/compare" },
-  { label: "Monitor", href: "/app/monitors" }
-];
-
-export const footerDeveloperLinks: MarketingLink[] = [
-  { label: "API", href: "/developers" },
-  { label: "Webhooks", href: "/developers/webhooks" },
-  { label: "Docs", href: "/docs" }
-];
-
-export const footerResearchLinks: MarketingLink[] = [
-  { label: "Methodology", href: "/methodology" },
-  { label: "Security", href: "/security" }
-];
-
-export const footerCompanyLinks: MarketingLink[] = [
-  { label: "About", href: "/#product" },
-  { label: "Status", href: "/status" }
+export const footerColumns = [
+  {
+    title: "Product",
+    links: [
+      { label: "Wallet X-Ray", href: "/app/analyze" },
+      { label: "Attack My Wallet", href: "/app/analyze" },
+      { label: "Compare", href: "/app/compare" },
+      { label: "Privacy Monitor", href: "/app/monitors" },
+      { label: "Market Intelligence", href: "/markets" }
+    ]
+  },
+  {
+    title: "Intelligence",
+    links: [
+      { label: "Methodology", href: "/methodology" },
+      { label: "Funding", href: "/intelligence#funding" },
+      { label: "Behavior", href: "/intelligence#behavior" },
+      { label: "Correlation", href: "/intelligence" },
+      { label: "Entities", href: "/intelligence#entities" }
+    ]
+  },
+  {
+    title: "Developers",
+    links: [
+      { label: "Docs", href: "/docs" },
+      { label: "API Reference", href: "/docs" },
+      { label: "Developer Platform", href: "/developers" },
+      { label: "Webhooks", href: "/developers/webhooks" }
+    ]
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About", href: "/about" },
+      { label: "Roadmap", href: "/roadmap" },
+      { label: "Security", href: "/security" },
+      { label: "Status", href: "/status" }
+    ]
+  },
+  {
+    title: "Network",
+    links: [{ label: "Solana", href: "/#network" }]
+  }
 ];

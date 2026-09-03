@@ -89,7 +89,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           <nav className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto px-4 py-6" aria-label="Documentation">
             {DOC_SECTIONS.map((section) => (
               <div key={section.title} className="mb-6">
-                <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                <p className="section-label px-2 pb-2">
                   {section.title}
                 </p>
                 <ul className="space-y-1">
@@ -109,7 +109,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           </nav>
         </aside>
         <div className="min-w-0 flex-1">
-          <main className="container-page max-w-4xl py-12">{children}</main>
+          <main className="container-narrow py-12">{children}</main>
         </div>
       </div>
       <PublicFooter />

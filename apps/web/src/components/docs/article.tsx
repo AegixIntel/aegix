@@ -13,9 +13,9 @@ export function DocBreadcrumb({ route }: { route: string }) {
 export function DocHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead?: string }) {
   return (
     <header className="mb-8">
-      <p className="marketing-eyebrow">{eyebrow}</p>
-      <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-marble md:text-4xl">{title}</h1>
-      {lead && <p className="marketing-body mt-4">{lead}</p>}
+      <p className="section-label">{eyebrow}</p>
+      <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight text-marble md:text-5xl">{title}</h1>
+      {lead && <p className="mt-5 editorial-body max-w-2xl">{lead}</p>}
     </header>
   );
 }
@@ -41,7 +41,7 @@ export function DocList({ items }: { items: string[] }) {
 
 export function DocCode({ children }: { children: string }) {
   return (
-    <pre className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-marble/90">
+    <pre className="mt-3 overflow-x-auto rounded-md border border-white/10 bg-black/40 p-4 font-mono text-[13px] leading-relaxed text-marble/90">
       <code>{children}</code>
     </pre>
   );

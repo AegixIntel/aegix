@@ -1,20 +1,14 @@
 import Link from "next/link";
 import { AegixMark } from "@/components/aegix-logo";
-import {
-  footerProductLinks,
-  footerDeveloperLinks,
-  footerResearchLinks,
-  footerCompanyLinks,
-  SITE_URL
-} from "@/lib/site";
+import { footerColumns, SITE_URL } from "@/lib/site";
 
 function FooterColumn({ title, links }: { title: string; links: { label: string; href: string }[] }) {
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{title}</h3>
-      <ul className="mt-4 space-y-2">
+      <h3 className="section-label mb-4">{title}</h3>
+      <ul className="space-y-2">
         {links.map((link) => (
-          <li key={link.href}>
+          <li key={`${title}-${link.label}`}>
             <Link href={link.href} className="text-sm text-muted-foreground transition hover:text-marble">
               {link.label}
             </Link>
@@ -28,29 +22,29 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
 export function PublicFooter() {
   return (
     <footer className="border-t border-white/10 bg-ink-deep">
-      <div className="container-page py-14">
-        <div className="grid gap-10 md:grid-cols-5">
+      <div className="container-page py-16">
+        <div className="grid gap-10 md:grid-cols-6">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 text-marble">
-              <AegixMark className="h-6 w-6" />
-              <span className="font-display text-lg font-semibold">AEGIX</span>
+              <AegixMark className="h-7 w-7" />
+              <span className="font-display text-xl font-semibold tracking-tight">AEGIX</span>
             </div>
-            <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Evidence-based on-chain privacy intelligence for Solana. Built on observable data —
-              never asserted identity.
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground/70">
-              Correlation ≠ Ownership ≠ Identity. The AEGIX observed population is not the global Solana population.
+            <p className="mt-3 text-sm text-muted-foreground">Financial &amp; On-Chain Intelligence.</p>
+            <p className="mt-1 font-display text-lg font-semibold text-marble">See What Others Don't.</p>
+            <p className="mt-4 text-xs leading-relaxed text-muted-2">
+              Correlation ≠ Ownership ≠ Identity. AEGIX reports observable relationships and confidence — it
+              never asserts real-world identity.
             </p>
           </div>
 
-          <FooterColumn title="Product" links={footerProductLinks} />
-          <FooterColumn title="Developers" links={footerDeveloperLinks} />
-          <FooterColumn title="Research" links={footerResearchLinks} />
-          <FooterColumn title="AEGIX" links={footerCompanyLinks} />
+          {footerColumns.map((col) => (
+            <div key={col.title} className="md:col-span-1">
+              <FooterColumn title={col.title} links={col.links} />
+            </div>
+          ))}
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 text-xs text-muted-foreground/70 sm:flex-row sm:items-center">
+        <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 text-xs text-muted-2 sm:flex-row sm:items-center">
           <span>© {new Date().getFullYear()} AEGIX. All rights reserved.</span>
           <span className="mono-address">{SITE_URL.replace(/^https?:\/\//, "")}</span>
         </div>
