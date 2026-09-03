@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AegixLogo } from "@/components/aegix-logo";
 import { NavDropdown, MobileNavGroup } from "@/components/layout/nav-dropdown";
+import WalletAuthButton from "@/components/wallet-auth-button";
 import { primaryNav, docsNavLink, roadmapNavLink } from "@/lib/site";
 
 export function PublicNavbar() {
@@ -12,9 +13,9 @@ export function PublicNavbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-ink-deep/85 backdrop-blur-md">
       <nav className="container-page flex h-16 items-center justify-between gap-4" aria-label="Primary">
-        <Link href="/" className="flex items-center gap-3" aria-label="AEGIX home">
+        <Link href="/" className="flex flex-none items-center gap-3" aria-label="AEGIX home">
           <AegixLogo />
-          <span className="hidden text-[10px] uppercase tracking-[0.2em] text-muted-2 lg:block">
+          <span className="hidden whitespace-nowrap text-[10px] uppercase tracking-[0.2em] text-muted-2 xl:block">
             Financial &amp; On-Chain Intelligence
           </span>
         </Link>
@@ -31,8 +32,9 @@ export function PublicNavbar() {
           </Link>
         </div>
 
-        <div className="hidden md:block">
-          <Link href="/app/analyze" className="btn-primary px-4 py-2">
+        <div className="hidden flex-none items-center gap-3 md:flex">
+          <WalletAuthButton compact />
+          <Link href="/app/analyze" className="btn-primary whitespace-nowrap px-4 py-2">
             Launch App <span className="text-white/70">→</span>
           </Link>
         </div>
@@ -67,7 +69,10 @@ export function PublicNavbar() {
             <Link href={roadmapNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-marble">
               {roadmapNavLink.label}
             </Link>
-            <Link href="/app/analyze" onClick={() => setOpen(false)} className="btn-primary mt-2 justify-center">
+            <div className="mt-3">
+              <WalletAuthButton compact />
+            </div>
+            <Link href="/app/analyze" onClick={() => setOpen(false)} className="btn-primary mt-3 justify-center">
               Launch App →
             </Link>
           </div>

@@ -6,17 +6,21 @@
  * SOL. Surfaces specific errors (rejected connection, rejected signature,
  * unsupported signMessage, expired challenge, invalid signature) instead
  * of a generic failure.
+ *
+ * `compact` hides the explanatory copy and disconnect link so it fits a
+ * navbar; it still shows the connect / sign / sign-out action.
  */
 
 import { useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useAegixAuth } from "@/lib/auth";
+import { cn } from "@/lib/cn";
 
 function shortWallet(wallet: string): string {
   return wallet.length > 12 ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : wallet;
 }
 
-export default function WalletAuthButton() {
+export default function WalletAuthButton({ compact = false }: { compact?: boolean }) {
   const { select, connected, publicKey, connecting, disconnect } = useWallet();
   const auth = useAegixAuth();
 
@@ -34,12 +38,12 @@ export default function WalletAuthButton() {
   if (auth.user) {
     return (
       <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-400">
+        <span className="font-mono text-xs text-muted-foreground">
           {auth.user.wallet ? shortWallet(auth.user.wallet) : "Authenticated"}
         </span>
         <button
           onClick={() => void auth.signOut()}
-          className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:border-accent"
+          className="btn-secondary px-3 py-1.5 text-xs"
         >
           Sign out
         </button>
@@ -49,40 +53,43 @@ export default function WalletAuthButton() {
 
   if (connected && publicKey) {
     return (
-      <div className="flex flex-col items-end gap-1">
+      <div className={cn("flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
         <button
           onClick={() => void auth.signIn()}
           disabled={auth.busy}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
+          className="btn-primary whitespace-nowrap px-4 py-2 text-sm"
         >
           {auth.busy ? "Signing…" : "Sign to Login"}
         </button>
-        <span className="text-[11px] text-slate-500">
-          Signing does not create a transaction and costs no SOL.
-        </span>
+        {!compact && (
+          <>
+            <span className="text-[11px] text-muted-2">
+              Signing does not create a transaction and costs no SOL.
+            </span>
+            <button onClick={() => void disconnect()} className="text-xs text-muted-2 hover:text-muted-foreground">
+              Disconnect
+            </button>
+          </>
+        )}
         {auth.error && <span className="text-xs text-red-400">{auth.error}</span>}
-        <button
-          onClick={() => void disconnect()}
-          className="text-xs text-slate-500 hover:text-slate-300"
-        >
-          Disconnect
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className={cn("flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
       <button
         onClick={() => void handleConnect()}
         disabled={connecting}
-        className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-50"
+        className="btn-primary whitespace-nowrap px-4 py-2 text-sm"
       >
         {connecting ? "Connecting…" : "Connect Wallet"}
       </button>
-      <span className="text-[11px] text-slate-500">
-        Signing does not create a transaction and costs no SOL.
-      </span>
+      {!compact && (
+        <span className="text-[11px] text-muted-2">
+          Signing does not create a transaction and costs no SOL.
+        </span>
+      )}
       {auth.error && <span className="text-xs text-red-400">{auth.error}</span>}
     </div>
   );
