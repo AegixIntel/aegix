@@ -1,6 +1,34 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SectionLabel, StatusBadge, InlineArrowLink, CodePreview } from "@/components/ui/primitives";
 import LiveStatsPanel from "@/components/live-stats-panel";
+
+/** Wide visual panel used as a restrained banner inside a section. */
+function VisualPanel({
+  src,
+  alt,
+  caption
+}: {
+  src: string;
+  alt: string;
+  caption: string;
+}) {
+  return (
+    <div className="mt-10">
+      <div className="aspect-video overflow-hidden rounded-lg border border-white/10">
+        <Image
+          src={src}
+          alt={alt}
+          width={1280}
+          height={720}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      </div>
+      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">{caption}</p>
+    </div>
+  );
+}
 
 /* Category strip above hero — product names with status. */
 export function CategoryStrip() {
@@ -160,6 +188,11 @@ export function ProductLine() {
             </Link>
           ))}
         </div>
+        <VisualPanel
+          src="/assets/aegix-wallet-intelligence.jpg"
+          alt="AEGIX Wallet Intelligence interface showing a privacy exposure score, evidence breakdown, and linked entities"
+          caption="Privacy Intelligence · Wallet X-Ray" 
+        />
       </div>
     </section>
   );
@@ -200,6 +233,13 @@ Authorization: Bearer aegix_live_...
             Scoped · Metered · Signed webhooks
           </p>
         </div>
+      </div>
+      <div className="px-4 lg:px-8">
+        <VisualPanel
+          src="/assets/aegix-intelligence-infrastructure.jpg"
+          alt="AEGIX intelligence infrastructure — servers and API layers"
+          caption="Developers · Intelligence Is Infrastructure"
+        />
       </div>
     </section>
   );
@@ -248,6 +288,18 @@ export function NetworkAndRoadmap() {
               <InlineArrowLink href="/roadmap">Explore the roadmap</InlineArrowLink>
             </p>
           </div>
+        </div>
+        <div className="mt-12 grid gap-8 md:grid-cols-2">
+          <VisualPanel
+            src="/assets/aegix-market-structure.jpg"
+            alt="AEGIX market structure concept — aspirational research direction, in development"
+            caption="Future · Market Intelligence (IN DEVELOPMENT)"
+          />
+          <VisualPanel
+            src="/assets/aegix-ecosystem-vision.jpg"
+            alt="AEGIX ecosystem vision — aspirational future direction"
+            caption="Vision · AEGIX Ecosystem"
+          />
         </div>
       </div>
     </section>

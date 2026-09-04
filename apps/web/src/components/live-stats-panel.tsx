@@ -12,10 +12,10 @@ function fmt(n: number | null): string {
 
 const STATS: Array<{ key: keyof PublicStats; label: string }> = [
   { key: "analyses", label: "Analyses" },
-  { key: "walletsAnalyzed", label: "Wallets analyzed" },
+  { key: "walletsAnalyzed", label: "Wallets" },
   { key: "compareCount", label: "Comparisons" },
   { key: "monitors", label: "Monitors" },
-  { key: "populationSize", label: "Observed population" }
+  { key: "populationSize", label: "Population" }
 ];
 
 /** Live aggregate metrics from the backend. Shows "—" when unavailable —
@@ -47,7 +47,7 @@ export default function LiveStatsPanel() {
           {stats ? "Live" : loading ? "Loading" : "Offline"}
         </span>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-white/10 sm:grid-cols-5">
+      <div className="grid grid-cols-2 divide-x divide-y divide-white/10 sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5">
         {STATS.map((s) => (
           <div key={s.key} className="px-4 py-4">
             <p className="mono-label text-muted-2">{s.label}</p>
