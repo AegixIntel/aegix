@@ -3,18 +3,21 @@ import Link from "next/link";
 import { SectionLabel, StatusBadge, InlineArrowLink, CodePreview } from "@/components/ui/primitives";
 import LiveStatsPanel from "@/components/live-stats-panel";
 
-/** Wide visual panel used as a restrained banner inside a section. */
+/** Visual panel used as a restrained banner inside a section.
+ *  `size="md"` constrains the panel width (centered) for smaller images. */
 function VisualPanel({
   src,
   alt,
-  caption
+  caption,
+  size = "full"
 }: {
   src: string;
   alt: string;
   caption: string;
+  size?: "full" | "md";
 }) {
   return (
-    <div className="mt-10">
+    <div className={size === "md" ? "mx-auto mt-10 max-w-2xl" : "mt-10"}>
       <div className="aspect-video overflow-hidden rounded-lg border border-white/10">
         <Image
           src={src}
@@ -25,7 +28,7 @@ function VisualPanel({
           className="h-full w-full object-cover"
         />
       </div>
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">{caption}</p>
+      <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">{caption}</p>
     </div>
   );
 }
@@ -189,6 +192,7 @@ export function ProductLine() {
           ))}
         </div>
         <VisualPanel
+          size="md"
           src="/assets/aegix-wallet-intelligence.jpg"
           alt="AEGIX Wallet Intelligence interface showing a privacy exposure score, evidence breakdown, and linked entities"
           caption="Privacy Intelligence · Wallet X-Ray" 
@@ -236,6 +240,7 @@ Authorization: Bearer aegix_live_...
       </div>
       <div className="px-4 lg:px-8">
         <VisualPanel
+          size="md"
           src="/assets/aegix-intelligence-infrastructure.jpg"
           alt="AEGIX intelligence infrastructure — servers and API layers"
           caption="Developers · Intelligence Is Infrastructure"
