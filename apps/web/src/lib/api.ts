@@ -728,6 +728,31 @@ export async function testWebhook(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Test failed with status ${res.status}`);
 }
 
+// ---- D7: public aggregate stats (landing page, honest numbers) ----
+
+export interface PublicStats {
+  analyses: number | null;
+  readyAnalyses: number | null;
+  cachedAnalyses: number | null;
+  walletsAnalyzed: number | null;
+  compareCount: number | null;
+  monitors: number | null;
+  populationSize: number | null;
+  populationEligible: boolean;
+  generatedAt: string | null;
+}
+
+export async function getPublicStats(): Promise<PublicStats | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/v1/public/stats`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data: PublicStats };
+    return body.data;
+  } catch {
+    return null;
+  }
+}
+
 // ---- D6-I1: notification-email destination (optional, verified) ----
 
 export interface NotificationEmailState {

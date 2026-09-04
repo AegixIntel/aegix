@@ -43,6 +43,18 @@ export const primaryNav: NavGroup[] = [
 export const docsNavLink: NavLinkItem = { label: "Docs", href: "/docs" };
 export const roadmapNavLink: NavLinkItem = { label: "Roadmap", href: "/roadmap" };
 
+/** Left sidebar menu for the public website (Aeron-inspired layout). */
+export const siteMenu: NavLinkItem[] = [
+  { label: "Home", href: "/" },
+  { label: "Products", href: "/privacy" },
+  { label: "Intelligence", href: "/intelligence" },
+  { label: "Methodology", href: "/methodology" },
+  { label: "Docs", href: "/docs" },
+  { label: "Roadmap", href: "/roadmap" },
+  { label: "Security", href: "/security" },
+  { label: "About", href: "/about" }
+];
+
 export type AppNavItem = { label: string; href: string };
 export type AppNavGroup = { label: string; items: AppNavItem[] };
 

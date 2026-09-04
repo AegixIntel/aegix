@@ -476,6 +476,70 @@ export async function buildServer(deps: ApiDeps) {
     }
   });
 
+  // D7: public, read-only aggregate stats for the landing page. Honest
+  // numbers only — count queries + commonality status + a health snapshot.
+  // No auth, no secrets; unavailability degrades to null, never fabricated.
+  app.get("/v1/public/stats", async (req, reply) => {
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? "unknown";
+    // Whitelisted table names only — never interpolate untrusted identifiers.
+    const count = async (table: "analysis_jobs" | "wallets" | "correlation_results" | "monitors"): Promise<number | null> => {
+      try {
+        const [row] =
+          table === "analysis_jobs"
+            ? await sql<Array<{ n: string }>>`select count(*)::text as n from analysis_jobs`
+            : table === "wallets"
+              ? await sql<Array<{ n: string }>>`select count(*)::text as n from wallets`
+              : table === "correlation_results"
+                ? await sql<Array<{ n: string }>>`select count(*)::text as n from correlation_results`
+                : await sql<Array<{ n: string }>>`select count(*)::text as n from monitors`;
+        return Number(row?.n ?? 0);
+      } catch {
+        return null;
+      }
+    };
+    try {
+      const [analyses, readyAnalyses, wallets, correlationResults, monitors] = await Promise.all([
+        count("analysis_jobs"),
+        sql<Array<{ n: string }>>`select count(*)::text as n from analysis_jobs where status = 'READY'`.catch(() => null).then((r) => Number(r?.[0]?.n ?? 0)),
+        count("wallets"),
+        count("correlation_results"),
+        count("monitors")
+      ]);
+      const { commonalityStatus } = await import("@aegix/commonality");
+      let commonality = { eligible: false, populationSize: null as number | null };
+      try {
+        const cs = await commonalityStatus({ sql }, {
+          version: config.COMMONALITY_VERSION,
+          minPopulation: config.COMMONALITY_MIN_POPULATION,
+          maxSnapshotAgeHours: config.COMMONALITY_MAX_SNAPSHOT_AGE_HOURS,
+          enabled: config.ENABLE_POPULATION_COMMONALITY
+        });
+        commonality = { eligible: cs.eligible, populationSize: cs.populationSize };
+      } catch {
+        // commonality diagnostic is best-effort for the landing panel
+      }
+      return reply.send({
+        data: {
+          analyses,
+          readyAnalyses,
+          cachedAnalyses: analyses === null ? null : Math.max(0, (analyses ?? 0) - (readyAnalyses ?? 0)),
+          walletsAnalyzed: wallets,
+          compareCount: correlationResults,
+          monitors,
+          populationSize: commonality.populationSize,
+          populationEligible: commonality.eligible,
+          generatedAt: new Date().toISOString()
+        },
+        meta: { requestId }
+      });
+    } catch {
+      return reply.code(503).send({
+        error: { code: "PUBLIC_STATS_UNAVAILABLE", message: "Public stats unavailable" },
+        meta: { requestId }
+      });
+    }
+  });
+
   app.post<{ Body: { address: string } }>(
     "/v1/analyses",
     {
