@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AegixLogo } from "@/components/aegix-logo";
 import WalletAuthButton from "@/components/wallet-auth-button";
+import { cn } from "@/lib/cn";
 import { primaryNav, docsNavLink, roadmapNavLink, siteMenu } from "@/lib/site";
 
 function SidebarLink({ href, label }: { href: string; label: string }) {
@@ -23,17 +24,47 @@ function SidebarLink({ href, label }: { href: string; label: string }) {
   );
 }
 
+/** Nav link with an animated underline on hover. */
+function NavUnderline({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="group relative text-sm text-muted-foreground transition hover:text-marble">
+      {children}
+      <span
+        className="absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-accent-bright transition-transform duration-200 group-hover:scale-x-100"
+        aria-hidden="true"
+      />
+    </Link>
+  );
+}
+
 export function SidebarShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
   // Docs has its own sidebar navigation; hide the site sidebar to avoid
   // two stacked left columns on /docs.
   const hideSiteSidebar = pathname.startsWith("/docs");
 
+  // Soften the top bar once the page is scrolled (keeps it readable over
+  // content). Uses a passive scroll listener; no per-frame state churn.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col bg-ink-deep">
       {/* Top bar */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-ink-deep/85 backdrop-blur-md">
+      <header
+        className={cn(
+          "sticky top-0 z-50 transition-colors duration-300",
+          scrolled
+            ? "border-b border-white/10 bg-ink-deep/90 backdrop-blur-md"
+            : "border-b border-transparent bg-transparent"
+        )}
+      >
         <nav className="flex h-14 items-center justify-between gap-4 px-4 lg:px-6" aria-label="Primary">
           <div className="flex items-center gap-3">
             <button
@@ -57,14 +88,14 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
             {primaryNav.map((group) => (
               <span key={group.label} className="text-sm text-muted-foreground">{group.label}</span>
             ))}
-            <Link href={docsNavLink.href} className="text-sm text-muted-foreground hover:text-marble">{docsNavLink.label}</Link>
-            <Link href={roadmapNavLink.href} className="text-sm text-muted-foreground hover:text-marble">{roadmapNavLink.label}</Link>
+            <NavUnderline href={docsNavLink.href}>{docsNavLink.label}</NavUnderline>
+            <NavUnderline href={roadmapNavLink.href}>{roadmapNavLink.label}</NavUnderline>
           </div>
 
           <div className="flex items-center gap-2">
             <WalletAuthButton compact />
             <Link href="/app/analyze" className="btn-primary hidden px-4 py-2 sm:inline-flex">
-              Launch App <span className="text-white/70">→</span>
+              Launch App <span className="btn-arrow text-white/70">→</span>
             </Link>
           </div>
         </nav>

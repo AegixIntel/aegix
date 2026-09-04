@@ -22,6 +22,55 @@
     color: theme("colors.marble");
   }
 
+  /* Landing motion — reveals + button micro-interactions.
+     The hidden state is applied inline by <Reveal> only after JS runs and
+     only while waiting for the viewport, so content stays visible under
+     SSR or if JS fails (content stability). */
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: opacity, transform;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* CTA buttons: arrow micro-interaction + press feedback. */
+  .btn-primary,
+  .btn-secondary {
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn-primary:active,
+    .btn-secondary:active {
+      transform: scale(0.985);
+    }
+  }
+  .btn-primary .btn-arrow,
+  .btn-secondary .btn-arrow {
+    display: inline-block;
+    transition: transform 0.18s ease;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn-primary:hover .btn-arrow,
+    .btn-secondary:hover .btn-arrow {
+      transform: translateX(3px);
+    }
+  }
+
+  /* Ambient pulse for the live panel indicator. */
+  @keyframes aegix-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .live-dot {
+    animation: aegix-pulse 2.4s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
@@ -32,6 +81,13 @@
       animation-duration: 0.001ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.001ms !important;
+    }
+    .reveal {
+      opacity: 1;
+      transform: none;
+    }
+    .live-dot {
+      animation: none;
     }
   }
 }

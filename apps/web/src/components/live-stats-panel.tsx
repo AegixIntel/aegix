@@ -43,7 +43,7 @@ export default function LiveStatsPanel() {
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
         <span className="mono-label">AEGIX system · live</span>
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-accent-bright">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent-bright" aria-hidden="true" />
+          <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent-bright" aria-hidden="true" />
           {stats ? "Live" : loading ? "Loading" : "Offline"}
         </span>
       </div>
