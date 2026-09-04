@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SectionLabel, StatusBadge, InlineArrowLink, CodePreview } from "@/components/ui/primitives";
 import LiveStatsPanel from "@/components/live-stats-panel";
 import { Reveal } from "@/components/motion/reveal";
+import { InteractiveSystemMap } from "@/components/marketing/system-map";
 
 /** Visual panel used as a restrained banner inside a section.
  *  `size="md"` constrains the panel width (centered) for smaller images. */
@@ -88,40 +89,9 @@ export function HeroStatement() {
   );
 }
 
-/* System map — AEGIX pipeline with boxed labels. */
+/* System map — interactive AEGIX intelligence pipeline. */
 export function SystemMap() {
-  const stages = [
-    { label: "Public Activity", kind: "surface" },
-    { label: "Normalization", kind: "process" },
-    { label: "Signals", kind: "process" },
-    { label: "Relationships", kind: "process" },
-    { label: "Correlation", kind: "process" },
-    { label: "Confidence", kind: "meter" },
-    { label: "Exposure", kind: "result" }
-  ];
-  return (
-    <section className="border-b border-white/10">
-      <div className="px-4 py-16 md:py-24 lg:px-8">
-        <div className="max-w-2xl">
-          <SectionLabel>AEGIX System Map</SectionLabel>
-          <h2 className="mt-6 font-display text-3xl font-semibold tracking-tight text-marble md:text-5xl">
-            Public activity becomes observable intelligence.
-          </h2>
-        </div>
-        <div className="mt-12 grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-7">
-          {stages.map((s, i) => (
-            <Reveal key={s.label} as="div" delay={i * 70} className="bg-ink-deep p-4">
-              <span className="mono-label text-muted-2">{s.kind}</span>
-              <p className="mt-2 font-mono text-sm text-marble/90">{s.label}</p>
-            </Reveal>
-          ))}
-        </div>
-        <Reveal delay={stages.length * 70} as="p" className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">
-          agent → activity → normalize → signal → correlate → confidence → exposure
-        </Reveal>
-      </div>
-    </section>
-  );
+  return <InteractiveSystemMap />;
 }
 
 /* How it works — numbered. */
