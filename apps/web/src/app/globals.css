@@ -139,15 +139,17 @@
     @apply text-[15px] leading-relaxed text-muted-foreground;
   }
 
-  /* Buttons — restrained, thin-border primary accent. */
+  /* Buttons — technical, restrained. Primary is dark with a thin accent
+     border that inverts to an accent fill on hover (not a solid AI-style
+     block). Secondary is a hairline border that brightens on hover. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-accent/50 bg-transparent px-5 py-2.5 text-sm font-semibold text-accent-bright transition-colors hover:bg-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright disabled:opacity-40;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-2.5 text-sm font-medium text-marble transition hover:border-white/30 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-2.5 text-sm font-medium text-marble transition-colors hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium text-muted-foreground transition hover:text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
   }
 
   /* Flat surfaces + thin borders — no heavy cards. */

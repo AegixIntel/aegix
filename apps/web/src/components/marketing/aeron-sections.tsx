@@ -74,7 +74,7 @@ export function HeroStatement() {
           <Reveal delay={220} as="p" className="mt-2 text-sm text-muted-2">Starting with privacy intelligence on Solana.</Reveal>
           <Reveal delay={280} className="mt-10 flex flex-col gap-3 sm:flex-row">
             <Link href="/app/analyze" className="btn-primary">
-              Launch AEGIX <span className="btn-arrow text-white/70">→</span>
+              Launch AEGIX <span className="btn-arrow text-inherit">→</span>
             </Link>
             <Link href="/methodology" className="btn-secondary">
               Explore the intelligence layer
@@ -295,7 +295,7 @@ export function FinalCta() {
       <Reveal as="h2" className="statement-lg">See what others don&apos;t.</Reveal>
       <Reveal delay={100} className="mx-auto mt-8 max-w-md text-lg text-muted-foreground">Start with your wallet.</Reveal>
       <Reveal delay={180} className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-        <Link href="/app/analyze" className="btn-primary">Launch AEGIX <span className="btn-arrow text-white/70">→</span></Link>
+        <Link href="/app/analyze" className="btn-primary">Launch AEGIX <span className="btn-arrow text-inherit">→</span></Link>
         <Link href="/docs" className="btn-secondary">Read the docs</Link>
       </Reveal>
     </section>

@@ -95,7 +95,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <WalletAuthButton compact />
             <Link href="/app/analyze" className="btn-primary hidden px-4 py-2 sm:inline-flex">
-              Launch App <span className="btn-arrow text-white/70">→</span>
+              Launch App <span className="btn-arrow text-inherit">→</span>
             </Link>
           </div>
         </nav>
