@@ -8,9 +8,5 @@ export const metadata: Metadata = {
 
 export default async function CompareRoute({ searchParams }: { searchParams: Promise<{ a?: string; b?: string }> }) {
   const { a, b } = await searchParams;
-  return (
-    <div className="container-page py-10">
-      <ComparePage initialA={a ?? ""} initialB={b ?? ""} />
-    </div>
-  );
+  return <ComparePage initialA={a ?? ""} initialB={b ?? ""} />;
 }

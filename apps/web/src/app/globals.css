@@ -28,26 +28,35 @@
      SSR or if JS fails (content stability). */
   @media (prefers-reduced-motion: no-preference) {
     .reveal {
-      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      will-change: opacity, transform;
+      transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.65s cubic-bezier(0.16, 1, 0.3, 1), filter 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: opacity, transform, filter;
     }
   }
   @media (prefers-reduced-motion: no-preference) {
     .reveal.is-visible {
       opacity: 1;
       transform: translateY(0);
+      filter: blur(0);
     }
   }
 
-  /* CTA buttons: arrow micro-interaction + press feedback. */
+  /* CTA buttons: Aeron-style motion with restrained press feedback. */
   .btn-primary,
-  .btn-secondary {
-    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  .btn-secondary,
+  .btn-ghost {
+    transition: background-color 0.22s ease, background-position 0.55s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease, box-shadow 0.22s ease, color 0.22s ease, filter 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
   }
   @media (prefers-reduced-motion: no-preference) {
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .btn-ghost:hover {
+      transform: translateY(-2px);
+    }
     .btn-primary:active,
-    .btn-secondary:active {
-      transform: scale(0.985);
+    .btn-secondary:active,
+    .btn-ghost:active {
+      transform: translateY(0) scale(0.975);
     }
   }
   .btn-primary .btn-arrow,
@@ -69,6 +78,38 @@
   }
   .live-dot {
     animation: aegix-pulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes aegix-ambient-drift {
+    0%, 100% { transform: translate3d(-3%, -2%, 0) scale(1); opacity: 0.42; }
+    50% { transform: translate3d(4%, 3%, 0) scale(1.08); opacity: 0.7; }
+  }
+  @keyframes aegix-signal-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(139, 124, 255, 0)); opacity: 0.72; }
+    50% { filter: drop-shadow(0 0 6px rgba(139, 124, 255, 0.9)); opacity: 1; }
+  }
+  @keyframes aegix-header-in {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes aegix-command-scan {
+    0% { transform: translateX(-110%); opacity: 0; }
+    18% { opacity: 0.9; }
+    72% { opacity: 0.45; }
+    100% { transform: translateX(110%); opacity: 0; }
+  }
+
+  .site-shell > header {
+    animation: aegix-header-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .hero-ambient::before {
+    animation: aegix-ambient-drift 12s ease-in-out infinite;
+  }
+  .rail-signal {
+    animation: aegix-signal-glow 2.2s ease-in-out infinite;
+  }
+  .analysis-command-panel::before {
+    animation: aegix-command-scan 5.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
   }
 
   /* System map detail-panel handoff: new stage content enters with a small
@@ -98,6 +139,19 @@
     }
     .live-dot {
       animation: none;
+    }
+    .site-shell > header,
+    .hero-ambient::before,
+    .rail-signal {
+      animation: none;
+    }
+    .analysis-command-panel::before {
+      animation: none;
+    }
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .btn-ghost:hover {
+      transform: none;
     }
   }
 }
@@ -139,28 +193,192 @@
     @apply text-[15px] leading-relaxed text-muted-foreground;
   }
 
-  /* Buttons — technical, restrained. Primary is dark with a thin accent
-     border that inverts to an accent fill on hover (not a solid AI-style
-     block). Secondary is a hairline border that brightens on hover. */
+  /* Buttons follow Aeron's technical CTA language: square geometry, a solid
+     signal-colour primary with a clipped lower-right corner, and a precise
+     hairline outline for secondary actions. Compact text utilities keep the
+     denser controls used throughout the authenticated app at their intended
+     height. */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-accent/50 bg-transparent px-5 py-2.5 text-sm font-semibold text-accent-bright transition-colors hover:bg-accent hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright disabled:opacity-40;
+    @apply inline-flex h-12 items-center justify-center gap-2 border-0 px-[26px] py-0 font-display text-base font-semibold leading-none tracking-[0.02em] text-black hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40;
+    background-color: #8b7cff;
+    background-image: linear-gradient(110deg, transparent 0%, transparent 34%, rgba(255, 255, 255, 0.38) 48%, transparent 62%, transparent 100%);
+    background-position: 120% 0;
+    background-size: 250% 100%;
+    outline-color: #8b7cff;
+    border-radius: 0;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  }
+  .btn-primary:hover {
+    background-position: -30% 0;
+    box-shadow: 0 12px 30px rgba(108, 92, 231, 0.28);
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-2.5 text-sm font-medium text-marble transition-colors hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    @apply inline-flex h-12 items-center justify-center gap-2 border px-[26px] py-0 font-display text-base font-medium leading-none tracking-[0.02em] text-black hover:border-black hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2;
+    background: #ffffff;
+    border-color: #d0d5db;
+    outline-color: #8b7cff;
+    border-radius: 0;
+  }
+  .btn-secondary:hover {
+    box-shadow: 0 10px 26px rgba(255, 255, 255, 0.12);
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    @apply inline-flex h-12 items-center justify-center gap-2 px-[26px] py-0 font-display text-base font-medium leading-none tracking-[0.02em] text-muted-foreground hover:text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    border-radius: 0;
+  }
+  .btn-ghost:hover {
+    background-color: rgba(139, 124, 255, 0.08);
+  }
+
+  .btn-primary.text-sm,
+  .btn-secondary.text-sm,
+  .btn-ghost.text-sm {
+    height: 2.5rem;
+  }
+  .btn-primary.text-xs,
+  .btn-secondary.text-xs,
+  .btn-ghost.text-xs {
+    height: auto;
+    min-height: 2rem;
   }
 
   /* Flat surfaces + thin borders — no heavy cards. */
   .surface {
     @apply border border-white/10 bg-white/[0.02];
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* Existing app-presentation card, restyled to a flat surface so the data
      UI keeps working without a full rewrite. */
   .card-surface {
     @apply rounded-md border border-white/10 bg-white/[0.02];
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .surface:hover,
+  .card-surface:hover,
+  .data-panel:hover {
+    border-color: rgba(139, 124, 255, 0.3);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28), 0 0 32px rgba(108, 92, 231, 0.07);
+  }
+
+  .data-panel {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .data-panel:hover {
+      transform: translateY(-3px);
+    }
+  }
+
+  .hero-ambient::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 28% 38%, rgba(139, 124, 255, 0.16), transparent 24%),
+      radial-gradient(circle at 76% 32%, rgba(108, 92, 231, 0.1), transparent 22%);
+    filter: blur(18px);
+  }
+  .hero-ambient::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.18;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: linear-gradient(to bottom, black, transparent 90%);
+  }
+
+  .analysis-workspace {
+    background:
+      radial-gradient(circle at 18% 16%, rgba(139, 124, 255, 0.1), transparent 28%),
+      radial-gradient(circle at 88% 54%, rgba(108, 92, 231, 0.06), transparent 25%),
+      #050505;
+  }
+  .premium-workspace {
+    position: relative;
+    background:
+      radial-gradient(circle at 16% 12%, rgba(139, 124, 255, 0.085), transparent 26%),
+      radial-gradient(circle at 88% 42%, rgba(108, 92, 231, 0.05), transparent 24%),
+      #050505;
+  }
+  .premium-workspace::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.16;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: linear-gradient(to bottom, black, transparent 72%);
+  }
+  .premium-workspace > * {
+    position: relative;
+    z-index: 1;
+  }
+  .premium-results > section,
+  .premium-results > div,
+  .premium-results details {
+    border-radius: 0;
+  }
+  .premium-results > section,
+  .premium-results details,
+  .premium-results .card-surface {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.018);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .premium-results > section:hover,
+  .premium-results details:hover,
+  .premium-results .card-surface:hover {
+    border-color: rgba(139, 124, 255, 0.28);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24), 0 0 30px rgba(108, 92, 231, 0.05);
+  }
+  .analysis-workspace::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.22;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(circle at 35% 30%, black, transparent 68%);
+  }
+  .analysis-command-panel {
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.38), 0 0 50px rgba(108, 92, 231, 0.05);
+  }
+  .analysis-command-panel::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    height: 1px;
+    width: 100%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, #8b7cff, transparent);
+  }
+  .analysis-input {
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
+  }
+  .analysis-input:focus-within {
+    border-color: rgba(139, 124, 255, 0.72);
+    background-color: rgba(10, 10, 10, 0.96);
+    box-shadow: 0 0 0 1px rgba(139, 124, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.28);
+  }
+  .luxury-panel {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
   }
   .hairline {
     @apply border-t border-white/10;

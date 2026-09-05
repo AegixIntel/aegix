@@ -33,9 +33,9 @@ export function PublicNavbar() {
         </div>
 
         <div className="hidden flex-none items-center gap-3 md:flex">
-          <WalletAuthButton compact />
-          <Link href="/app/analyze" className="btn-primary whitespace-nowrap px-4 py-2">
-            Launch App <span className="text-white/70">→</span>
+          <WalletAuthButton compact buttonClassName="w-[9.5rem]" />
+          <Link href="/app/analyze" className="btn-primary w-[9.5rem] whitespace-nowrap px-4 py-2 text-sm">
+            Launch App <span className="text-inherit opacity-60">→</span>
           </Link>
         </div>
 

@@ -42,8 +42,13 @@ export default function MonitorsPage() {
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setMonitors([]);
+      setError(null);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, user]);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -73,49 +78,64 @@ export default function MonitorsPage() {
   }
 
   return (
-    <div className="container-page py-10">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-marble">Privacy Monitors</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Continuously re-analyze wallets and get alerted to meaningful exposure changes.</p>
+    <div className="premium-workspace min-h-screen px-5 py-8 md:px-10 md:py-12 lg:px-14 lg:py-16">
+      <div className="mx-auto max-w-[86rem]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">
+        <span>Intelligence / <span className="text-accent-bright">Surveillance console</span></span>
+        <span className="flex items-center gap-2"><span className="live-dot h-1.5 w-1.5 bg-accent-bright" />Exposure watch</span>
+      </div>
+      <header className="mt-12 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="max-w-4xl">
+          <p className="section-label-accent">Privacy monitors</p>
+          <h1 className="mt-5 font-display text-5xl font-medium leading-[0.98] tracking-[-0.045em] text-marble md:text-7xl">Know when the<br />signal changes.</h1>
+          <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">Continuously re-analyze wallets and get alerted to meaningful exposure changes.</p>
+        </div>
+        <div className="grid grid-cols-2 border border-white/10 bg-black/30 lg:w-80">
+          <div className="border-r border-white/10 p-4"><p className="mono-label">Active</p><p className="mt-2 font-mono text-2xl text-marble">{monitors?.filter((m) => m.status === "ACTIVE").length ?? "—"}</p></div>
+          <div className="p-4"><p className="mono-label">Total</p><p className="mt-2 font-mono text-2xl text-marble">{monitors?.length ?? "—"}</p></div>
         </div>
       </header>
 
       {!user && (
-        <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
+        <div className="mt-8 border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300">
           Connect a Solana wallet to create monitors. Signing in is free — it does not create a transaction and does not cost SOL.
         </div>
       )}
 
-      {error && <p className="mt-6 text-sm text-red-400">{error}</p>}
+      {error && (
+        <div role="alert" className="mt-5 border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.16em] text-red-400">Monitor service</span>
+          {error}
+        </div>
+      )}
 
       {/* Create monitor */}
-      <section className="mt-6">
-        <form onSubmit={(e) => void create(e)} className="card-surface p-5">
-          <h2 className="text-sm font-semibold text-marble">Create Monitor</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-            <label className="block text-xs text-muted-foreground">
+      <section className="mt-10">
+        <form onSubmit={(e) => void create(e)} className="analysis-command-panel border border-white/10 bg-black/40 p-5 md:p-7">
+          <div className="flex items-center justify-between"><h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">Create monitor</h2><span className="font-mono text-[9px] uppercase tracking-wider text-accent-bright">Automated watch</span></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+            <label className="block font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2">
               Solana wallet address
               <input
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Enter a Solana address"
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-marble outline-none focus:border-accent"
+                className="analysis-input mt-3 w-full border border-white/15 bg-ink-deep/80 px-4 py-3.5 font-mono text-sm normal-case tracking-normal text-marble outline-none placeholder:text-muted-2"
               />
             </label>
-            <label className="block text-xs text-muted-foreground">
+            <label className="block font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2">
               Schedule
               <select
                 value={schedule}
                 onChange={(e) => setSchedule(e.target.value)}
-                className="mt-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+                className="analysis-input mt-3 h-[50px] border border-white/15 bg-ink-deep/80 px-4 text-sm normal-case tracking-normal text-marble outline-none"
               >
                 <option value="DAILY">Daily</option>
                 <option value="EVERY_12_HOURS">Every 12h</option>
                 <option value="EVERY_6_HOURS">Every 6h</option>
               </select>
             </label>
-            <button type="submit" disabled={busy || address.trim().length < 32} className="btn-primary px-5 py-2 text-xs">
+            <button type="submit" disabled={!user || busy || address.trim().length < 32} className="btn-primary h-[50px] min-w-44">
               {busy ? "Creating…" : "Create monitor"}
             </button>
           </div>
@@ -133,9 +153,9 @@ export default function MonitorsPage() {
             <Link href="/app/analyze" className="btn-primary mt-2 px-5 py-2.5 text-xs">Analyze a wallet first</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="premium-results grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {monitors?.map((m) => (
-              <div key={m.id} className="card-surface flex flex-col gap-3 p-5">
+              <div key={m.id} className="luxury-panel flex flex-col gap-4 border border-white/10 bg-black/30 p-5">
                 <div className="flex items-start justify-between gap-2">
                   <Link href={`/app/monitor/${m.id}`} className="truncate font-mono text-sm text-marble hover:text-accent">
                     {m.label ? `${m.label} · ` : ""}
@@ -158,6 +178,7 @@ export default function MonitorsPage() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

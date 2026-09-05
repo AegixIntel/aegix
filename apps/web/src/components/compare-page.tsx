@@ -189,38 +189,45 @@ export default function ComparePage({ initialA, initialB }: { initialA?: string;
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-bold">Compare Wallets</h1>
-      <p className="mt-1 text-sm text-slate-400">
+    <main className="premium-workspace mx-auto min-h-screen max-w-[86rem] px-5 py-8 md:px-10 md:py-12 lg:px-14 lg:py-16">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">
+        <span>Intelligence / <span className="text-accent-bright">Correlation workspace</span></span>
+        <span className="flex items-center gap-2"><span className="live-dot h-1.5 w-1.5 bg-accent-bright" />Multi-evidence engine</span>
+      </div>
+      <p className="section-label-accent mt-12">Compare wallets</p>
+      <h1 className="mt-5 max-w-4xl font-display text-5xl font-medium leading-[0.98] tracking-[-0.045em] text-marble md:text-7xl">Two addresses.<br />One evidence model.</h1>
+      <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
         Compare two wallets&apos; observable on-chain behavior. Correlation indicates linkability — it never establishes common ownership.
       </p>
 
-      <form onSubmit={submit} className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-end">
-        <label className="block">
-          <span className="text-xs text-slate-500">Wallet A</span>
+      <form onSubmit={submit} className="analysis-command-panel mt-10 border border-white/10 bg-black/40 p-5 md:p-7">
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+        <label className="block min-w-0">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-2">Wallet A</span>
           <input
             value={walletA}
             onChange={(e) => setWalletA(e.target.value)}
             placeholder="Solana address"
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-accent"
+            className="analysis-input mt-3 w-full border border-white/15 bg-ink-deep/80 px-4 py-4 font-mono text-sm text-marble outline-none placeholder:text-muted-2"
           />
         </label>
-        <span className="hidden text-center text-slate-600 sm:pb-2">vs</span>
-        <label className="block">
-          <span className="text-xs text-slate-500">Wallet B</span>
+        <span className="hidden h-10 w-10 items-center justify-center border border-accent/40 font-mono text-[10px] uppercase text-accent-bright sm:flex">vs</span>
+        <label className="block min-w-0">
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-2">Wallet B</span>
           <input
             value={walletB}
             onChange={(e) => setWalletB(e.target.value)}
             placeholder="Solana address"
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-accent"
+            className="analysis-input mt-3 w-full border border-white/15 bg-ink-deep/80 px-4 py-4 font-mono text-sm text-marble outline-none placeholder:text-muted-2"
           />
         </label>
+        </div>
         <button
           type="submit"
           disabled={loading || !walletA.trim() || !walletB.trim()}
-          className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40"
+          className="btn-primary mt-4 h-12 w-full"
         >
-          {loading ? "Comparing…" : "Compare"}
+          {loading ? "Comparing evidence…" : <>Run comparison <span className="btn-arrow">→</span></>}
         </button>
       </form>
 
@@ -405,7 +412,7 @@ function CompareResultView({ result, onRetry }: { result: CompareResult; onRetry
     .sort((a, b) => b.strength - a.strength);
 
   return (
-    <div className="mt-8 space-y-6">
+    <div className="premium-results mt-10 space-y-6">
       {result.cached && <p className="text-xs text-slate-500">Cached result — no new computation was performed.</p>}
       <SaveComparisonButton result={result} />
 

@@ -58,8 +58,8 @@ export function CategoryStrip() {
 /* Hero — statement left, live stats mini-panel right. Staggered reveal. */
 export function HeroStatement() {
   return (
-    <section className="border-b border-white/10">
-      <div className="grid gap-10 px-4 py-16 md:py-24 lg:grid-cols-[1.3fr_1fr] lg:px-8">
+    <section className="hero-ambient relative overflow-hidden border-b border-white/10">
+      <div className="relative z-10 grid gap-10 px-4 py-16 md:py-24 lg:grid-cols-[1.3fr_1fr] lg:px-8">
         <div>
           <Reveal as="p" className="section-label-accent">Financial &amp; On-Chain Intelligence</Reveal>
           <Reveal as="h1" delay={80} className="mt-6 statement-lg">

@@ -55,6 +55,16 @@ export const siteMenu: NavLinkItem[] = [
   { label: "About", href: "/about" }
 ];
 
+/** Product stops shown in the persistent desktop rail. */
+export const siteRail: NavLinkItem[] = [
+  { label: "Wallet X-Ray", href: "/app/analyze", status: "LIVE" },
+  { label: "Attack", href: "/app/attack", status: "LIVE" },
+  { label: "Compare", href: "/app/compare", status: "LIVE" },
+  { label: "Monitor", href: "/app/monitors", status: "LIVE" },
+  { label: "Developers", href: "/developers", status: "LIVE" },
+  { label: "Market Intel", href: "/markets", status: "SOON" }
+];
+
 export type AppNavItem = { label: string; href: string };
 export type AppNavGroup = { label: string; items: AppNavItem[] };
 

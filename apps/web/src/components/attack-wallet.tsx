@@ -144,29 +144,41 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
   }, [initialAddress, load]);
 
   return (
-    <div className="container-page py-10">
-      <div className="max-w-2xl">
+    <div className="premium-workspace min-h-screen px-5 py-8 md:px-10 md:py-12 lg:px-14 lg:py-16">
+      <div className="mx-auto max-w-[86rem]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">
+        <span>Intelligence / <span className="text-accent-bright">Attack laboratory</span></span>
+        <span className="flex items-center gap-2"><span className="live-dot h-1.5 w-1.5 bg-accent-bright" />Path engine · live</span>
+      </div>
+
+      <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="max-w-4xl">
         <p className="section-label-accent">Attack My Wallet</p>
-        <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-marble md:text-4xl">
-          Follow observable paths through your activity.
+        <h1 className="mt-5 font-display text-5xl font-medium leading-[0.98] tracking-[-0.045em] text-marble md:text-7xl">
+          Trace what an observer<br className="hidden sm:block" /> could follow.
         </h1>
-        <p className="mt-3 text-muted-foreground">
+        <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
           Simulated paths an observer could follow through public on-chain data. Dashed = inferred, solid =
           observed. This is not a real-world identification claim.
         </p>
+        </div>
+        <div className="grid grid-cols-2 border border-white/10 bg-black/30 text-left lg:w-80">
+          <div className="border-r border-white/10 p-4"><p className="mono-label">Scope</p><p className="mt-2 text-sm font-semibold text-marble">Bounded graph</p></div>
+          <div className="p-4"><p className="mono-label">Claims</p><p className="mt-2 text-sm font-semibold text-marble">Evidence only</p></div>
+        </div>
       </div>
 
-      <form onSubmit={(e) => void submit(e)} className="mt-8 flex flex-col gap-3 sm:flex-row">
-        <input
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Solana wallet address"
-          className="flex-1 rounded-md border border-white/10 bg-white/[0.02] px-4 py-2.5 font-mono text-sm text-marble outline-none focus:border-accent"
-          spellCheck={false}
-        />
-        <button type="submit" disabled={loading || address.trim().length < 32} className="btn-primary whitespace-nowrap">
-          {loading ? "Analyzing…" : "Analyze"}
-        </button>
+      <form onSubmit={(e) => void submit(e)} className="analysis-command-panel mt-10 overflow-hidden border border-white/10 bg-black/40">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3"><span className="mono-label">Path analysis request</span><span className="font-mono text-[9px] uppercase tracking-wider text-accent-bright">Read only</span></div>
+        <div className="flex flex-col p-5 sm:flex-row sm:p-7">
+          <div className="analysis-input flex min-w-0 flex-1 items-center border border-white/15 bg-ink-deep/80">
+            <span className="pl-4 font-mono text-accent-bright">›</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter a Solana wallet address" className="min-w-0 flex-1 bg-transparent px-3 py-4 font-mono text-sm text-marble outline-none placeholder:text-muted-2" spellCheck={false} />
+          </div>
+          <button type="submit" disabled={loading || address.trim().length < 32} className="btn-primary h-14 min-w-48 whitespace-nowrap">
+            {loading ? "Tracing paths…" : <>Trace exposure <span className="btn-arrow">→</span></>}
+          </button>
+        </div>
       </form>
 
       {trackingId && (
@@ -192,7 +204,7 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
       ) : null}
 
       {data && !loading && (
-        <div className="mt-12">
+        <div className="premium-results mt-12">
           {data.attackPaths.length > 0 ? (
             <AttackPathList paths={data.attackPaths} />
           ) : (
@@ -216,6 +228,7 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

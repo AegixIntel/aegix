@@ -25,7 +25,13 @@ function shortWallet(wallet: string): string {
   return wallet.length > 12 ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : wallet;
 }
 
-export default function WalletAuthButton({ compact = false }: { compact?: boolean }) {
+export default function WalletAuthButton({
+  compact = false,
+  buttonClassName
+}: {
+  compact?: boolean;
+  buttonClassName?: string;
+}) {
   const { select, wallets, connected, publicKey, connecting, disconnect } = useWallet();
   const auth = useAegixAuth();
   const [open, setOpen] = useState(false);
@@ -62,7 +68,7 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
         </span>
         <button
           onClick={() => void auth.signOut()}
-          className="btn-secondary px-3 py-1.5 text-xs"
+          className={cn("btn-secondary px-3 py-1.5 text-xs", buttonClassName)}
         >
           Sign out
         </button>
@@ -77,7 +83,7 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
         <button
           onClick={() => void auth.signIn()}
           disabled={auth.busy}
-          className="btn-primary whitespace-nowrap px-4 py-2 text-sm"
+          className={cn("btn-primary whitespace-nowrap px-4 py-2 text-sm", buttonClassName)}
         >
           {auth.busy ? "Signing…" : "Sign to Login"}
         </button>
@@ -102,7 +108,7 @@ export default function WalletAuthButton({ compact = false }: { compact?: boolea
       <button
         onClick={handleConnect}
         disabled={connecting}
-        className="btn-primary whitespace-nowrap px-4 py-2 text-sm"
+        className={cn("btn-primary whitespace-nowrap px-4 py-2 text-sm", buttonClassName)}
       >
         {connecting ? "Connecting…" : "Connect Wallet"}
       </button>

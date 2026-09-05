@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
  *
  * Supports a `delay` (ms) so parent sections can stagger children.
  */
-const TAGS = ["div", "section", "li", "article", "span", "p", "h1", "h2", "h3", "h4"] as const;
+const TAGS = ["div", "section", "aside", "li", "article", "span", "p", "h1", "h2", "h3", "h4"] as const;
 type RevealTag = (typeof TAGS)[number];
 
 export function Reveal({
@@ -67,7 +67,8 @@ export function Reveal({
   // readable even if JS fails.
   const hiddenStyle: React.CSSProperties = {
     opacity: visible === false ? 0 : undefined,
-    transform: visible === false ? "translateY(16px)" : undefined,
+    transform: visible === false ? "translateY(22px)" : undefined,
+    filter: visible === false ? "blur(6px)" : undefined,
     transitionDelay: delay ? `${delay}ms` : undefined
   };
 
