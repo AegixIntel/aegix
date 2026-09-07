@@ -1,69 +1,111 @@
+# Local development stack. Production uses docker-compose.production.yml.
 services:
   redis:
     image: redis:7-alpine
-    container_name: aegix-redis
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
 
   postgres:
     image: postgres:16-alpine
-    container_name: aegix-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: aegix
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aegix"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/migrate.Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/aegix
+      NODE_ENV: development
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
 
   api:
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile
-    container_name: aegix-api
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/aegix
       REDIS_URL: redis://redis:6379
       RPC_URL: ${RPC_URL:-https://api.mainnet-beta.solana.com}
       PORT: 3001
-      NODE_ENV: production
-    ports:
-      - "3001:3001"
+      NODE_ENV: development
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+      AUTH_DOMAIN: http://localhost:3000
+      AUTH_APP_URI: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000
+    ports: ["127.0.0.1:3001:3001"]
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
   worker:
     build:
       context: .
       dockerfile: infra/docker/worker.Dockerfile
-    container_name: aegix-worker
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/aegix
       REDIS_URL: redis://redis:6379
       RPC_URL: ${RPC_URL:-https://api.mainnet-beta.solana.com}
-      NODE_ENV: production
+      NODE_ENV: development
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        API_INTERNAL_URL: http://api:3001
+    environment:
+      NODE_ENV: production
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
 
 volumes:
   redis-data:

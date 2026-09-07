@@ -18,7 +18,7 @@
  *            symmetry (A,B) == (B,A); self compare → DUPLICATE_WALLET.
  *   Flow 5   save comparison (authenticated) — create/list/update/detail
  *            with stale flag.
- *   Flow 6   monitor + notification + notification-email destination.
+ *   Flow 6   monitor + in-app notification.
  *   Flow 7   developer API — create/list/status/rotate/revoke.
  *   Flow 8   webhook management — create/list/test/rotate/disable/enable/
  *            delete + consumer signature verification + SSRF policy.
@@ -47,20 +47,20 @@ import { verifyWebhookRequest, resolveWebhookDestination, SsrfBlockedError } fro
 import { signWebhookPayload } from "@aegix/webhook-delivery";
 import { buildServer } from "../apps/api/src/server.js";
 import { canonicalComparePair, runComparison } from "../apps/api/src/compare.js";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
+import type { BlockchainProvider } from "@aegix/blockchain";
 
 // ---- Environment setup (must be set BEFORE config is loaded) ----
-// The test process runs with NODE_ENV=production in this environment, which
-// triggers loadConfig()'s production guard (rejects the localhost DATABASE_URL
-// and the dev webhook key). Force test mode so the local harness can run.
-process.env.NODE_ENV = process.env.NODE_ENV === "production" ? "test" : process.env.NODE_ENV;
+const TEST_DB_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+requireSafeTestDatabaseReset(process.env, { databaseUrl: TEST_DB_URL });
+
 if (!process.env.WEBHOOK_ENCRYPTION_KEY) {
   process.env.WEBHOOK_ENCRYPTION_KEY = "e2e-d7-public-product-webhook-encryption-key-0123456789";
 }
 process.env.WEBHOOK_DEV_ALLOW_PRIVATE = process.env.WEBHOOK_DEV_ALLOW_PRIVATE ?? "true";
 process.env.WEBHOOK_ALLOWED_PORTS = process.env.WEBHOOK_ALLOWED_PORTS ?? "80,443,18765,18766";
-process.env.EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "true";
-process.env.EMAIL_PROVIDER = process.env.EMAIL_PROVIDER ?? "console";
-process.env.ENABLE_EMAIL_NOTIFICATIONS = process.env.ENABLE_EMAIL_NOTIFICATIONS ?? "true";
+process.env.EMAIL_ENABLED = "false";
+process.env.ENABLE_EMAIL_NOTIFICATIONS = "false";
 // Critical: the production target is wallet-only auth.
 process.env.ENABLE_LEGACY_AUTH = "false";
 process.env.AUTH_DOMAIN = process.env.AUTH_DOMAIN ?? "http://localhost:3000";
@@ -72,7 +72,7 @@ process.env.ENABLE_DEVELOPER_API = process.env.ENABLE_DEVELOPER_API ?? "true";
 process.env.ENABLE_MONITORING = process.env.ENABLE_MONITORING ?? "true";
 process.env.ENABLE_WEBHOOK_DELIVERY = process.env.ENABLE_WEBHOOK_DELIVERY ?? "true";
 process.env.ENABLE_POPULATION_COMMONALITY = process.env.ENABLE_POPULATION_COMMONALITY ?? "true";
-process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+process.env.DATABASE_URL = TEST_DB_URL;
 process.env.REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 
 const config = loadConfig();
@@ -104,6 +104,23 @@ const WALLET_B = "4AL8ZUMB4LBDSeKrkbsjGTSmmt7ydWna3ZyHoSGhkUVF";
 const WALLET_B_PRIV = Uint8Array.from("e94189d50c0cd8dad2c116d166eae281e2226afcd7ce610302f427d5b060585d".match(/.{2}/g)!.map((b) => parseInt(b, 16)));
 // A program/mint-like address used to prove non-eligible accounts are rejected.
 const NON_ELIGIBLE = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+const fixtureProvider: BlockchainProvider = {
+  chain: "solana",
+  name: "recorded-e2e-fixture",
+  validateAddress: () => true,
+  async getAccountInfo(address) {
+    if (address === NON_ELIGIBLE) {
+      return { owner: "BPFLoader2111111111111111111111111111111111", executable: true, lamports: 1, dataLength: 1, data: "" };
+    }
+    return { owner: "11111111111111111111111111111111", executable: false, lamports: 1, dataLength: 0, data: "" };
+  },
+  async getSignatures() { return []; },
+  async getTransaction() { return null; },
+  async getTokenAccounts() { return []; },
+  async getBalance() { return 0; },
+  async getLatestBlockHeight() { return 1; }
+};
 
 async function signMessage(priv: Uint8Array, message: string): Promise<string> {
   const sig = ed25519.sign(new TextEncoder().encode(message), priv);
@@ -247,7 +264,7 @@ async function main(): Promise<void> {
   console.log("resetting database to clean state...");
   await sql.unsafe("drop schema public cascade; create schema public;");
   await sql.end();
-  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
   sql = createDb(config.DATABASE_URL);
   const db = sql;
 
@@ -267,7 +284,7 @@ async function main(): Promise<void> {
   const pairId = canonicalComparePair(WALLET_A, WALLET_B);
   ok("setup: comparison computed + persisted", corr.correlation.correlationScore >= 0, `score ${corr.correlation.correlationScore}`);
 
-  const app = await buildServer({ config });
+  const app = await buildServer({ config, provider: fixtureProvider });
 
   try {
     // ============ FLOW 1: new-user wallet auth ============
@@ -384,7 +401,7 @@ async function main(): Promise<void> {
     const saveWallet = await app.inject({ method: "POST", url: "/v1/me/saved", headers: { authorization: `Bearer ${loginA.token}` }, payload: { address: WALLET_A, label: "my wallet" } });
     ok("FLOW5: wallet saved (prerequisite for monitor)", saveWallet.statusCode === 201);
 
-    // ============ FLOW 6: monitor + notification + notification email ============
+    // ============ FLOW 6: monitor + in-app notification ============
     const monitor = await app.inject({ method: "POST", url: "/v1/me/monitors", headers: { authorization: `Bearer ${loginA.token}` }, payload: { address: WALLET_A } });
     const monitorBody = monitor.json();
     ok("FLOW6: create monitor returns monitor + rules", monitor.statusCode === 201 && monitorBody?.monitor?.id !== undefined && monitorBody?.rules?.id !== undefined, `${monitor.statusCode}`);
@@ -418,21 +435,6 @@ async function main(): Promise<void> {
     ok("FLOW6: in-app notification seeded", notif?.id !== undefined);
     const readNotif = await app.inject({ method: "POST", url: `/v1/me/notifications/${notif!.id}/read`, headers: { authorization: `Bearer ${loginA.token}` } });
     ok("FLOW6: mark notification read", readNotif.statusCode === 200 && readNotif.json()?.read === true, `${readNotif.statusCode}`);
-
-    // Notification-email destination flow. The console provider only prints
-    // the code to logs, so we deliberately do NOT depend on reading it back:
-    // we assert wrong-code rejection and the bounded max-attempt limit, which
-    // are the real security guarantees.
-    const setEmail = await app.inject({ method: "PUT", url: "/v1/me/email", headers: { authorization: `Bearer ${loginA.token}` }, payload: { email: "alerts@example.com" } });
-    ok("FLOW6: set notification email (unverified)", setEmail.statusCode === 200 && setEmail.json()?.data?.verified === false, `${setEmail.statusCode} ${JSON.stringify(setEmail.json()?.data)}`);
-    const wrongCode = await app.inject({ method: "POST", url: "/v1/me/email/verify", headers: { authorization: `Bearer ${loginA.token}` }, payload: { code: "000000" } });
-    ok("FLOW6: wrong verification code rejected", wrongCode.statusCode === 400 && wrongCode.json()?.error?.code === "INVALID_CODE", `${wrongCode.statusCode} ${wrongCode.json()?.error?.code}`);
-    // Exhaust the bounded attempts (5 max): subsequent verifies hit the limit.
-    for (let i = 0; i < 4; i++) {
-      await app.inject({ method: "POST", url: "/v1/me/email/verify", headers: { authorization: `Bearer ${loginA.token}` }, payload: { code: "000000" } });
-    }
-    const limitReached = await app.inject({ method: "POST", url: "/v1/me/email/verify", headers: { authorization: `Bearer ${loginA.token}` }, payload: { code: "000000" } });
-    ok("FLOW6: verification limit applies after max attempts", limitReached.statusCode === 429 && limitReached.json()?.error?.code === "VERIFICATION_LIMIT_REACHED", `${limitReached.statusCode} ${limitReached.json()?.error?.code}`);
 
     // ============ FLOW 7: developer API ============
     const devKey = await app.inject({ method: "POST", url: "/v1/developer/keys", headers: { authorization: `Bearer ${loginA.token}` }, payload: { name: "d7 key", scopes: ["intelligence:read"] } });
@@ -522,6 +524,9 @@ async function main(): Promise<void> {
 
     const bSavedDetail = await app.inject({ method: "GET", url: `/v1/me/saved-comparisons/${savedId}`, headers: { authorization: `Bearer ${loginB.token}` } });
     ok("FLOW9: user B cannot read user A's saved-comparison detail", bSavedDetail.statusCode === 404, `${bSavedDetail.statusCode}`);
+
+    const bSavedAnalyses = await app.inject({ method: "GET", url: "/v1/me/saved", headers: { authorization: `Bearer ${loginB.token}` } });
+    ok("FLOW9: user B does NOT see user A's saved analysis", (bSavedAnalyses.json()?.saved as unknown[])?.length === 0, `${(bSavedAnalyses.json()?.saved as unknown[])?.length}`);
 
     const bMonitors = await app.inject({ method: "GET", url: "/v1/me/monitors", headers: { authorization: `Bearer ${loginB.token}` } });
     ok("FLOW9: user B does NOT see user A's monitors", (bMonitors.json()?.monitors as unknown[])?.length === 0, `${(bMonitors.json()?.monitors as unknown[])?.length}`);

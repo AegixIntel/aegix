@@ -22,6 +22,10 @@ import { applyCorrelationRules, evaluateCorrelationChanges, CORRELATION_MONITOR_
 import { createEmailProvider, PermanentEmailError, type EmailProvider } from "./email.js";
 import { buildCorrelationEmail, correlationEmailEligibility } from "./notification-email.js";
 
+/** A notification-channel fan-out reason string (§7: email-unconfigured is a
+ *  valid product state, never a failure). */
+export const EMAIL_SKIP_REASON = "EMAIL_NOT_CONFIGURED";
+
 /** D6-H §106: maps internal event types to the webhook event vocabulary. */
 const WEBHOOK_EVENT_MAP: Record<string, string> = {
   PRIVACY_EXPOSURE_INCREASED: "monitor.threat.created",
@@ -166,6 +170,7 @@ async function processMonitorDiff(
   const eventRepo = createThreatEventRepo(sql);
   const rulesRepo = createMonitorAlertRulesRepo(sql);
   const notificationRepo = createNotificationRepo(sql);
+  const profileRepo = createProfileRepo(sql);
   const monitorRepo = createMonitorRepo(sql);
 
   // Load both analyses' persisted outputs (source of truth, D4-C).
@@ -301,7 +306,19 @@ async function processMonitorDiff(
       ctx.logger.info("in-app notification created", { notificationId: inApp.id, monitorId: input.monitorId });
     }
 
-    if (config.ENABLE_EMAIL_NOTIFICATIONS && input.emailProvider.isConfigured()) {
+    // EMAIL is an optional channel (§6): only create a PENDING row + delivery
+    // job when the global switches, the provider, AND a verified destination
+    // all exist. A missing/disabled email is EMAIL_NOT_CONFIGURED — it is
+    // never a pipeline failure and never produces useless PENDING rows (§13).
+    const emailProfile = await profileRepo.getEmailForUser(input.monitorUserId);
+    const emailEligibility = correlationEmailEligibility({
+      config,
+      providerConfigured: input.emailProvider.isConfigured(),
+      recipient: emailProfile
+        ? { email: emailProfile.notification_email, verifiedAt: emailProfile.notification_email_verified_at }
+        : null
+    });
+    if (emailEligibility.eligible) {
       const email = await notificationRepo.insert({
         userId: input.monitorUserId,
         monitorId: input.monitorId,
@@ -319,6 +336,16 @@ async function processMonitorDiff(
           { kind: "deliver", notificationId: email.id },
           { jobId: `notif-deliver-${email.id}`, attempts: 3, backoff: { type: "exponential", delay: 5000 } }
         );
+      }
+    } else {
+      // Email skipped because it is not configured for this user/event —
+      // a valid product state, not an error, not a failure (§7, §28).
+      if (config.EMAIL_ENABLED && config.ENABLE_EMAIL_NOTIFICATIONS) {
+        ctx.logger.debug("email channel skipped", {
+          monitorId: input.monitorId,
+          eventType: event.eventType,
+          reason: emailEligibility.reason ?? EMAIL_SKIP_REASON
+        });
       }
     }
   }
@@ -664,7 +691,10 @@ export async function deliverNotification(ctx: ProcessorContext, notificationId:
       logger.error("notification permanently failed", { notificationId, error: message.slice(0, 200) });
       return;
     }
-    await notificationRepo.markFailed(notificationId, message);
+    // Transient failure: record the attempt but keep status PENDING so the
+    // BullMQ retry still passes the status guard and can actually resend
+    // (D5-J §51). The previous markFailed flip to FAILED made retries no-ops.
+    await notificationRepo.recordAttempt(notificationId, message);
     throw err; // BullMQ retries with backoff; the status guard prevents duplicates.
   }
 }

@@ -1,33 +1,257 @@
-{
-  "$schema": "https://json.schemastore.org/github-workflow",
-  "name": "CI",
-  "on": {
-    "pull_request": {},
-    "push": {
-      "branches": ["main"]
-    }
-  },
-  "jobs": {
-    "ci": {
-      "name": "Install, typecheck, lint, test, build",
-      "runs-on": "ubuntu-latest",
-      "steps":
-        [
-          { "uses": "actions/checkout@v4" },
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  static-build:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - name: Reject common committed credential formats
+        run: |
+          if git grep -qE '(sk_live_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'; then
+            echo "Potential committed credential pattern detected; match intentionally withheld"
+            exit 1
+          fi
+      - run: pnpm build
+      - run: pnpm test:web-routing
+
+  unit-tests:
+    name: Pure unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - name: Run unit tests
+        run: mkdir -p artifacts && set -o pipefail && pnpm test 2>&1 | tee artifacts/unit-tests.log
+      - name: Upload unit logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: unit-test-logs, path: artifacts/unit-tests.log, retention-days: 7 }
+
+  integration-tests:
+    name: PostgreSQL and Redis integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aegix_test_integration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aegix_test_integration"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aegix_test_integration
+      REDIS_URL: redis://localhost:6379
+      AEGIX_ALLOW_TEST_DB_RESET: "true"
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - name: Migration safety and idempotency
+        run: mkdir -p artifacts && set -o pipefail && pnpm test:migrations 2>&1 | tee artifacts/migrations.log
+      - name: API integration tests
+        run: set -o pipefail && pnpm test:integration 2>&1 | tee artifacts/integration.log
+      - name: Redis and BullMQ integration tests
+        run: set -o pipefail && pnpm test:queue-integration 2>&1 | tee artifacts/queue-integration.log
+      - name: Upload integration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: integration-test-logs, path: artifacts/*.log, retention-days: 7 }
+
+  golden-tests:
+    name: Deterministic golden suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aegix_test_golden
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aegix_test_golden"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aegix_test_golden
+      REDIS_URL: redis://localhost:6379
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - run: pnpm --filter @aegix/database migrate
+      - name: Run every deterministic golden test
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
           {
-            "uses": "pnpm/action-setup@v4",
-            "with": { "version": "9.15.9" }
-          },
-          {
-            "uses": "actions/setup-node@v4",
-            "with": { "node-version": "22", "cache": "pnpm" }
-          },
-          { "run": "pnpm install --frozen-lockfile" },
-          { "run": "pnpm typecheck" },
-          { "run": "pnpm lint" },
-          { "run": "pnpm test" },
-          { "run": "pnpm build" }
-        ]
-    }
-  }
-}
+            pnpm test:wallets
+            pnpm test:account-classification
+            pnpm test:monitors
+            pnpm test:correlation
+            pnpm test:correlation-dataset
+            pnpm test:correlation-block2
+          } 2>&1 | tee artifacts/golden-tests.log
+      - name: Upload golden logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: golden-test-logs, path: artifacts/golden-tests.log, retention-days: 7 }
+
+  e2e-d7:
+    name: E2E D7 public beta
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aegix_test_d7
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aegix_test_d7"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aegix_test_d7
+      REDIS_URL: redis://localhost:6379
+      AEGIX_ALLOW_TEST_DB_RESET: "true"
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - name: Run E2E
+        run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-d7 2>&1 | tee artifacts/e2e.log
+      - name: Upload E2E logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: e2e-d7-logs, path: artifacts/e2e.log, retention-days: 7 }
+
+  e2e-monitor:
+    name: E2E monitor and in-app notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aegix_test_monitor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aegix_test_monitor"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aegix_test_monitor
+      REDIS_URL: redis://localhost:6379
+      AEGIX_ALLOW_TEST_DB_RESET: "true"
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - name: Run monitor E2E
+        run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-monitor 2>&1 | tee artifacts/e2e-monitor.log
+      - name: Upload monitor logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: e2e-monitor-logs, path: artifacts/e2e-monitor.log, retention-days: 7 }
+
+  docker-images:
+    name: Production Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f infra/docker/api.Dockerfile -t aegix-api:ci .
+      - run: docker build -f infra/docker/worker.Dockerfile -t aegix-worker:ci .
+      - run: docker build -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=/api -t aegix-web:ci .
+      - run: docker build -f infra/docker/migrate.Dockerfile -t aegix-migrate:ci .

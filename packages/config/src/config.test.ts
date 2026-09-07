@@ -26,6 +26,20 @@ function prodEnv(overrides: Record<string, string> = {}): Record<string, string>
 test("production: valid minimal config loads", () => {
   const config = loadConfig(prodEnv());
   assert.equal(config.NODE_ENV, "production");
+  assert.equal(config.EMAIL_ENABLED, false);
+  assert.equal(config.ENABLE_EMAIL_NOTIFICATIONS, false);
+});
+
+test("production: public beta starts without SMTP configuration", () => {
+  const config = loadConfig(prodEnv({
+    EMAIL_ENABLED: "false",
+    ENABLE_EMAIL_NOTIFICATIONS: "false",
+    EMAIL_SMTP_HOST: "",
+    EMAIL_SMTP_USER: "",
+    EMAIL_SMTP_PASS: ""
+  }));
+  assert.equal(config.EMAIL_ENABLED, false);
+  assert.equal(config.ENABLE_EMAIL_NOTIFICATIONS, false);
 });
 
 test("production: missing WEBHOOK_ENCRYPTION_KEY fails when webhooks enabled (D6-J §60)", () => {
@@ -67,4 +81,12 @@ test("development: unsafe combos remain allowed (ergonomic dev defaults)", () =>
       AUTH_DOMAIN: "http://localhost:3000"
     })
   );
+});
+
+test("production: empty RPC failover URLs are treated as unset (compose default)", () => {
+  const config = loadConfig(prodEnv({ RPC_PRIMARY_URL: "", RPC_SECONDARY_URL: "", RPC_TERTIARY_URL: "" }));
+  assert.equal(config.RPC_PRIMARY_URL, undefined);
+  assert.equal(config.RPC_SECONDARY_URL, undefined);
+  assert.equal(config.RPC_TERTIARY_URL, undefined);
+  assert.doesNotThrow(() => loadConfig(prodEnv({ RPC_PRIMARY_URL: "https://rpc.backup.example" })));
 });

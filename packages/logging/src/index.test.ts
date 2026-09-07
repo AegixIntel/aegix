@@ -76,3 +76,28 @@ test("walletRef shortens and hashes without leaking full address", () => {
   assert.ok(!ref.walletShort.includes(address.slice(6, -4)));
   assert.match(ref.walletHash, /^[0-9a-f]{16}$/);
 });
+
+test("redacts secret fields and URL query strings", () => {
+  const { logger, lines, restore } = capture();
+  logger.info("provider failed", {
+    rpcUrl: "https://rpc.example.com/path?api-key=sensitive-value",
+    authorization: "Bearer sensitive-value",
+    nested: { password: "sensitive-value" }
+  });
+  restore();
+  assert.doesNotMatch(lines[0]!, /sensitive-value/);
+  assert.match(lines[0]!, /REDACTED/);
+});
+
+test("retains non-secret API key identifiers for operational tracing", () => {
+  const { logger, lines, restore } = capture();
+  logger.info("developer request", {
+    apiKeyId: "key-row-42",
+    apiKeyPrefix: "aegix_live_abc123",
+    apiKey: "full-secret-value"
+  });
+  restore();
+  assert.match(lines[0]!, /key-row-42/);
+  assert.match(lines[0]!, /aegix_live_abc123/);
+  assert.doesNotMatch(lines[0]!, /full-secret-value/);
+});

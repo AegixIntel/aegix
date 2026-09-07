@@ -7,7 +7,7 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { buildServer } from "./server.js";
 import { loadConfig } from "@aegix/config";
 import { createDb } from "@aegix/database";
@@ -21,8 +21,8 @@ import {
 function testConfig(overrides: Record<string, string> = {}) {
   return loadConfig({
     NODE_ENV: "test",
-    DATABASE_URL: "postgres://postgres:postgres@localhost:5432/aegix_test",
-    REDIS_URL: "redis://localhost:6379",
+    DATABASE_URL: process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test",
+    REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6379",
     EMAIL_ENABLED: "true",
     ENABLE_EMAIL_NOTIFICATIONS: "true",
     EMAIL_PROVIDER: "console",
@@ -30,7 +30,8 @@ function testConfig(overrides: Record<string, string> = {}) {
   });
 }
 
-const sql = createDb("postgres://postgres:postgres@localhost:5432/aegix_test");
+const sql = createDb(process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test");
+after(async () => { await sql.end(); });
 
 test("email: format validation is a plain shape check", () => {
   assert.equal(isValidNotificationEmail("alerts@example.com"), true);

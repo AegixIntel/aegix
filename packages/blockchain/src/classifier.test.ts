@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { classifyAccount, isAnalysisEligible } from "./classifier.js";
 import type { AccountInfo } from "./types.js";
+import { decodeSolanaSignature } from "./solana/address.js";
 
 const SYSTEM = "11111111111111111111111111111111";
 const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
@@ -78,4 +79,11 @@ test("eligibility: only user wallets and unknown are analyzed", () => {
   assert.equal(isAnalysisEligible("TOKEN_ACCOUNT"), false);
   assert.equal(isAnalysisEligible("SYSVAR"), false);
   assert.equal(isAnalysisEligible("PDA"), false);
+});
+
+test("base58 signature decoder preserves leading zero bytes", () => {
+  // 64 zero bytes encode as 64 leading base58 `1` characters.
+  const decoded = decodeSolanaSignature("1".repeat(64));
+  assert.equal(decoded?.length, 64);
+  assert.ok(decoded?.every((byte) => byte === 0));
 });

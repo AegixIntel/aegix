@@ -80,6 +80,7 @@ export function registerNotificationEmailRoutes(deps: NotificationEmailRoutesDep
   };
 
   app.get("/v1/me/email", async (req, reply) => {
+    if (gate(reply)) return;
     const user = await requireUser(req, reply);
     if (!user) return;
     const row = await profileRepo.getEmailForUser(user.id);
@@ -179,6 +180,7 @@ export function registerNotificationEmailRoutes(deps: NotificationEmailRoutesDep
   );
 
   app.delete("/v1/me/email", async (req, reply) => {
+    if (gate(reply)) return;
     const user = await requireUser(req, reply);
     if (!user) return;
     await profileRepo.setNotificationEmail(user.id, null);

@@ -77,12 +77,18 @@ importers:
       '@aegix/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@aegix/correlation':
+        specifier: workspace:^
+        version: link:../../packages/correlation
       '@aegix/database':
         specifier: workspace:*
         version: link:../../packages/database
       '@aegix/explanation':
         specifier: workspace:^
         version: link:../../packages/explanation
+      '@aegix/graph':
+        specifier: workspace:*
+        version: link:../../packages/graph
       '@aegix/logging':
         specifier: workspace:*
         version: link:../../packages/logging

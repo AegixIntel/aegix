@@ -8,6 +8,11 @@ function boolEnv(v: unknown): boolean {
   return false;
 }
 
+/** Delegates "" (unset-from-compose) to undefined for optional URL fields. */
+function urlOrUndefined(v: unknown): unknown {
+  return typeof v === "string" && v.trim() === "" ? undefined : v;
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
@@ -24,11 +29,11 @@ const envSchema = z.object({
   RPC_WEBSOCKET_URL: z.string().url().optional(),
   RPC_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().default(100),
 
-  RPC_PRIMARY_URL: z.string().url().optional(),
+  RPC_PRIMARY_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
   RPC_PRIMARY_NAME: z.string().optional(),
-  RPC_SECONDARY_URL: z.string().url().optional(),
+  RPC_SECONDARY_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
   RPC_SECONDARY_NAME: z.string().optional(),
-  RPC_TERTIARY_URL: z.string().url().optional(),
+  RPC_TERTIARY_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
   RPC_TERTIARY_NAME: z.string().optional(),
 
   RPC_CIRCUIT_FAILURE_THRESHOLD: z.coerce.number().int().positive().default(5),
@@ -233,7 +238,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         `Production configuration error: ${missing.map(([k]) => k).join(", ")} must be explicitly set (no unsafe defaults)`
       );
     }
-    if (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_KEY) {
+    if (config.ENABLE_LEGACY_AUTH && (!config.SUPABASE_URL || !config.SUPABASE_SERVICE_KEY)) {
       throw new Error("Production configuration error: SUPABASE_URL and SUPABASE_SERVICE_KEY are required");
     }
 
@@ -243,11 +248,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (config.EMAIL_ENABLED && config.EMAIL_PROVIDER === "smtp" && !config.EMAIL_SMTP_HOST) {
       throw new Error("Production configuration error: EMAIL_ENABLED with EMAIL_PROVIDER=smtp requires EMAIL_SMTP_HOST");
     }
-    if (config.AUTH_DOMAIN.includes("localhost") || config.AUTH_APP_URI.includes("localhost")) {
-      throw new Error("Production configuration error: AUTH_DOMAIN and AUTH_APP_URI must be production origins (no localhost defaults)");
+    const authDomain = new URL(config.AUTH_DOMAIN);
+    const authAppUri = new URL(config.AUTH_APP_URI);
+    const corsOrigins = config.CORS_ORIGIN.split(",").map((origin) => new URL(origin.trim()));
+    if (authDomain.protocol !== "https:" || authAppUri.protocol !== "https:" || corsOrigins.some((origin) => origin.protocol !== "https:")) {
+      throw new Error("Production configuration error: AUTH_DOMAIN, AUTH_APP_URI, and CORS_ORIGIN must use HTTPS");
+    }
+    if (authDomain.origin !== authAppUri.origin || !corsOrigins.some((origin) => origin.origin === authDomain.origin)) {
+      throw new Error("Production configuration error: wallet-auth and CORS origins must include the same public web origin");
     }
     if (config.ENABLE_WEBHOOK_DELIVERY && config.WEBHOOK_DEV_ALLOW_PRIVATE) {
       throw new Error("Production configuration error: WEBHOOK_DEV_ALLOW_PRIVATE must be false in production (SSRF policy)");
+    }
+
+    // RPC resilience: warn if no failover providers are configured.
+    if (!config.RPC_PRIMARY_URL && !config.RPC_SECONDARY_URL && !config.RPC_TERTIARY_URL) {
+      console.warn("[AEGIX] WARNING: No RPC failover providers configured (RPC_PRIMARY_URL/RPC_SECONDARY_URL/RPC_TERTIARY_URL). A single RPC_URL means no automatic failover on provider failure.");
     }
   }
 

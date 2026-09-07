@@ -31,6 +31,12 @@ import { loadConfig } from "@aegix/config";
 import { createCache } from "@aegix/cache";
 import { runComparison, canonicalComparePair, compareCacheKey } from "../apps/api/src/compare.js";
 import { generateApiKey, hashApiKey, verifyApiKey } from "../apps/api/src/developer-keys.js";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
+
+// ---- Environment safety guards ----
+const _e2e6b1DbUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+requireSafeTestDatabaseReset(process.env, { databaseUrl: _e2e6b1DbUrl });
+process.env.DATABASE_URL = _e2e6b1DbUrl;
 
 const config = loadConfig();
 let sql = createDb(config.DATABASE_URL);
@@ -118,7 +124,7 @@ async function main(): Promise<void> {
   console.log("resetting database to clean state...");
   await sql.unsafe("drop schema public cascade; create schema public;");
   await sql.end();
-  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
 
   sql = createDb(config.DATABASE_URL);
   const db = sql;

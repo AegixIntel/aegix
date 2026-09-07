@@ -1,4 +1,6 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+// Browser traffic is same-origin in every production build. Development can
+// override this, but defaults to the Next.js /api rewrite below as well.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export interface CreateAnalysisResponse {
   analysisId: string;
@@ -386,15 +388,38 @@ export async function acknowledgeEvent(id: string): Promise<void> {
   await fetch(`${API_BASE_URL}/v1/me/events/${id}/acknowledge`, { method: "POST", headers: authHeaders() });
 }
 
-export async function listNotifications(): Promise<{ notifications: Notification[]; unreadCount: number }> {
-  const res = await fetch(`${API_BASE_URL}/v1/me/notifications`, { headers: authHeaders() });
-  if (res.status === 401) return { notifications: [], unreadCount: 0 };
+export interface NotificationListOptions {
+  limit?: number;
+  cursor?: string;
+  unreadOnly?: boolean;
+  severity?: string;
+  signal?: AbortSignal;
+}
+
+export async function listNotifications(options: NotificationListOptions = {}): Promise<{ notifications: Notification[]; unreadCount: number; nextCursor: string | null }> {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.unreadOnly) params.set("unread", "true");
+  if (options.severity) params.set("severity", options.severity);
+  params.set("channel", "IN_APP");
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE_URL}/v1/me/notifications${qs ? `?${qs}` : ""}`, { headers: authHeaders(), signal: options.signal });
+  if (res.status === 401) return { notifications: [], unreadCount: 0, nextCursor: null };
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
-  return res.json() as Promise<{ notifications: Notification[]; unreadCount: number }>;
+  return res.json() as Promise<{ notifications: Notification[]; unreadCount: number; nextCursor: string | null }>;
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  await fetch(`${API_BASE_URL}/v1/me/notifications/${id}/read`, { method: "POST", headers: authHeaders() });
+  const res = await fetch(`${API_BASE_URL}/v1/me/notifications/${id}/read`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+}
+
+export async function markAllNotificationsRead(): Promise<number> {
+  const res = await fetch(`${API_BASE_URL}/v1/me/notifications/read-all`, { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  const body = (await res.json()) as { marked: number };
+  return body.marked;
 }
 
 // ---- D5-I: wallet comparison ----

@@ -7,6 +7,10 @@
  *   fan-out → pipeline (diff → threat → rules → events → notifications) →
  *   idempotency re-run → ownership verification.
  *
+ * Public-beta regression: a wallet-only user with no email receives IN_APP
+ * notifications; dormant email delivery remains disabled and outside this
+ * release gate. Also covers webhook independence and correlation alerts.
+ *
  * Requires local Postgres + Redis (docker compose). Resets the database.
  *
  * Run: pnpm test:e2e-monitor
@@ -14,11 +18,26 @@
 
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { createDb, createAnalysisJobRepo, createIntelligenceRepo, createMonitorAlertRulesRepo, createMonitorRepo, createWalletRepo, createNotificationRepo, createThreatEventRepo } from "@aegix/database";
+import { createDb, createAnalysisJobRepo, createIntelligenceRepo, createMonitorAlertRulesRepo, createMonitorRepo, createWalletRepo, createNotificationRepo, createThreatEventRepo, createCorrelationRepo, createMonitorCorrelationRepo, createWebhookRepo } from "@aegix/database";
 import { loadConfig } from "@aegix/config";
 import { createLogger } from "@aegix/logging";
 import { createQueues } from "@aegix/queue";
-import { runMonitorPipeline, type ProcessorContext } from "@aegix/monitor";
+import { runMonitorPipeline, CORRELATION_MONITOR_ENGINE_VERSION, type ProcessorContext } from "@aegix/monitor";
+import { createWebhookSecret } from "../apps/api/src/webhook-crypto.js";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
+
+// ---- Environment safety guards ----
+const TEST_DB_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+requireSafeTestDatabaseReset(process.env, { databaseUrl: TEST_DB_URL });
+process.env.DATABASE_URL = TEST_DB_URL;
+process.env.EMAIL_ENABLED = "false";
+process.env.ENABLE_EMAIL_NOTIFICATIONS = "false";
+
+// Webhook signing secrets are encrypted at rest; e2e uses a dev key when
+// the environment does not provide one (production fail-fast still applies).
+if (!process.env.WEBHOOK_ENCRYPTION_KEY) {
+  process.env.WEBHOOK_ENCRYPTION_KEY = "e2e-monitor-webhook-encryption-key-0123456789";
+}
 
 const ENGINE_VERSION = "aegix-pipeline-v2.0.0";
 const config = loadConfig();
@@ -46,7 +65,12 @@ async function main(): Promise<void> {
   console.log("resetting database to clean state...");
   await sql.unsafe("drop schema public cascade; create schema public;");
   await sql.end();
-  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
+
+  // Clear deterministic deliver-job leftovers from prior runs (Redis is not
+  // reset with the schema) so the no-email job assertions measure this run.
+  await queues.monitoring.drain(true).catch(() => {});
+  await queues.webhooks.drain(true).catch(() => {});
 
   // Reconnect after schema reset.
   const sql2 = createDb(config.DATABASE_URL);
@@ -137,6 +161,20 @@ async function main(): Promise<void> {
   }]);
   ok("current analysis READY with changed exposure", true);
 
+  // D6 regression §11: webhook independence — configure a webhook BEFORE the
+  // pipeline runs, for a user that has NO email anywhere.
+  const webhookRepo = createWebhookRepo(sql2);
+  const material = createWebhookSecret(config);
+  const webhook = await webhookRepo.create({
+    userId,
+    url: "https://example.com/hooks",
+    eventTypes: ["monitor.threat.created"],
+    secretEncrypted: material.encrypted,
+    secretNonce: material.nonce,
+    secretKeyVersion: material.keyVersion
+  });
+  ok("webhook created for no-email user", webhook.id !== undefined && webhook.status === "ACTIVE");
+
   // 5. Analysis-complete fan-out: run the monitor pipeline.
   await runMonitorPipeline(ctx2, { analysisId: currentJob.id, walletId: wallet.id });
 
@@ -148,9 +186,22 @@ async function main(): Promise<void> {
 
   const notifs = await notifRepo.listForUser(userId, 10);
   ok("in-app notifications created", notifs.length >= 2, `got ${notifs.length}`);
+  ok("in-app notifications are SENT", notifs.every((n) => n.channel === "IN_APP" && n.status === "SENT"), JSON.stringify(notifs.map((n) => ({ ch: n.channel, s: n.status }))));
 
   const monitorAfter = await monitorRepo.getRowForUserOwned(monitor.id);
   ok("monitor last_analysis_id advanced", monitorAfter?.last_analysis_id === currentJob.id);
+
+  // D6 regression: a wallet-only user with NO email must get IN_APP only.
+  // No EMAIL row may exist and no deliver job may be enqueued (§13, §30).
+  const emailRows = await notifRepo.listForUser(userId, 100);
+  ok("no-email user: zero EMAIL notification rows", emailRows.every((n) => n.channel === "IN_APP"), `channels: ${[...new Set(emailRows.map((n) => n.channel))].join(",")}`);
+  const deliverJobs = await queues.monitoring.getJobs(["waiting", "active", "delayed"], 0, 100);
+  ok("no-email user: no notify-deliver jobs enqueued", deliverJobs.every((j) => !String(j.name).startsWith("notify-deliver")), `${deliverJobs.length} pending jobs`);
+
+  // D6 regression §11, §15: no-email user + configured webhook → the pipeline
+  // must have enqueued webhook deliveries independently of email.
+  const hookJobs = await queues.webhooks.getJobs(["waiting", "active", "delayed", "completed", "failed"], 0, 100);
+  ok("no-email user: webhook deliveries enqueued independently", hookJobs.length >= 1, `${hookJobs.length} webhook jobs`);
 
   // 6. Idempotency: re-running the same fan-out must not duplicate.
   await runMonitorPipeline(ctx2, { analysisId: currentJob.id, walletId: wallet.id });
@@ -168,6 +219,64 @@ async function main(): Promise<void> {
   const firstEvent = events[0]!;
   const acked = await eventRepo.acknowledge(userId, firstEvent.id);
   ok("event acknowledge", acked === true);
+
+  // 9. Correlation alert path with no email (§24): a correlation result that
+  // crosses the monitor thresholds must persist a correlation event and an
+  // IN_APP notification for the email-less user without FK/recipient errors.
+  const correlationRepo = createCorrelationRepo(sql2);
+  const monitorCorrRepo = createMonitorCorrelationRepo(sql2);
+  const related = "DpFKMQXG21YQTUsCKGusU6SuQpAnR87dqu5DJL8Hm8Eb";
+  await correlationRepo.upsert({
+    pairId: [wallet.address, related].sort().join("|"),
+    correlationScore: 72,
+    confidence: 0.7,
+    classification: "PERSONAL",
+    evidenceFamilies: [{ family: "sharedFunding", strength: 0.6 }],
+    limitations: [],
+    engineVersion: "correlation-v1.0.0"
+  });
+  const corrCurrent = await correlationRepo.listForWallet(wallet.address, 20);
+  const corrSnap = corrCurrent.map((r) => ({
+    walletA: r.wallet_a,
+    walletB: r.wallet_b,
+    pairId: [r.wallet_a, r.wallet_b].sort().join("|"),
+    correlationScore: r.correlation_score,
+    confidence: Number(r.confidence),
+    classification: r.classification,
+    evidenceFamilies: ((r.evidence_families ?? []) as Array<{ family: string; strength: number }>).map((f) => ({ family: f.family, strength: Number(f.strength) })),
+    engineVersion: r.engine_version,
+    correlationResultId: r.id
+  }));
+  const { evaluateCorrelationChanges } = await import("@aegix/monitor");
+  const corrCandidates = evaluateCorrelationChanges(monitor.id, wallet.address, null, corrSnap[0]!, {
+    enterStrongScore: config.CORRELATION_ALERT_ENTER_STRONG,
+    exitStrongScore: config.CORRELATION_ALERT_EXIT_STRONG,
+    minDelta: config.CORRELATION_ALERT_MIN_DELTA,
+    minScore: 40,
+    minConfidence: 0.5,
+    cooldownHours: 24,
+    notifyCorrelationChange: true
+  });
+  ok("correlation no-email: APPEARED candidate emitted", corrCandidates.some((c) => c.eventType === "CORRELATION_APPEARED"), JSON.stringify(corrCandidates.map((c) => c.eventType)));
+  const appeared = corrCandidates.find((c) => c.eventType === "CORRELATION_APPEARED")!;
+  const corrEvent = await monitorCorrRepo.upsertEvent({
+    monitorId: monitor.id,
+    userId,
+    walletId: wallet.id,
+    relatedWallet: appeared.relatedWallet,
+    eventType: appeared.eventType,
+    severity: appeared.severity,
+    confidence: appeared.confidence,
+    previousScore: appeared.previousScore,
+    newScore: appeared.newScore,
+    previousConfidence: appeared.previousConfidence,
+    newConfidence: appeared.newConfidence,
+    evidence: appeared.evidence as Record<string, unknown>,
+    limitations: appeared.limitations,
+    engineVersion: CORRELATION_MONITOR_ENGINE_VERSION,
+    fingerprint: appeared.fingerprint
+  });
+  ok("correlation no-email: event persisted", corrEvent.id !== undefined && corrEvent.fingerprint === appeared.fingerprint);
 
   await queues.close();
   await sql2.end();

@@ -166,6 +166,10 @@ export default function MonitorDetailPage() {
         </div>
         <div className="card-surface p-5">
           <h2 className="text-sm font-semibold text-marble">Alert Rules</h2>
+          <p className="mt-1 text-xs text-muted-foreground/80">
+            In-app alerts are delivered automatically and appear on the{" "}
+            <Link href="/app/notifications" className="text-accent hover:underline">Notifications</Link> page.
+          </p>
           <div className="mt-3 space-y-2 text-xs text-muted-foreground">
             <label className="flex items-center justify-between gap-2">
               <span>Minimum severity</span>

@@ -57,6 +57,7 @@ import { resolveWebhookDestination, SsrfBlockedError, processWebhookDelivery } f
 import { createWalletAuth, hashToken } from "../apps/api/src/wallet-auth.js";
 import { generateApiKey, hashApiKey } from "../apps/api/src/developer-keys.js";
 import { canonicalComparePair, runComparison } from "../apps/api/src/compare.js";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
 if (!process.env.WEBHOOK_ENCRYPTION_KEY) {
   process.env.WEBHOOK_ENCRYPTION_KEY = "e2e-d6-final-webhook-encryption-key-0123456789";
@@ -66,14 +67,20 @@ if (!process.env.WEBHOOK_ENCRYPTION_KEY) {
 // SSRF with the production policy (devPrivate=false) explicitly.
 process.env.WEBHOOK_DEV_ALLOW_PRIVATE = process.env.WEBHOOK_DEV_ALLOW_PRIVATE ?? "true";
 process.env.WEBHOOK_ALLOWED_PORTS = process.env.WEBHOOK_ALLOWED_PORTS ?? "80,443,18765,18766";
-process.env.EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "true";
-process.env.EMAIL_PROVIDER = process.env.EMAIL_PROVIDER ?? "console";
-process.env.ENABLE_EMAIL_NOTIFICATIONS = process.env.ENABLE_EMAIL_NOTIFICATIONS ?? "true";
+// This legacy D6 regression explicitly exercises the optional email channel.
+// Public-beta D7/monitor gates run separately with both flags forced false.
+process.env.EMAIL_ENABLED = "true";
+process.env.ENABLE_EMAIL_NOTIFICATIONS = "true";
 process.env.ENABLE_LEGACY_AUTH = "false";
 process.env.AUTH_DOMAIN = process.env.AUTH_DOMAIN ?? "http://localhost:3000";
 process.env.AUTH_APP_URI = process.env.AUTH_APP_URI ?? "http://localhost:3000";
 
 const TEST_WEBHOOK_PORT = 18765;
+
+// ---- Environment safety guards ----
+const _e2e6DbUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+requireSafeTestDatabaseReset(process.env, { databaseUrl: _e2e6DbUrl });
+process.env.DATABASE_URL = _e2e6DbUrl;
 
 const config = loadConfig();
 let sql = createDb(config.DATABASE_URL);
@@ -176,7 +183,7 @@ async function main(): Promise<void> {
   console.log("resetting database to clean state...");
   await sql.unsafe("drop schema public cascade; create schema public;");
   await sql.end();
-  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
   sql = createDb(config.DATABASE_URL);
   const db = sql;
 
@@ -189,7 +196,7 @@ async function main(): Promise<void> {
 
   try {
     // ============ FLOW 1: wallet-only auth (legacy auth OFF) ============
-    ok("FLOW1: legacy supabase auth is disabled in this run", config.ENABLE_LEGACY_AUTH === false || true, "config may default on; wallet sessions take precedence");
+    ok("FLOW1: legacy supabase auth is disabled in this run", config.ENABLE_LEGACY_AUTH === false);
 
     const loginA = await login(walletAuth, WALLET_A, new Uint8Array(32).fill(11));
     const loginB = await login(walletAuth, WALLET_B, new Uint8Array(32).fill(12));
@@ -215,6 +222,29 @@ async function main(): Promise<void> {
       const bad = await walletAuth.verify({ challengeId: ch2.challenge.challengeId, wallet: WALLET_A, signature: sigBad, nonce: ch2.challenge.nonce });
       ok("FLOW1: tampered message (wrong domain) rejected", !bad.ok && "code" in bad);
     }
+
+    const wrongWalletChallenge = await walletAuth.issueChallenge({ wallet: WALLET_A, ip: "127.0.0.1" });
+    if (!wrongWalletChallenge.ok) throw new Error("wrong-wallet challenge failed");
+    const wrongWalletSignature = await signMessage(WALLET_B, new Uint8Array(32).fill(12), wrongWalletChallenge.challenge.message);
+    const wrongWallet = await walletAuth.verify({
+      challengeId: wrongWalletChallenge.challenge.challengeId,
+      wallet: WALLET_A,
+      signature: wrongWalletSignature,
+      nonce: wrongWalletChallenge.challenge.nonce
+    });
+    ok("FLOW1: signature from the wrong wallet is rejected", !wrongWallet.ok && wrongWallet.code === "INVALID_SIGNATURE");
+
+    const expiredChallenge = await walletAuth.issueChallenge({ wallet: WALLET_A, ip: "127.0.0.1" });
+    if (!expiredChallenge.ok) throw new Error("expired challenge setup failed");
+    await db`update wallet_auth_challenges set expires_at = now() - interval '1 second' where id = ${expiredChallenge.challenge.challengeId}`;
+    const expiredSignature = await signMessage(WALLET_A, new Uint8Array(32).fill(11), expiredChallenge.challenge.message);
+    const expired = await walletAuth.verify({
+      challengeId: expiredChallenge.challenge.challengeId,
+      wallet: WALLET_A,
+      signature: expiredSignature,
+      nonce: expiredChallenge.challenge.nonce
+    });
+    ok("FLOW1: expired challenge is rejected", !expired.ok && expired.code === "CHALLENGE_EXPIRED");
 
     // Session resolution + logout.
     const resolved = await walletAuth.resolveSession(loginA.token);
@@ -266,6 +296,10 @@ async function main(): Promise<void> {
       expiresAt: null
     });
     ok("FLOW3: developer key created", keyRow.id !== undefined);
+    const userBKeys = await keyRepo.listForUser(loginB.userId);
+    ok("FLOW3: user B cannot list user A's developer key", userBKeys.length === 0, `${userBKeys.length}`);
+    const userBRevoke = await keyRepo.revokeForUser(loginB.userId, keyRow.id);
+    ok("FLOW3: user B cannot revoke user A's developer key", userBRevoke === null);
     // Wrong scope.
     const keyUsageOnly = generateApiKey();
     const usageKeyRow = await keyRepo.create({

@@ -3,25 +3,15 @@
  *
  * Deterministic offline harness: builds synthetic analysis fixtures, runs the
  * diff → threat → rules pipeline without any RPC, and asserts the golden
- * cases. Requires a local Postgres (docker compose) — the pipeline persists
- * diffs/events/notifications.
+ * cases. It is pure and offline: no PostgreSQL, Redis, or RPC is opened.
  *
  * Run: pnpm test:monitors
  */
 
-import { createDb } from "@aegix/database";
-import { loadConfig } from "@aegix/config";
-import { createLogger } from "@aegix/logging";
-import { createQueues } from "@aegix/queue";
 import { buildExposureDiff, type DiffInputs } from "@aegix/diff";
 import { evaluateThreats, applyRules } from "@aegix/monitor";
 import type { AnalysisJobRow, PathRow, ScoreRow, SignalRow } from "@aegix/database";
 import type { MonitorAlertRules, ExposureDiff } from "@aegix/types";
-
-const config = loadConfig();
-const sql = createDb(config.DATABASE_URL);
-const logger = createLogger(config, { service: "golden-monitors" });
-const queues = createQueues(config);
 
 let pass = 0;
 let fail = 0;
@@ -279,9 +269,6 @@ async function main(): Promise<void> {
 }
 
 // ---- Cleanup ----
-
-await queues.close();
-await sql.end();
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

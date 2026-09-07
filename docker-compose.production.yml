@@ -1,0 +1,149 @@
+# Production reference stack. Supply every ${VAR:?required} through an
+# orchestrator/secret manager; do not commit a production .env file.
+#
+# Design notes (release-gate verification, 2026-09):
+#   - Public beta ships IN_APP notifications only: EMAIL_ENABLED /
+#     ENABLE_EMAIL_NOTIFICATIONS stay "false" and all email routes return
+#     403 FEATURE_DISABLED. SMTP is never a startup dependency.
+#   - Healthchecks probe 127.0.0.1 explicitly: "localhost" in Alpine resolves
+#     to ::1 first, which made healthy services report unhealthy (IPv4 bind).
+#   - RPC_PRIMARY/SECONDARY/TERTIARY_URL are passed as "${VAR:-}" and are
+#     treated as unset by the config loader when empty (compose default).
+#     A single RPC_URL yields a startup warning, not a crash.
+#   - Only the proxy publishes a host port; PostgreSQL/Redis/API/web stay on
+#     the private Compose network. Redis runs noeviction + requirepass.
+#   - migrate runs the compiled dist/migrate.js (no tsx) under
+#     NODE_ENV=production with a Postgres advisory lock; API/worker depend on
+#     service_completed_successfully, so they never start on a failed migrate.
+#   - The worker healthcheck runs dist/healthcheck.js and requires a fresh
+#     Redis heartbeat plus working DB and queue connections.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+    volumes: ["postgres-production-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --maxmemory-policy noeviction --requirepass \"$${REDIS_PASSWORD}\""]
+    volumes: ["redis-production-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/migrate.Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?required}
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    environment: &runtime-environment
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?required}
+      REDIS_URL: ${REDIS_URL:?required}
+      RPC_URL: ${RPC_URL:?required}
+      RPC_PRIMARY_URL: ${RPC_PRIMARY_URL:-}
+      RPC_SECONDARY_URL: ${RPC_SECONDARY_URL:-}
+      RPC_TERTIARY_URL: ${RPC_TERTIARY_URL:-}
+      AUTH_DOMAIN: ${PUBLIC_WEB_ORIGIN:?required}
+      AUTH_APP_URI: ${PUBLIC_WEB_ORIGIN:?required}
+      CORS_ORIGIN: ${PUBLIC_WEB_ORIGIN:?required}
+      ENABLE_LEGACY_AUTH: "false"
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+      ENABLE_WEBHOOK_DELIVERY: ${ENABLE_WEBHOOK_DELIVERY:-true}
+      # The application performs the conditional fail-fast check: this may be
+      # empty only when ENABLE_WEBHOOK_DELIVERY=false.
+      WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health/ready"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/worker.Dockerfile
+    environment: *runtime-environment
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "dist/healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        API_INTERNAL_URL: http://api:3001
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  proxy:
+    image: nginx:1.27-alpine
+    ports:
+      - "${AEGIX_HTTP_PORT:-80}:8080"
+    volumes:
+      - ./infra/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-production-data:
+  redis-production-data:

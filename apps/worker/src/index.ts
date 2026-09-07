@@ -7,6 +7,8 @@ import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
 import { registerMonitorScheduler } from "./scheduler.js";
+import { workerHeartbeatKey } from "./health.js";
+import { isFinalJobFailure } from "./failure.js";
 
 const config = loadConfig();
 const sql = createDb(config.DATABASE_URL);
@@ -32,15 +34,42 @@ const webhookWorkers = config.ENABLE_WEBHOOK_DELIVERY
 const allWorkers = [...analysisWorkers, ...monitorWorkers, ...webhookWorkers];
 
 let shuttingDown = false;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let schedulerReady = !config.ENABLE_MONITOR_SCHEDULER || !config.ENABLE_MONITORING;
+
+async function writeHeartbeat(): Promise<boolean> {
+  try {
+    if (!schedulerReady) throw new Error("monitor scheduler is not registered");
+    await sql`select 1`;
+    await queues.monitoring.getJobCounts();
+    const client = await queues.monitoring.client;
+    await client.set(workerHeartbeatKey(config), String(Date.now()));
+    return true;
+  } catch (error) {
+    logger.error("worker heartbeat failed", { error: error instanceof Error ? error.message : "dependency unavailable" });
+    return false;
+  }
+}
 
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info("received shutdown signal, draining workers", { signal });
-  await Promise.all(allWorkers.map((w) => w.close()));
-  await queues.close();
-  await sql.end();
-  process.exit(0);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  const close = async () => {
+    await Promise.all(allWorkers.map((w) => w.close()));
+    await queues.close();
+    await sql.end();
+  };
+  const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("worker shutdown timed out")), 25_000));
+  try {
+    await Promise.race([close(), timeout]);
+    logger.info("worker shutdown complete", { signal });
+    process.exit(0);
+  } catch (error) {
+    logger.error("worker shutdown failed", { signal, error: error instanceof Error ? error.message : "unknown" });
+    process.exit(1);
+  }
 }
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
@@ -68,7 +97,7 @@ analysisWorkers.forEach((w) => {
         provider: null,
         timestamp: new Date().toISOString()
       };
-      void publishToDeadLetter(queues, record);
+      if (isFinalJobFailure(job)) void publishToDeadLetter(queues, record);
       logger.error("job failed", {
         queue: w.name,
         jobId: job?.id,
@@ -108,7 +137,7 @@ monitorWorkers.forEach((w) => {
         provider: null,
         timestamp: new Date().toISOString()
       };
-      void publishToDeadLetter(queues, record);
+      if (isFinalJobFailure(job)) void publishToDeadLetter(queues, record);
       logger.error("monitor job failed", {
         queue: w.name,
         jobId: job?.id,
@@ -129,9 +158,55 @@ monitorWorkers.forEach((w) => {
   });
 });
 
-void registerMonitorScheduler(queues, config, logger);
-
-logger.info("worker started", {
-  queues: allWorkers.map((w) => w.name),
-  concurrency: config.ANALYSIS_WORKER_CONCURRENCY
+webhookWorkers.forEach((w) => {
+  w.on("failed", (job, err) => {
+    try {
+      const errorCode = classifyError(err);
+      const record: DeadLetterRecord = {
+        jobId: job?.id ?? "unknown",
+        analysisId: null,
+        walletShort: null,
+        walletHash: null,
+        originalQueue: w.name,
+        stage: "worker",
+        errorCode,
+        error: err.message.slice(0, 500),
+        attempts: job?.attemptsMade ?? 0,
+        provider: null,
+        timestamp: new Date().toISOString()
+      };
+      if (isFinalJobFailure(job)) void publishToDeadLetter(queues, record);
+      logger.error("webhook job failed", {
+        queue: w.name,
+        jobId: job?.id,
+        errorCode,
+        error: err.message
+      });
+    } catch {
+      // never crash on logging
+    }
+  });
+  w.on("error", (err) => {
+    try {
+      logger.error("worker error", { queue: w.name, error: err.message });
+    } catch {
+      // never crash on logging
+    }
+  });
 });
+
+try {
+  // A process is not ready merely because it exists: every BullMQ consumer,
+  // the scheduler, PostgreSQL, and Redis must be viable before heartbeat starts.
+  await Promise.all(allWorkers.map((worker) => worker.waitUntilReady()));
+  schedulerReady = await registerMonitorScheduler(queues, config, logger);
+  if (!(await writeHeartbeat())) throw new Error("initial worker readiness check failed");
+  heartbeatTimer = setInterval(() => void writeHeartbeat(), 10_000);
+  logger.info("worker started", {
+    queues: allWorkers.map((w) => w.name),
+    concurrency: config.ANALYSIS_WORKER_CONCURRENCY
+  });
+} catch (error) {
+  logger.error("worker startup failed", { error: error instanceof Error ? error.message : "unknown" });
+  await shutdown("STARTUP_FAILURE");
+}

@@ -87,7 +87,7 @@ export default function NotificationEmailSettings() {
     <section className="card-surface p-5">
       <h2 className="text-sm font-semibold text-marble">Notification Email</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Optional destination for alert emails. Email is <span className="font-semibold text-marble/90">not authentication</span> — it only receives alerts you opt into.
+        Optional destination for alert emails. In-app alerts work without it — email is <span className="font-semibold text-marble/90">not authentication</span> and only receives alerts you opt into.
       </p>
 
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}

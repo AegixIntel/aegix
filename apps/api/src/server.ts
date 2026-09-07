@@ -9,7 +9,8 @@ import {
   createProviderPoolFromConfig,
   isAnalysisEligible,
   isValidSolanaAddress,
-  type AccountClassification
+  type AccountClassification,
+  type BlockchainProvider
 } from "@aegix/blockchain";
 import { createLogger, walletRef } from "@aegix/logging";
 import {
@@ -49,10 +50,12 @@ import { generateApiKey } from "./developer-keys.js";
 import { registerDeveloperIntelligence } from "./developer-intelligence.js";
 import { registerWebhookRoutes } from "./webhooks.js";
 import { registerNotificationEmailRoutes } from "./notification-email.js";
+import { decodeNotificationCursor } from "./notification-cursor.js";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
   config: AppConfig;
+  provider?: BlockchainProvider;
 }
 
 const ENGINE_SCOPE = "full";
@@ -127,7 +130,9 @@ async function checkAdmission(deps: {
 
 export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
-  const app = Fastify({ logger: { level: config.LOG_LEVEL }, bodyLimit: config.API_BODY_LIMIT_BYTES });
+  // Request logging is handled by the redacting AEGIX logger below. Fastify's
+  // default logger includes the raw query string and can leak API keys/URLs.
+  const app = Fastify({ logger: false, bodyLimit: config.API_BODY_LIMIT_BYTES });
   const logger = createLogger(config, { service: "api" });
 
   // D6-J §65: production error responses never expose stack traces, SQL,
@@ -174,7 +179,7 @@ export async function buildServer(deps: ApiDeps) {
   const notificationRepo = createNotificationRepo(sql);
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
-  const provider = createProviderPoolFromConfig(config);
+  const provider = deps.provider ?? createProviderPoolFromConfig(config);
   const developerAuth = createDeveloperAuth({ sql, config, logger });
 
   // Analysis trace, see D2 §56: every API request carries a request_id that
@@ -299,7 +304,7 @@ export async function buildServer(deps: ApiDeps) {
           properties: {
             challengeId: { type: "string" },
             wallet: { type: "string", minLength: 32, maxLength: 44 },
-            signature: { type: "string", minLength: 86, maxLength: 88 },
+            signature: { type: "string", minLength: 64, maxLength: 88 },
             nonce: { type: "string", minLength: 20, maxLength: 64 }
           }
         }
@@ -1701,17 +1706,50 @@ export async function buildServer(deps: ApiDeps) {
     requireUser
   });
 
-  app.get("/v1/me/notifications", async (req, reply) => {
+  app.get<{ Querystring: { limit: number; cursor?: string; unread: boolean; severity?: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO"; channel: "IN_APP" } }>("/v1/me/notifications", {
+    schema: {
+      querystring: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+          cursor: { type: "string", minLength: 1, maxLength: 512 },
+          unread: { type: "boolean", default: false },
+          severity: { type: "string", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+          channel: { type: "string", enum: ["IN_APP"], default: "IN_APP" }
+        }
+      }
+    }
+  }, async (req, reply) => {
     const gate = monitorGate(reply);
     if (gate) return gate;
     const user = await requireUser(req, reply);
     if (!user || user.isAnonymous) return;
     await auth.ensureProfile(user, sql);
-    const [notifications, unreadCount] = await Promise.all([
-      notificationRepo.listForUser(user.id, 50),
+    let cursor;
+    try {
+      cursor = req.query.cursor ? decodeNotificationCursor(req.query.cursor) : undefined;
+    } catch {
+      const requestId = (req.headers["x-request-id"] as string | undefined) ?? randomUUID();
+      return reply.code(400).send({ error: { code: "INVALID_REQUEST", message: "Invalid notification cursor" }, meta: { requestId } });
+    }
+    const [result, unreadCount] = await Promise.all([
+      notificationRepo.listForUserFiltered(user.id, {
+        limit: req.query.limit,
+        cursor,
+        unreadOnly: req.query.unread,
+        severity: req.query.severity
+      }),
       notificationRepo.unreadCount(user.id)
     ]);
-    return reply.send({ notifications, unreadCount });
+    return reply.send({ notifications: result.notifications, unreadCount, nextCursor: result.nextCursor });
+  });
+
+  app.post("/v1/me/notifications/read-all", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    const count = await notificationRepo.markAllRead(user.id);
+    return reply.send({ marked: count });
   });
 
   app.post<{ Params: { id: string } }>("/v1/me/notifications/:id/read", async (req, reply) => {

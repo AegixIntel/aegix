@@ -29,14 +29,13 @@ export function decodeSolanaPublicKey(address: string): Uint8Array | null {
  * input. Solana Ed25519 signatures are exactly 64 bytes.
  */
 export function decodeSolanaSignature(signature: string): Uint8Array | null {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{86,88}$/.test(signature)) return null;
+  if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(signature)) return null;
   const bytes = base58Decode(signature);
   if (!bytes || bytes.length !== 64) return null;
   return bytes;
 }
 
-/** Minimal base58 decoder (public-key style inputs, no leading-zero loss
- *  handling needed for random 32/64-byte payloads). */
+/** Minimal base58 decoder with Bitcoin/Solana leading-zero preservation. */
 function base58Decode(input: string): Uint8Array | null {
   const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   let num = 0n;
@@ -45,11 +44,13 @@ function base58Decode(input: string): Uint8Array | null {
     if (idx === -1) return null;
     num = num * 58n + BigInt(idx);
   }
-  // Convert to big-endian bytes.
-  const hex = num.toString(16).padStart(1, "0");
-  const bytes = new Uint8Array(Math.ceil(hex.length / 2));
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  const leadingZeroes = input.match(/^1*/)?.[0].length ?? 0;
+  let hex = num === 0n ? "" : num.toString(16);
+  if (hex.length % 2 === 1) hex = `0${hex}`;
+  const decodedLength = hex.length / 2;
+  const bytes = new Uint8Array(leadingZeroes + decodedLength);
+  for (let i = 0; i < decodedLength; i++) {
+    bytes[leadingZeroes + i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
 }

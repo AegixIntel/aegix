@@ -10,7 +10,7 @@
 
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { buildServer } from "./server.js";
 import { loadConfig } from "@aegix/config";
 import { createDb, createDeveloperApiKeyRepo, API_KEY_PREFIX_LENGTH } from "@aegix/database";
@@ -19,14 +19,16 @@ import { generateApiKey, hashApiKey } from "./developer-keys.js";
 function testConfig(overrides: Record<string, string> = {}) {
   return loadConfig({
     NODE_ENV: "test",
-    DATABASE_URL: "postgres://postgres:postgres@localhost:5432/aegix_test",
-    REDIS_URL: "redis://localhost:6379",
+    DATABASE_URL: databaseUrl,
+    REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6379",
     ...overrides
   });
 }
 
-const sql = createDb("postgres://postgres:postgres@localhost:5432/aegix_test");
+const databaseUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+const sql = createDb(databaseUrl);
 const keyRepo = createDeveloperApiKeyRepo(sql);
+after(async () => { await sql.end(); });
 
 /** Deterministic fresh key per call: fixed prefix slot + random tail. */
 function uniqueKey(prefixSlot: string): { key: string; keyPrefix: string; keyHash: string } {

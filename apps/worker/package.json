@@ -9,7 +9,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests\"",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "healthcheck": "node dist/healthcheck.js",
+    "queue-status": "node dist/queue-status.js",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js"
   },

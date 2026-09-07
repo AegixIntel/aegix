@@ -41,6 +41,31 @@ export interface LoggerOptions {
   service?: string;
 }
 
+const SENSITIVE_KEY = /(?:authorization|password|passwd|secret|token|api[_-]?key|credential)/i;
+
+function sanitizeLogValue(value: unknown, key = ""): unknown {
+  // IDs and prefixes are intentionally safe operational identifiers; the
+  // full API key remains redacted. This keeps logs useful for incident triage.
+  const safeIdentifier = /^(?:apiKeyId|apiKeyPrefix|keyId|keyPrefix)$/i.test(key);
+  if (!safeIdentifier && SENSITIVE_KEY.test(key)) return "[REDACTED]";
+  if (typeof value === "string" && /^https?:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      if (url.username) url.username = "[REDACTED]";
+      if (url.password) url.password = "[REDACTED]";
+      if (url.search) url.search = "?[REDACTED]";
+      return url.toString();
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeLogValue(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([childKey, child]) => [childKey, sanitizeLogValue(child, childKey)]));
+  }
+  return value;
+}
+
 /**
  * Short, log-safe wallet reference, see D2 §55.
  * `wallet_short` is a bounded prefix; `wallet_hash` is a stable sha256 digest
@@ -68,7 +93,7 @@ export function createLogger(config: Pick<AppConfig, "LOG_LEVEL">, options: Logg
       service,
       msg,
       timestamp: new Date().toISOString(),
-      ...ctx
+      ...(sanitizeLogValue(ctx) as LogContext | undefined)
     };
     const line = JSON.stringify(record);
     if (level === "fatal" || level === "error") {

@@ -44,6 +44,18 @@ export interface MonitorAlertRulesRepo {
   updateForMonitor(monitorId: string, patch: Partial<AlertRulesRow>): Promise<AlertRulesRow | null>;
 }
 
+export interface NotificationListOptions {
+  limit?: number;
+  cursor?: { createdAt: string; id: string };
+  unreadOnly?: boolean;
+  severity?: string;
+}
+
+export interface NotificationListResult {
+  notifications: NotificationRow[];
+  nextCursor: string | null;
+}
+
 export interface NotificationRepo {
   /** Idempotent per idempotency_key — a retried delivery cannot duplicate. */
   insert(input: {
@@ -60,10 +72,15 @@ export interface NotificationRepo {
   }): Promise<NotificationRow | null>;
   getById(id: string): Promise<NotificationRow | null>;
   listForUser(userId: string, limit: number): Promise<NotificationRow[]>;
+  listForUserFiltered(userId: string, options: NotificationListOptions): Promise<NotificationListResult>;
   unreadCount(userId: string): Promise<number>;
   markRead(userId: string, notificationId: string): Promise<boolean>;
+  markAllRead(userId: string): Promise<number>;
   markDelivered(id: string): Promise<boolean>;
   markFailed(id: string, error: string): Promise<void>;
+  /** Records a transient delivery failure but keeps status PENDING so the
+   *  next BullMQ retry still passes the status guard (D5-J §51). */
+  recordAttempt(id: string, error: string): Promise<void>;
   markSuppressed(id: string, error: string): Promise<void>;
 }
 
@@ -149,15 +166,41 @@ export function createNotificationRepo(sql: Sql): NotificationRepo {
       return sql<NotificationRow[]>`
         select * from notifications
         where user_id = ${userId}
-        order by created_at desc
+        order by created_at desc, id desc
         limit ${limit}
       `;
+    },
+
+    async listForUserFiltered(userId, options) {
+      const limit = Math.max(1, Math.min(options.limit ?? 20, 100));
+      // Fetch one extra to detect if there's a next page.
+      const rows = await sql<NotificationRow[]>`
+        select * from notifications
+        where user_id = ${userId}
+          and channel = 'IN_APP'
+          and (
+            ${options.cursor?.createdAt ?? null}::timestamptz is null
+            or created_at < ${options.cursor?.createdAt ?? null}::timestamptz
+            or (created_at = ${options.cursor?.createdAt ?? null}::timestamptz and id < ${options.cursor?.id ?? null}::bigint)
+          )
+          and (${options.unreadOnly ?? false} = false or read_at is null)
+          and (${options.severity ?? ""}::text = '' or severity = ${options.severity ?? ""})
+        order by created_at desc, id desc
+        limit ${limit + 1}
+      `;
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const lastRow = page[page.length - 1];
+      const nextCursor = hasMore && lastRow
+        ? Buffer.from(JSON.stringify({ createdAt: new Date(lastRow.created_at).toISOString(), id: String(lastRow.id) }), "utf8").toString("base64url")
+        : null;
+      return { notifications: page, nextCursor };
     },
 
     async unreadCount(userId) {
       const [row] = await sql<Array<{ count: string }>>`
         select count(*)::text as count from notifications
-        where user_id = ${userId} and read_at is null
+        where user_id = ${userId} and channel = 'IN_APP' and read_at is null
       `;
       return row ? Number(row.count) : 0;
     },
@@ -165,10 +208,19 @@ export function createNotificationRepo(sql: Sql): NotificationRepo {
     async markRead(userId, notificationId) {
       const result = await sql`
         update notifications
-        set read_at = now()
-        where user_id = ${userId} and id = ${notificationId}
+        set read_at = coalesce(read_at, now())
+        where user_id = ${userId} and id = ${notificationId} and channel = 'IN_APP'
       `;
       return result.count > 0;
+    },
+
+    async markAllRead(userId) {
+      const result = await sql`
+        update notifications
+        set read_at = now()
+        where user_id = ${userId} and channel = 'IN_APP' and read_at is null
+      `;
+      return result.count;
     },
 
     async markDelivered(id) {
@@ -185,6 +237,14 @@ export function createNotificationRepo(sql: Sql): NotificationRepo {
         update notifications
         set status = 'FAILED', attempt_count = attempt_count + 1, last_error = ${error}
         where id = ${id}
+      `;
+    },
+
+    async recordAttempt(id, error) {
+      await sql`
+        update notifications
+        set attempt_count = attempt_count + 1, last_error = ${error}
+        where id = ${id} and status = 'PENDING'
       `;
     },
 

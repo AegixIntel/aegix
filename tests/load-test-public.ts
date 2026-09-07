@@ -61,16 +61,13 @@
  */
 
 // ---- Environment setup (must be set BEFORE config is loaded) ----
-// This process can run under NODE_ENV=production, which would trip the
-// production guard in loadConfig() (rejects localhost DATABASE_URL). Force
-// test mode so the local harness can run — same as e2e-d7.ts.
-process.env.NODE_ENV = process.env.NODE_ENV === "production" ? "test" : process.env.NODE_ENV;
 // Default to the harness's own database. It points at `aegix_loadtest`, NOT
 // `aegix` or `aegix_test`, so test:e2e-d7 and loadtest:public never clobber
 // each other (D7-S requirement). This OVERRIDES any ambient DATABASE_URL
 // (the repo .env points at `aegix`), so the harness is guaranteed isolated.
 // Set LOADTEST_PUBLIC_DATABASE_URL to run against a different database.
-process.env.DATABASE_URL = process.env.LOADTEST_PUBLIC_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_loadtest";
+const _loadtestDbUrl = process.env.LOADTEST_PUBLIC_DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_loadtest_local";
+process.env.DATABASE_URL = _loadtestDbUrl;
 process.env.REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 
 import { execFileSync } from "node:child_process";
@@ -93,6 +90,7 @@ import { createCache } from "@aegix/cache";
 import { isValidSolanaAddress } from "@aegix/blockchain";
 import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 import {
   runComparison,
   canonicalComparePair,
@@ -101,6 +99,8 @@ import {
   cachedComparison,
   type CompareContext
 } from "../apps/api/src/compare.js";
+
+requireSafeTestDatabaseReset(process.env, { databaseUrl: _loadtestDbUrl });
 
 // ---- CLI flags, parsed exactly like load-test.ts (`--key=value`) ----
 interface Options {
@@ -441,7 +441,7 @@ async function main(): Promise<void> {
     console.log("\nresetting aegix_loadtest database to clean state...");
     await sql.unsafe("drop schema public cascade; create schema public;");
     await sql.end();
-    execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+    execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
     sql = createDb(config.DATABASE_URL);
     initRepos(); // the reset ended the old connection; rebind repos to the new one
   } else {

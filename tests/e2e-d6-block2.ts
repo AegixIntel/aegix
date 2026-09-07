@@ -52,12 +52,18 @@ import {
   correlationEventFingerprint,
   CORRELATION_MONITOR_ENGINE_VERSION
 } from "@aegix/monitor";
+import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
 // Webhook signing secrets are encrypted at rest; e2e uses a dev key when
 // the environment does not provide one (production fail-fast still applies).
 if (!process.env.WEBHOOK_ENCRYPTION_KEY) {
   process.env.WEBHOOK_ENCRYPTION_KEY = "e2e-webhook-encryption-key-0123456789abcdef";
 }
+
+// ---- Environment safety guards ----
+const _e2e6b2DbUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix_test";
+requireSafeTestDatabaseReset(process.env, { databaseUrl: _e2e6b2DbUrl });
+process.env.DATABASE_URL = _e2e6b2DbUrl;
 
 const config = loadConfig();
 let sql = createDb(config.DATABASE_URL);
@@ -144,7 +150,7 @@ async function main(): Promise<void> {
   console.log("resetting database to clean state...");
   await sql.unsafe("drop schema public cascade; create schema public;");
   await sql.end();
-  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: { ...process.env, NODE_ENV: "development" } });
+  execFileSync("pnpm", ["--filter", "@aegix/database", "migrate"], { stdio: "inherit", env: process.env });
   sql = createDb(config.DATABASE_URL);
   const db = sql;
 

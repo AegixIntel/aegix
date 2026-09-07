@@ -15,10 +15,14 @@ import postgres from "postgres";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, "../migrations");
 
-const databaseUrl = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/aegix";
+const databaseUrl = process.env.DATABASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "postgres://postgres:postgres@localhost:5432/aegix");
+if (!databaseUrl) throw new Error("DATABASE_URL is required for production migrations");
 const sql = postgres(databaseUrl, { max: 1 });
 
 async function run(): Promise<void> {
+  // Serialize migration runners across deploy replicas. The session-scoped
+  // lock is automatically released if the process or connection terminates.
+  await sql`select pg_advisory_lock(hashtext('aegix:schema-migrations'))`;
   await sql`
     create table if not exists schema_migrations (
       version text primary key,
@@ -42,6 +46,7 @@ async function run(): Promise<void> {
   }
 
   console.log("migrations up to date");
+  await sql`select pg_advisory_unlock(hashtext('aegix:schema-migrations'))`;
 }
 
 run()

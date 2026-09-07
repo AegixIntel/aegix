@@ -311,7 +311,7 @@ export function MonitoringSection() {
           {[
             { t: "Exposure Diff", b: "Baseline vs latest exposure, per dimension." },
             { t: "Correlation Alerts", b: "New or changed correlation evidence, deduped." },
-            { t: "Threat Events", b: "In-app notifications, verified email, signed webhooks." }
+            { t: "Threat Events", b: "In-app alerts by default; optional verified email and signed webhooks." }
           ].map((c) => (
             <div key={c.t} className="border-t border-white/10 pt-6">
               <h3 className="font-display text-lg font-semibold text-marble">{c.t}</h3>
