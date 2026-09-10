@@ -346,6 +346,27 @@ async function main(): Promise<void> {
     const sizeAfter = await populationRepo.populationSize(version);
     ok("FLOW4: population size stable after re-aggregation (no double count)", sizeBefore === sizeAfter && sizeAfter >= 20, `${sizeBefore} vs ${sizeAfter}`);
 
+    // A newer analysis for the same wallet must replace its previous counts,
+    // not merely keep distinct-wallet prevalence stable. Wallet A observed
+    // RARE_CP four times, so both counters must remain identical after the
+    // replacement even though the analysis id changes.
+    const rareBefore = (await populationRepo.statsForKeys([RARE_CP], version))[0];
+    const replacementJob = await createAnalysisJobRepo(db).create({
+      walletId: seedA.walletId,
+      requestedBy: loginA.userId,
+      analysisType: "full",
+      priority: "free"
+    });
+    await aggregatePopulation({ sql: db }, { walletId: seedA.walletId, analysisId: replacementJob.id, version });
+    const rareAfter = (await populationRepo.statsForKeys([RARE_CP], version))[0];
+    ok(
+      "FLOW4: newer analysis replaces exact observation counts",
+      rareBefore?.distinct_wallets === rareAfter?.distinct_wallets &&
+        rareBefore?.observation_count === rareAfter?.observation_count &&
+        rareAfter?.observation_count === 4,
+      `${rareBefore?.distinct_wallets}/${rareBefore?.observation_count} vs ${rareAfter?.distinct_wallets}/${rareAfter?.observation_count}`
+    );
+
     const statusBig = await commonalityStatus({ sql: db }, { version, minPopulation: 20, maxSnapshotAgeHours: 336, enabled: true });
     ok("FLOW4: adequate population → eligible", statusBig.eligible === true && statusBig.source === "POPULATION", statusBig.reason);
 

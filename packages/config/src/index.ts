@@ -177,7 +177,7 @@ const envSchema = z.object({
   ENABLE_POPULATION_COMMONALITY: z.preprocess(boolEnv, z.boolean()).default(false),
   COMMONALITY_MIN_POPULATION: z.coerce.number().int().positive().default(20),
   COMMONALITY_AGGREGATION_BATCH: z.coerce.number().int().positive().default(50),
-  COMMONALITY_VERSION: z.string().default("population-commonality-v1.0.0"),
+  COMMONALITY_VERSION: z.string().default("population-commonality-v1.1.0"),
   /** Stale snapshot fallback: aggregates older than this are not trusted
    *  (D6-I2 §21): the engine falls back to static commonality instead of
    *  treating old statistics as current truth. */

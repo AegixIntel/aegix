@@ -31,6 +31,7 @@ const stale = new Date(Date.now() - 400 * 3600_000).toISOString(); // 400h old
 test("commonalityStatus: disabled → STATIC, not eligible", async () => {
   const status = await commonalityStatus(fakeCtx({ populationSize: 500, lastAggregationAt: fresh }), { enabled: false });
   assert.equal(status.eligible, false);
+  assert.equal(status.state, "DISABLED");
   assert.equal(status.source, "STATIC");
   assert.match(status.reason, /disabled/);
 });
@@ -42,7 +43,9 @@ test("commonalityStatus: no aggregation → FALLBACK, not eligible", async () =>
     maxSnapshotAgeHours: 336
   });
   assert.equal(status.eligible, false);
+  assert.equal(status.state, "INSUFFICIENT_POPULATION");
   assert.equal(status.source, "FALLBACK");
+  assert.equal(status.state, "INSUFFICIENT_POPULATION");
   assert.match(status.reason, /no population aggregation/);
 });
 
@@ -66,6 +69,7 @@ test("commonalityStatus: stale snapshot → FALLBACK with stale flag", async () 
   assert.equal(status.eligible, false);
   assert.equal(status.source, "FALLBACK");
   assert.equal(status.stale, true);
+  assert.equal(status.state, "STALE");
   assert.ok((status.snapshotAgeHours ?? 0) > 336);
 });
 
@@ -76,6 +80,7 @@ test("commonalityStatus: large + fresh population → POPULATION, eligible", asy
     maxSnapshotAgeHours: 336
   });
   assert.equal(status.eligible, true);
+  assert.equal(status.state, "ACTIVE");
   assert.equal(status.source, "POPULATION");
   assert.equal(status.populationSize, 100);
   assert.equal(status.stale, false);

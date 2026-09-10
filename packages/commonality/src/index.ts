@@ -18,7 +18,7 @@ import {
   type PopulationObservationType
 } from "@aegix/database";
 
-export const POPULATION_COMMONALITY_ENGINE_VERSION = "population-commonality-v1.0.0";
+export const POPULATION_COMMONALITY_ENGINE_VERSION = "population-commonality-v1.1.0";
 
 export interface CommonalityContext {
   sql: Sql;
@@ -75,9 +75,15 @@ export async function aggregatePopulation(ctx: CommonalityContext, input: { wall
   `;
   const walletAddress = walletRow?.address ?? null;
 
-  // Load the wallet's normalized observations (bounded).
-  const transfers = await analyticsRepo.transfersForWallet(input.walletId, 5000);
-  const interactions = await analyticsRepo.programInteractionsForWallet(input.walletId, 5000).catch(() => []);
+  // Load the wallet's normalized observations under one shared bound. Without
+  // this, the nominal 5,000 limit was applied independently to transfers and
+  // programs and could scan twice the documented budget.
+  const maxObservations = Math.max(1, input.maxObservations ?? 5000);
+  const transfers = await analyticsRepo.transfersForWallet(input.walletId, maxObservations);
+  const remaining = Math.max(0, maxObservations - transfers.length);
+  const interactions = remaining > 0
+    ? await analyticsRepo.programInteractionsForWallet(input.walletId, remaining).catch(() => [])
+    : [];
 
   const observations = new Map<PopulationObservationType, Map<string, number>>();
   observations.set("COUNTERPARTY", new Map());
@@ -125,6 +131,7 @@ export async function aggregatePopulation(ctx: CommonalityContext, input: { wall
 export type CommonalitySource = "POPULATION" | "STATIC" | "FALLBACK";
 
 export interface CommonalityStatus {
+  state: "DISABLED" | "INSUFFICIENT_POPULATION" | "STALE" | "ACTIVE";
   enabled: boolean;
   /** True when population data may influence this calculation. */
   eligible: boolean;
@@ -152,6 +159,7 @@ export async function commonalityStatus(
   const populationRepo = createPopulationCommonalityRepo(sql);
 
   const base: CommonalityStatus = {
+    state: "DISABLED",
     enabled: opts.enabled,
     eligible: false,
     source: opts.enabled ? "STATIC" : "STATIC",
@@ -173,11 +181,12 @@ export async function commonalityStatus(
   const stale = snapshotAgeHours !== null && snapshotAgeHours > maxAgeHours;
 
   if (populationSize === 0 || !lastAggregationAt) {
-    return { ...base, populationSize, lastAggregationAt, snapshotAgeHours: null, source: "FALLBACK", reason: "no population aggregation exists yet" };
+    return { ...base, state: "INSUFFICIENT_POPULATION", populationSize, lastAggregationAt, snapshotAgeHours: null, source: "FALLBACK", reason: "no population aggregation exists yet" };
   }
   if (populationSize < minPopulation) {
     return {
       ...base,
+      state: "INSUFFICIENT_POPULATION",
       populationSize,
       lastAggregationAt,
       snapshotAgeHours,
@@ -188,6 +197,7 @@ export async function commonalityStatus(
   if (stale) {
     return {
       ...base,
+      state: "STALE",
       populationSize,
       lastAggregationAt,
       snapshotAgeHours,
@@ -198,6 +208,7 @@ export async function commonalityStatus(
   }
   return {
     ...base,
+    state: "ACTIVE",
     populationSize,
     lastAggregationAt,
     snapshotAgeHours,

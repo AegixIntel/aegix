@@ -71,22 +71,25 @@ export function createPopulationCommonalityRepo(sql: Sql): PopulationCommonality
         // only the keys this wallet previously contributed are decremented
         // (snapshot semantics, §93-§95). Other wallets' contributions are
         // never touched.
-        const staleKeys = (state?.observation_keys ?? []) as Array<{ observation_type: string; observation_key: string }>;
+        const staleKeys = (state?.observation_keys ?? []) as Array<{ observation_type: string; observation_key: string; count?: number }>;
         if (staleKeys.length > 0) {
-          const keyRows: Array<{ observation_type: string; observation_key: string }> = [];
+          const keyRows: Array<{ observation_type: string; observation_key: string; count: number }> = [];
           for (const k of staleKeys) {
             if (typeof k.observation_type === "string" && typeof k.observation_key === "string") {
-              keyRows.push({ observation_type: k.observation_type, observation_key: k.observation_key });
+              // Older contribution rows predate stored counts; treating those
+              // as one preserves backwards compatibility without allowing a
+              // new analysis to accumulate its repeated observations forever.
+              keyRows.push({ observation_type: k.observation_type, observation_key: k.observation_key, count: typeof k.count === "number" ? k.count : 1 });
             }
           }
           if (keyRows.length > 0) {
             await tx`
               update population_observation_stats s
               set distinct_wallets = greatest(0, s.distinct_wallets - 1),
-                  observation_count = greatest(0, s.observation_count - 1),
+                  observation_count = greatest(0, s.observation_count - r.count),
                   updated_at = now()
               from jsonb_to_recordset(${tx.json(keyRows as unknown as JsonValue)}::jsonb) as r(
-                observation_type text, observation_key text
+                observation_type text, observation_key text, count integer
               )
               where s.observation_type = r.observation_type
                 and s.observation_key = r.observation_key
@@ -119,7 +122,11 @@ export function createPopulationCommonalityRepo(sql: Sql): PopulationCommonality
         // Record the contribution state (idempotency anchor) + the keys this
         // wallet contributed, so a future re-analysis can decrement exactly
         // those stats (snapshot semantics).
-        const keysForState: Array<{ observation_type: string; observation_key: string }> = rows.map((r) => ({ observation_type: r.observation_type, observation_key: r.observation_key }));
+        const keysForState = rows.map((r) => ({
+          observation_type: r.observation_type,
+          observation_key: r.observation_key,
+          count: r.count
+        }));
         await tx`
           insert into population_contribution_state (wallet_id, analysis_id, version, observation_keys)
           values (${walletId}, ${analysisId}, ${version}, ${tx.json(keysForState as unknown as JsonValue)})
