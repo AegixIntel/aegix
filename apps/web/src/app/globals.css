@@ -43,7 +43,7 @@
     }
   }
 
-  /* CTA buttons: Aeron-style motion with restrained press feedback. */
+  /* CTA buttons: restrained press feedback. */
   .btn-primary,
   .btn-secondary,
   .btn-ghost {
@@ -196,7 +196,7 @@
     @apply text-[15px] leading-relaxed text-muted-foreground;
   }
 
-  /* Buttons follow Aeron's technical CTA language: square geometry, a solid
+  /* Buttons follow a technical CTA language: square geometry, a solid
      signal-colour primary with a clipped lower-right corner, and a precise
      hairline outline for secondary actions. Compact text utilities keep the
      denser controls used throughout the authenticated app at their intended

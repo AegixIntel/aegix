@@ -43,7 +43,7 @@ export const primaryNav: NavGroup[] = [
 export const docsNavLink: NavLinkItem = { label: "Docs", href: "/docs" };
 export const roadmapNavLink: NavLinkItem = { label: "Roadmap", href: "/roadmap" };
 
-/** Left sidebar menu for the public website (Aeron-inspired layout). */
+/** Left sidebar menu for the public website. */
 export const siteMenu: NavLinkItem[] = [
   { label: "Home", href: "/" },
   { label: "Products", href: "/privacy" },
@@ -100,7 +100,7 @@ export const footerColumns = [
     title: "Product",
     links: [
       { label: "Wallet X-Ray", href: "/app/analyze" },
-      { label: "Attack My Wallet", href: "/app/analyze" },
+      { label: "Attack My Wallet", href: "/app/attack" },
       { label: "Compare", href: "/app/compare" },
       { label: "Privacy Monitor", href: "/app/monitors" },
       { label: "Market Intelligence", href: "/markets" }

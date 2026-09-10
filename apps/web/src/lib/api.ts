@@ -78,6 +78,25 @@ export interface WalletXRay {
     historyCoverageDays?: number | null;
     dataQualityScore?: number | null;
     grade?: "HIGH" | "MEDIUM" | "LOW" | null;
+    coverageDisclosure?: {
+      scope: "MOST_RECENT_BOUNDED";
+      maxSignatures: number;
+      maxTransactions: number;
+      maxRpcCalls: number;
+      maxHistoryDays: number;
+      maxExecutionTimeMs: number;
+      rpcBudgetExhausted: boolean;
+      timeBudgetExhausted: boolean;
+      someInteractionsUnclassified: boolean;
+    };
+    unknownPrograms?: Array<{
+      programId: string;
+      instructionCount: number;
+      transactionCount: number;
+      sampleSignatures: string[];
+      firstObservedSlot: number;
+      lastObservedSlot: number;
+    }>;
     components?: {
       historyCoverage?: number;
       transactionCoverage?: number;

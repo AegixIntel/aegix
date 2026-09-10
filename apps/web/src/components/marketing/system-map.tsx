@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
  *
  * Explains how public wallet activity becomes AEGIX intelligence through a
  * data-driven pipeline of six stages. Modeled on the process/state
- * choreography of aeron.sh's system map, recreated for AEGIX — not a copy.
+ * choreography of a staged process map, recreated for AEGIX.
  *
  * Behaviors:
  *  - autoplays through stages when in view (~2600ms dwell)

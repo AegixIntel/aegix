@@ -232,9 +232,16 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
           </dl>
         </div>
         <p className="mt-3 text-xs text-slate-500">
-          Data quality measures how much confidence AEGIX can place in this dataset — it is separate from the exposure
-          score.
+          Analyzed the most recent bounded activity
+          {coverage.historyStart && coverage.historyEnd
+            ? ` observed from ${new Date(coverage.historyStart).toLocaleDateString()} to ${new Date(coverage.historyEnd).toLocaleDateString()}`
+            : ""}. This is not lifetime wallet coverage. Data quality is separate from the exposure score.
         </p>
+        {coverage.coverageDisclosure?.someInteractionsUnclassified && (
+          <p className="mt-2 text-xs text-amber-400">
+            Some protocol interactions could not be classified; semantic coverage and confidence reflect that limitation.
+          </p>
+        )}
       </section>
 
       {/* Primary score */}

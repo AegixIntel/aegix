@@ -8,7 +8,7 @@ import {
   Epistemic,
   NetworkAndRoadmap,
   FinalCta
-} from "@/components/marketing/aeron-sections";
+} from "@/components/marketing/home-sections";
 
 export default function Home() {
   return (
