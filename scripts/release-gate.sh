@@ -2,6 +2,7 @@
 set -euo pipefail
 
 : "${DATABASE_URL:?Set DATABASE_URL to an allowlisted disposable test database}"
+: "${RPC_URL:?Set RPC_URL to a Solana mainnet endpoint for program-catalog verification}"
 : "${REDIS_URL:?Set REDIS_URL to a disposable test Redis instance}"
 : "${AEGIX_ALLOW_TEST_DB_RESET:?Set AEGIX_ALLOW_TEST_DB_RESET=true}"
 
@@ -15,6 +16,10 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+# A program ID that decodes cleanly but has no on-chain account matches
+# nothing, so the protocol it names silently disappears from every analysis.
+# Only a live RPC can catch that, so it gates the release.
+pnpm verify:programs
 pnpm test:web-routing
 pnpm test:migrations
 pnpm test:integration

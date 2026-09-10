@@ -26,6 +26,7 @@ work.
 | D7 functionality | VERIFIED | actual `test:e2e-d7` suite |
 | Public-beta notifications | VERIFIED | actual `test:e2e-monitor`; wallet-only user with `email = NULL` receives `IN_APP`, with no email row/job |
 | Deterministic intelligence | VERIFIED | wallet, classification, monitor, correlation, correlation-dataset, and correlation-block2 golden suites |
+| Program catalog identity | VERIFIED | `pnpm verify:programs` — all catalog program IDs resolve to executable, loader-owned mainnet accounts |
 | Container builds | VERIFIED | API, worker, web, and migration production Dockerfiles |
 | Disposable backup/restore | VERIFIED | logical backup restored to a separate disposable database with schema/data checks |
 | Real production deployment | NOT VERIFIED | No authorized target infrastructure or credentials were used |
@@ -170,7 +171,10 @@ Response steps are in `docs/deployment-runbook.md`.
 ## Known public-beta limitations
 
 - No global Solana indexer; transaction history is bounded.
-- Entity registry and protocol/NFT semantic coverage are incomplete.
+- Entity registry and protocol/NFT semantic coverage are incomplete. Program
+  identity is now consolidated in a single verified catalog — see
+  `docs/program-catalog.md`; instruction-level coverage remains partial for
+  Drift, Kamino and Raydium AMM v4.
 - Population commonality activates only when the existing real-data
   sufficiency gate passes; a feature flag alone never enables the penalty.
 - Email is not part of the required public-beta notification path.

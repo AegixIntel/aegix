@@ -113,7 +113,9 @@ test("records program interactions with category", () => {
 
   assert.equal(r.interactions.length, 1);
   const ix = r.interactions[0]!;
-  assert.equal(ix.programLabel, "Jupiter");
+  // The label names the specific program; the entity ("Jupiter") is what the
+  // classifier and the correlation commonality penalty key on.
+  assert.equal(ix.programLabel, "Jupiter Aggregator v6");
   assert.equal(ix.protocolCategory, "DEX");
   assert.equal(ix.actionType, "SWAP");
 });
@@ -180,11 +182,13 @@ test("recognizes new protocol parsers (Metaplex, Orca, Marinade)", () => {
 test("recognized programs with opaque instructions fall back to generic action (D3-B)", () => {
   // Real Metaplex instructions come as opaque base58 `data` without a parsed
   // type — the program is recognized, so the interaction must still be
-  // semantically classified instead of UNKNOWN.
+  // semantically classified instead of UNKNOWN. Instruction index 60 is not
+  // one AEGIX claims to understand, so this exercises the fallback rather
+  // than the u8 instruction map.
   const outcome = normalizeTransaction({
     signature: "sig-metaplex-opaque",
     raw: tx([
-      { programId: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", program: "metaplex", data: "3zRedDvfuC4YZdreTwV8KBm16Vk6tAWDk5XFLywbBjgEDjfxUUBZFTEr9HFNvnSrEieXVdGZ2ZtYM8NPukefk9RSog9wGsNmDzWF" }
+      { programId: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", program: "metaplex", data: "7mePU35" }
     ]),
     walletAddress: "walletA",
     rawProvider: "test"
@@ -192,6 +196,41 @@ test("recognized programs with opaque instructions fall back to generic action (
   const r = unwrap(outcome);
   assert.equal(outcome.parseClass, "FULLY_PARSED");
   assert.equal(r.interactions[0]!.actionType, "METADATA_INTERACTION");
+  assert.equal(r.interactions[0]!.protocolCategory, "NFT");
+});
+
+test("a Token Metadata instruction index AEGIX knows is parsed, not generalised", () => {
+  // Index 49 is Transfer, confirmed on mainnet by co-occurrence with
+  // spl-token transferChecked in every sampled transaction.
+  const outcome = normalizeTransaction({
+    signature: "sig-metaplex-transfer",
+    raw: tx([
+      { programId: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", program: "metaplex", data: "6XfYLU3" }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(r.interactions[0]!.actionType, "TRANSFER");
+});
+
+test("an unmapped instruction on a multi-purpose program is not guessed at", () => {
+  // TensorSwap has no fallback: claiming a generic action for an instruction
+  // we did not identify would inflate semanticCoverage, and semanticCoverage
+  // is what caps the confidence AEGIX reports.
+  const outcome = normalizeTransaction({
+    signature: "sig-tensor-unknown",
+    raw: tx([
+      { programId: "TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN", program: "tensor", data: "7mePU35" }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  assert.equal(outcome.parseClass, "PARTIALLY_PARSED");
+  assert.ok(outcome.semanticCoverage < 1, `coverage ${outcome.semanticCoverage}`);
+  const r = unwrap(outcome);
+  // Attribution survives even without an action: label and category are kept.
+  assert.equal(r.interactions[0]!.programLabel, "TensorSwap");
   assert.equal(r.interactions[0]!.protocolCategory, "NFT");
 });
 

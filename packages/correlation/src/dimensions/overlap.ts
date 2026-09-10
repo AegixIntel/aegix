@@ -10,6 +10,7 @@
  * by the FUNDING/TRANSFER families.
  */
 
+import { canonicalProgram } from "@aegix/types";
 import { COMMON_ENTITIES, COMMON_ENTITY_STRENGTH_FACTOR, COMMON_MINTS, COMMON_PROTOCOLS } from "../config.js";
 import type { EvidenceFamilyResult } from "../types.js";
 import type { TransferRow } from "@aegix/database";
@@ -174,7 +175,11 @@ export function evaluateEntityOverlap(input: OverlapInput): EvidenceFamilyResult
   // (0.25 single touch, up to 0.5 for repeated interaction on both sides).
   const contributions = shared.map((addr) => {
     const name = namesByAddress.get(addr) ?? addr;
-    const common = COMMON_ENTITIES.has(name);
+    // Commonality is a property of the ENTITY, not of one of its address
+    // labels: Jupiter owns five programs, and "Jupiter Aggregator v6" would
+    // never match a set entry of "Jupiter". Resolve through the catalog and
+    // only fall back to the stored label for addresses it does not know.
+    const common = COMMON_ENTITIES.has(canonicalProgram(addr)?.entityName ?? name);
     const repeatA = Math.min(1, (countA.get(addr) ?? 1) / 5);
     const repeatB = Math.min(1, (countB.get(addr) ?? 1) / 5);
     const repetition = Math.min(1, repeatA * repeatB * 1.5);
@@ -214,10 +219,19 @@ export function evaluateEntityOverlap(input: OverlapInput): EvidenceFamilyResult
   };
 }
 
-/** PROTOCOL_SEQUENCE_SIMILARITY: shared program usage with common-activity penalty. */
+/**
+ * PROTOCOL_SEQUENCE_SIMILARITY: shared program usage with common-activity penalty.
+ *
+ * Programs are grouped by their canonical entity before comparison. Comparing
+ * raw labels both over-counted (Jupiter v6 and Jupiter v4 looked like two
+ * independent shared protocols) and under-penalised (no label matched the
+ * common-protocol set once labels were reworded).
+ */
 export function evaluateProtocolSimilarity(input: OverlapInput): EvidenceFamilyResult | null {
-  const labelsA = new Set((input.interactionsA ?? []).map((i) => i.program_label ?? i.program_id));
-  const labelsB = new Set((input.interactionsB ?? []).map((i) => i.program_label ?? i.program_id));
+  const groupKey = (i: { program_id: string; program_label: string | null }) =>
+    canonicalProgram(i.program_id)?.entityName ?? i.program_label ?? i.program_id;
+  const labelsA = new Set((input.interactionsA ?? []).map(groupKey));
+  const labelsB = new Set((input.interactionsB ?? []).map(groupKey));
   if (labelsA.size === 0 || labelsB.size === 0) return null;
 
   const shared = [...labelsA].filter((l) => labelsB.has(l));

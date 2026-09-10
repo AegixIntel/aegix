@@ -11,7 +11,7 @@
     "build": "pnpm -r --filter \"./packages/**\" --filter \"./apps/**\" run build",
     "typecheck": "pnpm -r --filter \"./packages/**\" run build && pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
-    "test": "node --import tsx --test tests/helpers/*.test.ts && pnpm -r run test",
+    "test": "node --import tsx --test 'tests/helpers/*.test.ts' && pnpm -r run test",
     "test:integration": "pnpm --filter @aegix/api test:integration",
     "test:queue-integration": "node --import tsx tests/queue-integration.ts",
     "dev": "pnpm -r --parallel run dev",
@@ -34,7 +34,8 @@
     "loadtest:analysis": "node --import tsx tests/load-test.ts",
     "loadtest:correlation": "node --import tsx tests/load-test-correlation.ts",
     "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts",
-    "loadtest:public": "node --import tsx tests/load-test-public.ts"
+    "loadtest:public": "node --import tsx tests/load-test-public.ts",
+    "verify:programs": "node --import tsx scripts/verify-programs.ts"
   },
   "devDependencies": {
     "@aegix/blockchain": "workspace:*",

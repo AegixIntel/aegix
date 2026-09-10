@@ -10,6 +10,7 @@
  */
 
 import { classifyAccount, isAnalysisEligible } from "@aegix/blockchain";
+import { CANONICAL_PROGRAMS } from "@aegix/types";
 import type { AccountInfo } from "@aegix/blockchain";
 
 interface ClassificationCase {
@@ -40,20 +41,34 @@ function token(dataLength: number): AccountInfo {
  * reject them (they were previously in golden-wallets and failed because
  * the classifier correctly refused to analyze them).
  */
+
+/**
+ * Resolves a fixture program address from the canonical catalog instead of
+ * copying it. These fixtures used to carry their own copies, and four of them
+ * silently rotted into addresses with no mainnet account — the fixture still
+ * passed while describing a protocol it no longer pointed at. A stale label
+ * now throws instead of quietly testing the wrong address.
+ */
+function catalogProgram(label: string): string {
+  const program = CANONICAL_PROGRAMS.find((p) => p.label === label);
+  if (!program) throw new Error(`fixture references "${label}", which is not in the canonical program catalog`);
+  return program.programId;
+}
+
 const ACCOUNT_CLASSIFICATION_CASES: ClassificationCase[] = [
   { category: "TOKEN_MINT", address: "So11111111111111111111111111111111111111112", note: "Wrapped SOL mint", info: token(82), expectRejected: true },
   { category: "SYSTEM_ACCOUNT", address: "SysvarC1ock11111111111111111111111111111111", note: "clock sysvar", info: null, expectRejected: true },
-  { category: "PROTOCOL_ACCOUNT", address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", note: "Jupiter v6 program id", info: prog(), expectRejected: true },
-  { category: "DEX_PROGRAM", address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6", note: "Raydium AMM program", info: prog(), expectRejected: true },
-  { category: "DEX_PROGRAM", address: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", note: "Raydium CLMM program", info: prog(), expectRejected: true },
-  { category: "DEX_PROGRAM", address: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", note: "Orca v1 program", info: prog(), expectRejected: true },
-  { category: "DEX_PROGRAM", address: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", note: "Meteora DLMM program", info: prog(), expectRejected: true },
-  { category: "DEFI_PROGRAM", address: "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw", note: "Kamino lending program", info: prog(), expectRejected: true },
-  { category: "DEFI_PROGRAM", address: "dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF", note: "Drift program", info: prog(), expectRejected: true },
-  { category: "NFT_PROGRAM", address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", note: "Metaplex program", info: prog(), expectRejected: true },
-  { category: "STAKING_PROGRAM", address: "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD", note: "Marinade program", info: prog(), expectRejected: true },
-  { category: "BRIDGE_PROGRAM", address: "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth", note: "Wormhole bridge program", info: prog(), expectRejected: true },
-  { category: "LAUNCHPAD_PROGRAM", address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", note: "Pump.fun program", info: prog(), expectRejected: true },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Jupiter Aggregator v6"), note: "Jupiter v6 program id", info: prog(), expectRejected: true },
+  { category: "DEX_PROGRAM", address: catalogProgram("Raydium Liquidity Pool v4"), note: "Raydium AMM program", info: prog(), expectRejected: true },
+  { category: "DEX_PROGRAM", address: catalogProgram("Raydium Concentrated Liquidity"), note: "Raydium CLMM program", info: prog(), expectRejected: true },
+  { category: "DEX_PROGRAM", address: catalogProgram("Orca v1 Pools"), note: "Orca v1 program", info: prog(), expectRejected: true },
+  { category: "DEX_PROGRAM", address: catalogProgram("Meteora DLMM"), note: "Meteora DLMM program", info: prog(), expectRejected: true },
+  { category: "DEFI_PROGRAM", address: catalogProgram("Kamino Lending"), note: "Kamino lending program", info: prog(), expectRejected: true },
+  { category: "DEFI_PROGRAM", address: catalogProgram("Drift v2"), note: "Drift program", info: prog(), expectRejected: true },
+  { category: "NFT_PROGRAM", address: catalogProgram("Metaplex Token Metadata"), note: "Metaplex program", info: prog(), expectRejected: true },
+  { category: "STAKING_PROGRAM", address: catalogProgram("Marinade Finance"), note: "Marinade program", info: prog(), expectRejected: true },
+  { category: "BRIDGE_PROGRAM", address: catalogProgram("Wormhole Core Bridge"), note: "Wormhole bridge program", info: prog(), expectRejected: true },
+  { category: "LAUNCHPAD_PROGRAM", address: catalogProgram("Pump.fun Bonding Curve"), note: "Pump.fun program", info: prog(), expectRejected: true },
   { category: "USER_WALLET", address: "H4CpqxDhB2WLq43snohnKRwBEGm7XENdz8PU1cUfQm2a", note: "fresh keypair (system-owned, empty)", info: sysOwned(0), expectRejected: false }
 ];
 

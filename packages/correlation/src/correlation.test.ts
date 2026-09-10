@@ -245,3 +245,125 @@ test("PROVENANCE: dust funders excluded", async () => {
   });
   assert.equal(paths.length, 0);
 });
+
+test("direct transfers do not also feed the temporal family", () => {
+  // Evidence independence (D5-B §11): FUNDING and TRANSFER_RELATIONSHIP are
+  // built from the A↔B transfers. Those same transactions must not reappear as
+  // TEMPORAL_CORRELATION, or one observation would be counted three times.
+  const A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const B = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+  const times = ["2026-02-01T12:00:00Z", "2026-02-02T12:00:00Z", "2026-02-03T12:00:00Z", "2026-02-04T12:00:00Z"];
+  const direct = times.map((block_time, i) => ({
+    id: `id-${i}`,
+    transaction_id: `tx${i}`,
+    from_address: A,
+    to_address: B,
+    asset_type: "SOL",
+    mint: null,
+    amount_raw: "5000000000",
+    amount_normalized: "5",
+    transfer_type: "TRANSFER",
+    block_time
+  }));
+  const activity = direct.map((t) => ({ timestamp: t.block_time, signature: t.transaction_id }));
+
+  const result = computeCorrelation({
+    walletA: A,
+    walletB: B,
+    transfersA: direct,
+    transfersB: direct,
+    transactionCountA: 40,
+    transactionCountB: 40,
+    activityA: activity,
+    activityB: activity
+  });
+
+  const families = result.evidenceFamilies.map((f) => f.family);
+  assert.ok(families.includes("FUNDING"), "direct flow is funding evidence");
+  assert.ok(
+    !families.includes("TEMPORAL_CORRELATION"),
+    `direct transfers must not double-count as timing evidence: ${families.join(", ")}`
+  );
+});
+
+test("excluding direct transfers does not suppress unrelated temporal evidence", () => {
+  // The exclusion must be targeted, not a blanket mute. Wallets that transact
+  // directly AND also act coincidentally through third parties should still
+  // produce temporal evidence from the third-party activity.
+  const A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const B = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+  const X = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+  const Y = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY";
+  let n = 0;
+  const row = (from: string, to: string, value: number, block_time: string) => {
+    n += 1;
+    return {
+      id: String(n), transaction_id: `sig-${n}`, from_address: from, to_address: to,
+      asset_type: "SOL", mint: null, amount_raw: String(value), amount_normalized: String(value),
+      transfer_type: "TRANSFER", block_time
+    };
+  };
+
+  const direct = ["2026-03-01T09:00:00Z", "2026-03-02T09:00:00Z", "2026-03-03T09:00:00Z"].map((t) => row(B, A, 10, t));
+  const soloA = ["2026-03-05T09:00:00Z", "2026-03-06T09:00:00Z", "2026-03-07T09:00:00Z"].map((t) => row(X, A, 3, t));
+  const soloB = ["2026-03-05T09:00:40Z", "2026-03-06T09:00:40Z", "2026-03-07T09:00:40Z"].map((t) => row(Y, B, 3, t));
+
+  const transfersA = [...direct, ...soloA];
+  const transfersB = [...direct, ...soloB];
+  const activity = (rows: typeof transfersA) => rows.map((t) => ({ timestamp: t.block_time, signature: t.transaction_id }));
+
+  const result = computeCorrelation({
+    walletA: A, walletB: B, transfersA, transfersB,
+    transactionCountA: 40, transactionCountB: 40,
+    activityA: activity(transfersA), activityB: activity(transfersB)
+  });
+
+  const families = result.evidenceFamilies.map((f) => f.family);
+  assert.ok(families.includes("FUNDING"), families.join(", "));
+  assert.ok(
+    families.includes("TEMPORAL_CORRELATION"),
+    `third-party coincident activity is independent evidence and must survive: ${families.join(", ")}`
+  );
+
+  // And the direct transfers must not be what produced it.
+  const temporal = result.evidenceFamilies.find((f) => f.family === "TEMPORAL_CORRELATION")!;
+  const directSignatures = new Set(direct.map((t) => t.transaction_id));
+  const cited = JSON.stringify(temporal.evidence);
+  for (const signature of directSignatures) {
+    assert.ok(!cited.includes(signature), `${signature} is direct-transfer evidence and must not be cited as timing evidence`);
+  }
+});
+
+test("no signature is cited by more than one evidence family", () => {
+  const A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const B = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+  let n = 0;
+  const row = (from: string, to: string, value: number, block_time: string) => {
+    n += 1;
+    return {
+      id: String(n), transaction_id: `sig-${n}`, from_address: from, to_address: to,
+      asset_type: "SOL", mint: null, amount_raw: String(value), amount_normalized: String(value),
+      transfer_type: "TRANSFER", block_time
+    };
+  };
+  // Bidirectional flow exercises FUNDING and TRANSFER_RELATIONSHIP together.
+  const ab = ["2026-03-01T09:00:00Z", "2026-03-02T09:00:00Z", "2026-03-03T09:00:00Z"].map((t) => row(A, B, 8, t));
+  const ba = ["2026-03-01T10:00:00Z", "2026-03-02T10:00:00Z", "2026-03-03T10:00:00Z"].map((t) => row(B, A, 9, t));
+  const all = [...ab, ...ba];
+  const activity = all.map((t) => ({ timestamp: t.block_time, signature: t.transaction_id }));
+
+  const result = computeCorrelation({
+    walletA: A, walletB: B, transfersA: all, transfersB: all,
+    transactionCountA: 40, transactionCountB: 40, activityA: activity, activityB: activity
+  });
+
+  const owners = new Map<string, string[]>();
+  for (const family of result.evidenceFamilies) {
+    for (const match of JSON.stringify(family.evidence).matchAll(/sig-\d+/g)) {
+      owners.set(match[0], [...(owners.get(match[0]) ?? []), family.family]);
+    }
+  }
+  for (const [signature, families] of owners) {
+    assert.equal(families.length, 1, `${signature} is cited by ${families.join(" + ")} — evidence families must be disjoint`);
+  }
+});

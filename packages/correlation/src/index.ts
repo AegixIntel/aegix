@@ -133,13 +133,31 @@ export function computeCorrelation(input: CorrelationInput): CorrelationResult {
     semanticCoverageA,
     semanticCoverageB
   };
+  // Evidence independence (D5-B §11, D5-E §18): a transfer directly between A
+  // and B is the observation the FUNDING and TRANSFER_RELATIONSHIP families
+  // are built from. It also lands in both wallets' activity streams with one
+  // shared signature and one shared block time, so temporal analysis would
+  // pair it with itself and report a guaranteed zero-second "match". Feeding
+  // the same transfer to a third family breaks the disjoint-observation
+  // assumption of the weighted combination below, so those signatures are
+  // withheld from the temporal family.
+  const directTransferSignatures = new Set<string>();
+  for (const transfer of [...transfersA, ...transfersB]) {
+    const between =
+      (transfer.from_address === walletA && transfer.to_address === walletB) ||
+      (transfer.from_address === walletB && transfer.to_address === walletA);
+    if (between && transfer.transaction_id) directTransferSignatures.add(transfer.transaction_id);
+  }
+
   const temporalInput: TemporalInput = {
     walletA,
     walletB,
     activityA: input.activityA ?? [],
     activityB: input.activityB ?? [],
     dataQualityA: semanticCoverageA,
-    dataQualityB: semanticCoverageB
+    dataQualityB: semanticCoverageB,
+    excludedSignaturesA: directTransferSignatures,
+    excludedSignaturesB: directTransferSignatures
   };
 
   // Compute each family (evidence-independent by construction).

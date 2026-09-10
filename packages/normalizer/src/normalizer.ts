@@ -1,3 +1,4 @@
+import { canonicalProgram } from "@aegix/types";
 import type {
   NormalizedProgramInteraction,
   NormalizedTransaction,
@@ -22,18 +23,34 @@ const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
 const WRAPPED_SOL_MINT = "So11111111111111111111111111111111111111112";
 
 /**
+ * Priority order when several catalog programs in one transaction each imply
+ * a class. A Jupiter swap routed through Kamino is a SWAP, not a LENDING
+ * interaction, so the more specific intent wins over the venue it touched.
+ */
+const CLASS_PRIORITY: TransactionClass[] = ["SWAP", "LENDING", "NFT_MINT", "NFT_TRADE", "STAKE", "PAYMENT", "TRANSFER"];
+
+/**
  * Detects the transaction class from its instructions.
- * Heuristic: swap programs => SWAP, NFT programs => NFT_*, etc.
+ *
+ * Program → class hints come from the canonical catalog. They used to be
+ * hard-coded here, and three of the six addresses in that list had no
+ * on-chain account, so Raydium, Kamino and Drift transactions were silently
+ * classed UNKNOWN.
  */
 export function detectTransactionClass(ixs: ParsedInstruction[]): TransactionClass {
   const programIds = new Set(ixs.map((ix) => ix.programId));
-  if (programIds.has("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4")) return "SWAP";
-  if (programIds.has("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6")) return "SWAP";
-  if (programIds.has("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK")) return "SWAP";
-  if (programIds.has("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P")) return "PAYMENT";
-  if (programIds.has("KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw")) return "LENDING";
-  if (programIds.has("dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF")) return "LENDING";
-  if (programIds.has("Stake11111111111111111111111111111111111111")) return "STAKE";
+
+  const implied = new Set<TransactionClass>();
+  for (const programId of programIds) {
+    const program = canonicalProgram(programId);
+    if (program?.transactionClass) implied.add(program.transactionClass);
+  }
+  if (programIds.has("Stake11111111111111111111111111111111111111")) implied.add("STAKE");
+
+  for (const candidate of CLASS_PRIORITY) {
+    if (implied.has(candidate)) return candidate;
+  }
+
   const types = new Set(ixs.map((ix) => ix.parsed?.type));
   if (types.has("mintTo")) return "NFT_MINT";
   if (types.has("transfer") && programIds.has("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")) return "TRANSFER";

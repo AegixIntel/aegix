@@ -60,6 +60,36 @@ function toMillis(ts: string): number {
   return new Date(ts).getTime();
 }
 
+/** Drops activity whose signature was already attributed to another family. */
+function excludeSignatures(activity: TemporalActivity[], excluded?: Set<string>): TemporalActivity[] {
+  if (!excluded || excluded.size === 0) return activity;
+  return activity.filter((a) => !a.signature || !excluded.has(a.signature));
+}
+
+/**
+ * Signatures present in BOTH wallets' activity. One transaction that both
+ * wallets appear in is a direct interaction between them, which is what the
+ * FUNDING and TRANSFER_RELATIONSHIP families are built from — not two
+ * independent timing observations. Left in, such a transaction is a
+ * guaranteed zero-second window match AND an identical contribution to both
+ * hour-of-day distributions, so it manufactures temporal "evidence" from
+ * nothing.
+ */
+function union(a: Set<string> | undefined, b: Set<string>): Set<string> {
+  if (!a || a.size === 0) return b;
+  const out = new Set(a);
+  for (const value of b) out.add(value);
+  return out;
+}
+
+function sharedSignatures(activityA: TemporalActivity[], activityB: TemporalActivity[]): Set<string> {
+  const inA = new Set<string>();
+  for (const a of activityA) if (a.signature) inA.add(a.signature);
+  const shared = new Set<string>();
+  for (const b of activityB) if (b.signature && inA.has(b.signature)) shared.add(b.signature);
+  return shared;
+}
+
 /** Count how many B activities fall within [t, t+window] for each A activity.
  * Returns matched pairs (one A activity can match one B activity at most). */
 function windowMatches(activityA: TemporalActivity[], activityB: TemporalActivity[], windowSeconds: number): WindowMatch[] {
@@ -70,16 +100,17 @@ function windowMatches(activityA: TemporalActivity[], activityB: TemporalActivit
     const t = toMillis(a.timestamp);
     for (let i = 0; i < sortedB.length; i++) {
       if (usedB.has(i)) continue;
-      const bt = toMillis(sortedB[i]!.timestamp);
+      const candidate = sortedB[i]!;
+      const bt = toMillis(candidate.timestamp);
       const delta = bt - t;
       if (delta >= 0 && delta <= windowSeconds * 1000) {
         usedB.add(i);
         matches.push({
           aTimestamp: a.timestamp,
-          bTimestamp: sortedB[i]!.timestamp,
+          bTimestamp: candidate.timestamp,
           deltaSeconds: Math.round(delta / 1000),
           aSignature: a.signature,
-          bSignature: sortedB[i]!.signature
+          bSignature: candidate.signature
         });
         break;
       }
@@ -126,7 +157,23 @@ function cosine(a: Record<number, number>, b: Record<number, number>): number {
  * rate).
  */
 export function evaluateTemporalCorrelation(input: TemporalInput): EvidenceFamilyResult | null {
-  const { walletA, walletB, activityA, activityB } = input;
+  const { walletA, walletB } = input;
+
+  // Evidence de-duplication (D5-E §18). Transactions already consumed by the
+  // FUNDING / TRANSFER_RELATIONSHIP families must not be re-counted here: the
+  // combination model in `computeCorrelation` assumes families are computed
+  // over disjoint observations, so reusing a transfer inflates the score with
+  // one piece of evidence wearing two hats.
+  // Transactions both wallets took part in are excluded unconditionally; the
+  // caller's exclusion set covers evidence attributed to other families.
+  const shared = sharedSignatures(input.activityA, input.activityB);
+  const excludeA = union(input.excludedSignaturesA, shared);
+  const excludeB = union(input.excludedSignaturesB, shared);
+  const activityA = excludeSignatures(input.activityA, excludeA);
+  const activityB = excludeSignatures(input.activityB, excludeB);
+  const excludedCount =
+    (input.activityA.length - activityA.length) + (input.activityB.length - activityB.length);
+
   if (activityA.length < TEMPORAL_MIN_REPEATED_MATCHES || activityB.length < TEMPORAL_MIN_REPEATED_MATCHES) return null;
 
   const allTimes = [...activityA, ...activityB].map((a) => toMillis(a.timestamp)).sort((a, b) => a - b);
@@ -226,6 +273,11 @@ export function evaluateTemporalCorrelation(input: TemporalInput): EvidenceFamil
     "Activity timing patterns describe observable behavior; they never indicate where or when a person lives",
     "Temporal evidence is base-rate corrected; high-volume wallets naturally collide in time"
   );
+  if (excludedCount > 0) {
+    limitations.push(
+      `${excludedCount} transaction(s) already counted as direct transfer evidence were excluded from timing analysis`
+    );
+  }
 
   return {
     family: "TEMPORAL_CORRELATION",

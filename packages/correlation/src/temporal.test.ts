@@ -94,3 +94,65 @@ test("TEMPORAL: safe language — never timezone/country/location", () => {
   assert.ok(!text.includes("country"));
   assert.ok(!text.includes("location"));
 });
+
+test("TEMPORAL: a transaction never matches itself across the two wallets", () => {
+  // A direct A→B transfer is ONE transaction that appears in both wallets'
+  // activity with the same signature and the same block time. Pairing it with
+  // itself produced a guaranteed Δ0s "match", which drove TEMPORAL_CORRELATION
+  // to its maximum strength on evidence the FUNDING and TRANSFER families had
+  // already counted.
+  const shared = ["tx1", "tx2", "tx3", "tx4"].map((signature, i) => ({
+    timestamp: new Date(new Date(T0).getTime() + i * 86400 * 1000).toISOString(),
+    signature
+  }));
+  const r = evaluateTemporalCorrelation({
+    walletA: "A",
+    walletB: "B",
+    activityA: shared,
+    activityB: shared,
+    observationPeriodSeconds: 400000
+  });
+  assert.equal(r, null, "identical transactions are not independent timing evidence");
+});
+
+test("TEMPORAL: excluded signatures are dropped before analysis", () => {
+  const a = series(T0, [0, 86400, 172800, 259200, 345600]);
+  const b = series(T0, [45, 86445, 172845, 259245, 345645]);
+  const withEvidence = evaluateTemporalCorrelation({
+    walletA: "A", walletB: "B", activityA: a, activityB: b, observationPeriodSeconds: 400000
+  });
+  assert.ok(withEvidence !== null, "baseline temporal family present");
+
+  const excludedA = new Set(a.map((x) => x.signature!));
+  const excluded = evaluateTemporalCorrelation({
+    walletA: "A", walletB: "B", activityA: a, activityB: b, observationPeriodSeconds: 400000,
+    excludedSignaturesA: excludedA
+  });
+  assert.equal(excluded, null, "excluding all of A's activity leaves nothing to correlate");
+});
+
+test("TEMPORAL: partial exclusion is disclosed as a limitation", () => {
+  const a = series(T0, [0, 86400, 172800, 259200, 345600, 432000]);
+  const b = series(T0, [45, 86445, 172845, 259245, 345645, 432045]);
+  const r = evaluateTemporalCorrelation({
+    walletA: "A", walletB: "B", activityA: a, activityB: b, observationPeriodSeconds: 500000,
+    excludedSignaturesA: new Set([a[0]!.signature!])
+  });
+  assert.ok(r !== null);
+  assert.ok(
+    r.limitations.some((l) => l.includes("excluded from timing analysis")),
+    `exclusion must be disclosed: ${r.limitations.join(" | ")}`
+  );
+});
+
+test("TEMPORAL: unrelated wallets acting in the same window still correlate", () => {
+  // The self-match guard must not suppress genuine coincident activity — only
+  // pairs that are literally the same transaction.
+  const a = series(T0, [0, 86400, 172800, 259200, 345600]);
+  const b = series(T0, [45, 86445, 172845, 259245, 345645]);
+  const r = evaluateTemporalCorrelation({
+    walletA: "A", walletB: "B", activityA: a, activityB: b, observationPeriodSeconds: 400000
+  });
+  assert.ok(r !== null, "distinct transactions in a tight window remain evidence");
+  assert.ok(r.strength >= 0.4, `strength ${r.strength}`);
+});

@@ -51,7 +51,6 @@ const X = "J6AvzEkmvepWB498Q4QzHvTxgaLTqKBAoL3JFXVisEWx";
 const Y = "E3ygRpueE2J1FS9G8SgrLzoenzjWrrYU5bm1o2jCuyVh";
 
 const JUPITER_PROG = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
-const RAYDIUM_PROG = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const EXCHANGE = "ExchangeEeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const HUB = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";

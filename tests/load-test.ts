@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { Worker } from "bullmq";
 import { loadConfig } from "@aegix/config";
+import { CANONICAL_PROGRAMS } from "@aegix/types";
 import { createDb, createAnalysisJobRepo, createWalletRepo, type AnalysisJobRow } from "@aegix/database";
 import { createCache } from "@aegix/cache";
 import { createQueues } from "@aegix/queue";
@@ -91,16 +92,30 @@ function parseArgs(argv: string[]): Options {
   return opts;
 }
 
+
+/**
+ * Resolves a fixture program address from the canonical catalog instead of
+ * copying it. These fixtures used to carry their own copies, and four of them
+ * silently rotted into addresses with no mainnet account — the fixture still
+ * passed while describing a protocol it no longer pointed at. A stale label
+ * now throws instead of quietly testing the wrong address.
+ */
+function catalogProgram(label: string): string {
+  const program = CANONICAL_PROGRAMS.find((p) => p.label === label);
+  if (!program) throw new Error(`fixture references "${label}", which is not in the canonical program catalog`);
+  return program.programId;
+}
+
 const DEFAULT_WALLETS: LoadWallet[] = [
   { category: "TOKEN_MINT", address: "So11111111111111111111111111111111111111112", note: "Wrapped SOL mint" },
   { category: "SYSTEM_ACCOUNT", address: "SysvarC1ock11111111111111111111111111111111", note: "clock sysvar" },
-  { category: "PROTOCOL_ACCOUNT", address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", note: "Jupiter v6" },
-  { category: "PROTOCOL_ACCOUNT", address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6", note: "Raydium AMM" },
-  { category: "PROTOCOL_ACCOUNT", address: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", note: "Raydium CLMM" },
-  { category: "PROTOCOL_ACCOUNT", address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", note: "Pump.fun" },
-  { category: "PROTOCOL_ACCOUNT", address: "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw", note: "Kamino" },
-  { category: "PROTOCOL_ACCOUNT", address: "dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF", note: "Drift" },
-  { category: "PROTOCOL_ACCOUNT", address: "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX", note: "OpenBook" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Jupiter Aggregator v6"), note: "Jupiter v6" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Raydium Liquidity Pool v4"), note: "Raydium AMM" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Raydium Concentrated Liquidity"), note: "Raydium CLMM" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Pump.fun Bonding Curve"), note: "Pump.fun" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Kamino Lending"), note: "Kamino" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Drift v2"), note: "Drift" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("OpenBook v1"), note: "OpenBook" },
   { category: "NEW_WALLET", address: "H4CpqxDhB2WLq43snohnKRwBEGm7XENdz8PU1cUfQm2a", note: "fresh, zero activity" }
 ];
 

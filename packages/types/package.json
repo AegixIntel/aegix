@@ -15,9 +15,11 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests\""
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2"
   }
 }

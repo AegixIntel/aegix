@@ -13,6 +13,7 @@
  */
 
 import { loadConfig } from "@aegix/config";
+import { CANONICAL_PROGRAMS } from "@aegix/types";
 import { createDb, createAnalysisJobRepo, createWalletRepo, createIntelligenceRepo } from "@aegix/database";
 import { createCache } from "@aegix/cache";
 import { createLogger } from "@aegix/logging";
@@ -32,21 +33,35 @@ interface GoldenWallet {
  * - PROTOCOL_ACCOUNT: known protocol program id
  * - USER_*: real active wallets (public protocol/system accounts only)
  */
+
+/**
+ * Resolves a fixture program address from the canonical catalog instead of
+ * copying it. These fixtures used to carry their own copies, and four of them
+ * silently rotted into addresses with no mainnet account — the fixture still
+ * passed while describing a protocol it no longer pointed at. A stale label
+ * now throws instead of quietly testing the wrong address.
+ */
+function catalogProgram(label: string): string {
+  const program = CANONICAL_PROGRAMS.find((p) => p.label === label);
+  if (!program) throw new Error(`fixture references "${label}", which is not in the canonical program catalog`);
+  return program.programId;
+}
+
 const GOLDEN_WALLETS: GoldenWallet[] = [
   { category: "NEW_WALLET", address: "H4CpqxDhB2WLq43snohnKRwBEGm7XENdz8PU1cUfQm2a", note: "fresh keypair, zero activity" },
   { category: "TOKEN_MINT", address: "So11111111111111111111111111111111111111112", note: "Wrapped SOL mint, very high activity" },
   { category: "SYSTEM_ACCOUNT", address: "SysvarC1ock11111111111111111111111111111111", note: "clock sysvar, system traffic" },
-  { category: "PROTOCOL_ACCOUNT", address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4", note: "Jupiter v6 program id" },
-  { category: "DEX_HEAVY", address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6", note: "Raydium AMM program" },
-  { category: "DEX_HEAVY", address: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", note: "Raydium CLMM program" },
-  { category: "DEX_HEAVY", address: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP", note: "Orca v1 program" },
-  { category: "DEX_HEAVY", address: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo", note: "Meteora DLMM program" },
-  { category: "DEFI_HEAVY", address: "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw", note: "Kamino lending program" },
-  { category: "DEFI_HEAVY", address: "dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF", note: "Drift program" },
-  { category: "NFT_HEAVY", address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s", note: "Metaplex Token Metadata program" },
-  { category: "STAKING", address: "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD", note: "Marinade liquid staking program" },
-  { category: "BRIDGE", address: "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth", note: "Wormhole bridge program" },
-  { category: "MEMECOIN", address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P", note: "Pump.fun launchpad program" },
+  { category: "PROTOCOL_ACCOUNT", address: catalogProgram("Jupiter Aggregator v6"), note: "Jupiter v6 program id" },
+  { category: "DEX_HEAVY", address: catalogProgram("Raydium Liquidity Pool v4"), note: "Raydium AMM program" },
+  { category: "DEX_HEAVY", address: catalogProgram("Raydium Concentrated Liquidity"), note: "Raydium CLMM program" },
+  { category: "DEX_HEAVY", address: catalogProgram("Orca v1 Pools"), note: "Orca v1 program" },
+  { category: "DEX_HEAVY", address: catalogProgram("Meteora DLMM"), note: "Meteora DLMM program" },
+  { category: "DEFI_HEAVY", address: catalogProgram("Kamino Lending"), note: "Kamino lending program" },
+  { category: "DEFI_HEAVY", address: catalogProgram("Drift v2"), note: "Drift program" },
+  { category: "NFT_HEAVY", address: catalogProgram("Metaplex Token Metadata"), note: "Metaplex Token Metadata program" },
+  { category: "STAKING", address: catalogProgram("Marinade Finance"), note: "Marinade liquid staking program" },
+  { category: "BRIDGE", address: catalogProgram("Wormhole Core Bridge"), note: "Wormhole bridge program" },
+  { category: "MEMECOIN", address: catalogProgram("Pump.fun Bonding Curve"), note: "Pump.fun launchpad program" },
   { category: "USER_REPEATED_COUNTERPARTY", address: "7iDEKWJMprnBCLj8ZnSJxxa9TvMN83YCzrqpAU4Sp9KU", note: "repeated counterparty wallet" }
 ];
 

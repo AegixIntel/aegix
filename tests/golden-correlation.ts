@@ -52,7 +52,7 @@ const Y = "WalletYyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy";
 const EXCHANGE = "ExchangeEeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
 const JUPITER_PROG = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
-const RAYDIUM_PROG = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6";
+const RAYDIUM_PROG = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 
 function baseInput(overrides: Partial<CorrelationInput>): CorrelationInput {
   return {
@@ -144,10 +144,49 @@ console.log("\n=== Golden correlation cases ===\n");
   ok("SHARED_PROTOCOL_ONLY: score < 35", r.correlationScore < 35, `score ${r.correlationScore}`);
 }
 
-// 7. TEMPORAL_SIMILARITY_ONLY (negative control — one coincidence)
+// 7. TEMPORAL_SIMILARITY_ONLY (negative control — no timing evidence at all)
 {
   const r = computeCorrelation(baseInput({ transactionCountA: 50, transactionCountB: 50 }));
-  ok("TEMPORAL_SIMILARITY_ONLY: no temporal family (not implemented yet, score low)", r.correlationScore < 30, `score ${r.correlationScore}`);
+  ok("TEMPORAL_SIMILARITY_ONLY: no temporal family without activity", !r.evidenceFamilies.some((f) => f.family === "TEMPORAL_CORRELATION"));
+  ok("TEMPORAL_SIMILARITY_ONLY: score < 30", r.correlationScore < 30, `score ${r.correlationScore}`);
+}
+
+// 7b. TEMPORAL_REPEATED_WINDOW (positive — repeated coincident activity)
+{
+  const base = new Date("2026-03-01T09:00:00Z").getTime();
+  const activity = (offsets: number[], prefix: string) =>
+    offsets.map((o, i) => ({ timestamp: new Date(base + o * 1000).toISOString(), signature: `${prefix}-${i}` }));
+  const r = computeCorrelation(baseInput({
+    transactionCountA: 40,
+    transactionCountB: 40,
+    activityA: activity([0, 86400, 172800, 259200, 345600], "a"),
+    activityB: activity([40, 86440, 172840, 259240, 345640], "b")
+  }));
+  const temporal = r.evidenceFamilies.find((f) => f.family === "TEMPORAL_CORRELATION");
+  ok("TEMPORAL_REPEATED_WINDOW: temporal family present", temporal !== undefined);
+  ok("TEMPORAL_REPEATED_WINDOW: base-rate evidence exposed", temporal?.evidence.some((e) => e.key === "expected_random") ?? false);
+  ok("TEMPORAL_REPEATED_WINDOW: not strong alone (single non-direct family capped)", r.correlationScore < 55, `score ${r.correlationScore}`);
+  ok("TEMPORAL_REPEATED_WINDOW: never claims location", !JSON.stringify(r).toLowerCase().includes("timezone"));
+}
+
+// 7c. TEMPORAL_EVIDENCE_INDEPENDENCE (direct transfers must not double-count)
+{
+  const times = ["2026-03-01T09:00:00Z", "2026-03-02T09:00:00Z", "2026-03-03T09:00:00Z", "2026-03-04T09:00:00Z"];
+  const direct = times.map((t) => transfer(B, A, 10, t));
+  const shared = direct.map((t) => ({ timestamp: t.block_time, signature: t.transaction_id }));
+  const r = computeCorrelation(baseInput({
+    transfersA: direct,
+    transfersB: direct,
+    transactionCountA: 40,
+    transactionCountB: 40,
+    activityA: shared,
+    activityB: shared
+  }));
+  ok("TEMPORAL_EVIDENCE_INDEPENDENCE: funding family present", r.evidenceFamilies.some((f) => f.family === "FUNDING"));
+  ok(
+    "TEMPORAL_EVIDENCE_INDEPENDENCE: the same transfers do not also form temporal evidence",
+    !r.evidenceFamilies.some((f) => f.family === "TEMPORAL_CORRELATION")
+  );
 }
 
 // 8. WEAK_COINCIDENCE (single small transfer)

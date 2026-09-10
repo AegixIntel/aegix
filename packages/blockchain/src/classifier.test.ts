@@ -87,3 +87,16 @@ test("base58 signature decoder preserves leading zero bytes", () => {
   assert.equal(decoded?.length, 64);
   assert.ok(decoded?.every((byte) => byte === 0));
 });
+
+test("PumpSwap is attributed to Pump.fun, never to Raydium", () => {
+  // pAMMBay… shipped labelled "Raydium AMM v4". The `pAMM` vanity prefix and
+  // its co-occurrence with the Pump.fun fee program identify it as PumpSwap,
+  // so every PumpSwap trade was attributed to the wrong protocol and the
+  // wrong entity. This must never silently return.
+  const pumpswap = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
+  const c = classifyAccount(pumpswap, info({ executable: true, owner: "BPFLoaderUpgradeab1e11111111111111111111111" }));
+  assert.equal(c.accountType, "PROTOCOL_ACCOUNT");
+  assert.equal(c.protocol, "Pump.fun");
+  assert.notEqual(c.protocol, "Raydium");
+  assert.ok(!/raydium/i.test(JSON.stringify(c)), "no Raydium attribution may survive anywhere in the classification");
+});

@@ -1,13 +1,22 @@
 /**
- * Entity registry seed v1, see architecture.md §17, §36-§37 and milestone Phase 9.
+ * Entity registry seed, see architecture.md §17, §36-§37 and milestone Phase 9.
+ *
+ * Entries are derived from the canonical program catalog in `@aegix/types`,
+ * which is the single source of truth for every program identity AEGIX
+ * claims. This file used to hold its own copy of the addresses; four of them
+ * pointed at accounts that do not exist on mainnet, so those protocols were
+ * never recognized in any analysis.
  *
  * Seeds ONLY protocol program IDs that are publicly documented and stable.
+ * Infrastructure programs (memo, compression, oracles) are parsed but not
+ * seeded: every wallet touches them, so they carry no attribution value.
  * Exchange wallet addresses are deliberately NOT seeded — weak attribution
  * must never become fact.
  *
  * Usage: pnpm --filter @aegix/database seed:entities
  */
 
+import { SEEDABLE_ENTITIES, base58ByteLength } from "@aegix/types";
 import postgres from "postgres";
 import { createEntityRegistryRepo } from "./repositories/entity-registry.js";
 
@@ -33,227 +42,27 @@ export interface SeedEntry {
   }>;
 }
 
-/** Program IDs are protocol-owned accounts; treat as VERIFIED with high confidence. */
-const SEED_ENTITIES: SeedEntry[] = [
-  {
-    name: "Jupiter",
-    entityType: "DEX",
-    description: "Jupiter Aggregator v6 — Solana's primary DEX aggregator.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
-        label: "Jupiter Aggregator v6",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://jup.ag/docs"
-      }
-    ]
-  },
-  {
-    name: "Raydium AMM",
-    entityType: "DEX",
-    description: "Raydium AMM pool program.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6",
-        label: "Raydium AMM",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://raydium.io"
-      },
-      {
-        address: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
-        label: "Raydium Concentrated Liquidity",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://raydium.io"
-      }
-    ]
-  },
-  {
-    name: "Pump.fun",
-    entityType: "PROTOCOL",
-    description: "Pump.fun meme token launchpad.",
-    status: "VERIFIED",
-    confidence: 0.95,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P",
-        label: "Pump.fun",
-        confidence: 0.95,
-        status: "VERIFIED",
-        evidenceSource: "https://pump.fun"
-      }
-    ]
-  },
-  {
-    name: "Kamino",
-    entityType: "LENDING",
-    description: "Kamino lending protocol.",
-    status: "VERIFIED",
-    confidence: 0.95,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw",
-        label: "Kamino Lending",
-        confidence: 0.95,
-        status: "VERIFIED",
-        evidenceSource: "https://app.kamino.finance"
-      }
-    ]
-  },
-  {
-    name: "Drift",
-    entityType: "LENDING",
-    description: "Drift perpetuals / lending protocol.",
-    status: "VERIFIED",
-    confidence: 0.95,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF",
-        label: "Drift",
-        confidence: 0.95,
-        status: "VERIFIED",
-        evidenceSource: "https://www.drift.trade"
-      }
-    ]
-  },
-  {
-    name: "OpenBook",
-    entityType: "DEX",
-    description: "OpenBook central limit order book.",
-    status: "PROBABLE",
-    confidence: 0.9,
-    sourceType: "COMMUNITY_DOCUMENTATION",
-    addresses: [
-      {
-        address: "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX",
-        label: "OpenBook",
-        confidence: 0.9,
-        status: "PROBABLE",
-        evidenceSource: "https://github.com/openbook-dex"
-      }
-    ]
-  },
-  {
-    name: "Magic Eden",
-    entityType: "NFT_MARKETPLACE",
-    description: "Magic Eden v2 — Solana NFT marketplace.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K",
-        label: "Magic Eden v2",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://magiceden.io"
-      }
-    ]
-  },
-  {
-    name: "Metaplex",
-    entityType: "NFT_MARKETPLACE",
-    description: "Metaplex Token Metadata — the standard for NFT metadata on Solana.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
-        label: "Metaplex Token Metadata",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.metaplex.com"
-      }
-    ]
-  },
-  {
-    name: "Orca",
-    entityType: "DEX",
-    description: "Orca — concentrated liquidity DEX on Solana.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
-        label: "Orca v1",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.orca.so"
-      },
-      {
-        address: "whirLbMiicVdio4qvUfM5KAg6Ct8VdjYdZyBf5byvVM",
-        label: "Orca Whirlpools",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.orca.so"
-      }
-    ]
-  },
-  {
-    name: "Meteora",
-    entityType: "DEX",
-    description: "Meteora — dynamic liquidity pools on Solana.",
-    status: "VERIFIED",
-    confidence: 0.95,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
-        label: "Meteora DLMM",
-        confidence: 0.95,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.meteora.ag"
-      }
-    ]
-  },
-  {
-    name: "Marinade",
-    entityType: "STAKING",
-    description: "Marinade — liquid staking protocol on Solana.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD",
-        label: "Marinade Finance",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.marinade.finance"
-      }
-    ]
-  },
-  {
-    name: "Wormhole",
-    entityType: "BRIDGE",
-    description: "Wormhole — cross-chain bridge protocol.",
-    status: "VERIFIED",
-    confidence: 0.98,
-    sourceType: "PROTOCOL_DOCUMENTATION",
-    addresses: [
-      {
-        address: "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth",
-        label: "Wormhole",
-        confidence: 0.98,
-        status: "VERIFIED",
-        evidenceSource: "https://docs.wormhole.com"
-      }
-    ]
-  }
-];
+/**
+ * Program IDs are protocol-owned accounts. Derived from the canonical
+ * catalog so an address is written down exactly once in the codebase.
+ */
+export const SEED_ENTITIES: SeedEntry[] = SEEDABLE_ENTITIES.map((entity) => ({
+  name: entity.name,
+  entityType: entity.entityType,
+  description: entity.description,
+  status: entity.status,
+  confidence: entity.confidence,
+  sourceType: entity.sourceType,
+  addresses: entity.programs.map((program) => ({
+    address: program.programId,
+    label: program.label,
+    confidence: program.confidence,
+    status: program.status,
+    evidenceSource: program.evidenceSource,
+    role: program.role,
+    deprecatedReason: program.deprecatedReason
+  }))
+}));
 
 /**
  * Validates the seed registry before loading, see milestone D2 Phase 11.
@@ -321,15 +130,13 @@ export function validateSeedEntries(entries: SeedEntry[]): string[] {
   return problems;
 }
 
-const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-/** Base58 check: valid chars only + length in the Solana address range. */
+/**
+ * A Solana public key is exactly 32 bytes. The previous check only looked at
+ * the character set and the string length, which accepts strings that decode
+ * to 31 bytes — exactly how an unusable Tensor program ID survived review.
+ */
 function isValidBase58Address(address: string): boolean {
-  if (address.length < 32 || address.length > 44) return false;
-  for (const ch of address) {
-    if (!BASE58_ALPHABET.includes(ch)) return false;
-  }
-  return true;
+  return base58ByteLength(address) === 32;
 }
 
 async function run(): Promise<void> {

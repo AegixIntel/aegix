@@ -7,6 +7,7 @@
  * not fetched as if they were user wallets.
  */
 
+import { CANONICAL_PROGRAMS } from "@aegix/types";
 import type { AccountInfo, BlockchainProvider } from "./types.js";
 
 export type AccountType =
@@ -57,25 +58,23 @@ const SYSVARS: Record<string, string> = {
   SysvarS1otHistory11111111111111111111111111: "slot_history"
 };
 
-/** Known protocol program IDs, kept in sync with the entity seed registry. */
-const KNOWN_PROTOCOLS: Record<string, { protocol: string; status: string }> = {
-  JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4: { protocol: "Jupiter", status: "VERIFIED" },
-  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wF2tcy6u6": { protocol: "Raydium AMM", status: "VERIFIED" },
-  pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA: { protocol: "Raydium AMM v4", status: "VERIFIED" },
-  CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK: { protocol: "Raydium Concentrated", status: "VERIFIED" },
-  "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P": { protocol: "Pump.fun", status: "VERIFIED" },
-  KLend2g3cP87fffH8vSekita2WqbcjYb75QHoWJvEPw: { protocol: "Kamino", status: "VERIFIED" },
-  dRiftyHA39MWEi3m9aunc5tRFoFjCjFQ5uMYFnMqdfF: { protocol: "Drift", status: "VERIFIED" },
-  metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s: { protocol: "Metaplex", status: "VERIFIED" },
-  "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP": { protocol: "Orca", status: "VERIFIED" },
-  whirLbMiicVdio4qvUfM5KAg6Ct8VdjYdZyBf5byvVM: { protocol: "Orca Whirlpools", status: "VERIFIED" },
-  LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo: { protocol: "Meteora DLMM", status: "VERIFIED" },
-  MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD: { protocol: "Marinade", status: "VERIFIED" },
-  worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth: { protocol: "Wormhole", status: "VERIFIED" },
-  srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX: { protocol: "OpenBook", status: "PROBABLE" },
-  M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5Cyc5aF7K: { protocol: "Magic Eden v2", status: "VERIFIED" },
-  TSWAPaqyCsxBPKKhB9A9d3SxJS1QyJzUHVN5VKHTWA: { protocol: "Tensor", status: "PROBABLE" }
-};
+/**
+ * Known protocol program IDs, derived from the canonical catalog.
+ *
+ * This table used to be maintained by hand alongside three others. It drifted:
+ * it carried a Tensor "program ID" that decoded to 31 bytes — not a public key
+ * at all — plus four addresses with no on-chain account, so those protocols
+ * classified as generic PROGRAM instead of PROTOCOL_ACCOUNT.
+ */
+const KNOWN_PROTOCOLS: Record<string, { protocol: string; status: string }> = Object.fromEntries(
+  CANONICAL_PROGRAMS.map((program) => [
+    program.programId,
+    // The protocol identity is the ENTITY ("Jupiter"), not the individual
+    // program label ("Jupiter Aggregator v6"). Jupiter owns five programs and
+    // they all belong to the same protocol.
+    { protocol: program.entityName, status: program.status }
+  ])
+);
 
 /**
  * Classifies an address using live account info.

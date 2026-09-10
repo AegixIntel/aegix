@@ -39,14 +39,23 @@ export const CORRELATION_FAMILY_WEIGHTS: CorrelationFamilyWeights[] = [
 ];
 
 /**
- * Common-activity base rates. Shared use of these carries little
- * correlation value on its own (D5-B §12).
+ * Common-activity base rates (D5-B §12, D5-F §30).
+ *
+ * These are canonical ENTITY names from the program catalog, not free-text
+ * program labels. They used to be labels, which meant the penalty quietly
+ * stopped applying whenever a label was reworded — and a label like
+ * "Raydium AMM" never matched the set entry "Raydium" in the first place.
+ * Shared use of a popular protocol would then look like correlation evidence.
+ * `config.test.ts` asserts every name here still exists in the catalog.
  */
 export const COMMON_PROTOCOLS = new Set([
   "Jupiter",
-  "Jupiter Aggregator",
   "Raydium",
   "Pump.fun",
+  "Orca",
+  "Meteora",
+  "Solana Program Library",
+  "Oracles",
   "System Program",
   "Token Program",
   "Token-2022"
@@ -59,23 +68,22 @@ export const COMMON_MINTS = new Set([
 ]);
 
 /**
- * D5-F §30: commonality penalty for ENTITY_OVERLAP. Popular entities
- * (Jupiter, Raydium, USDC infrastructure, common bridges) carry a small
- * correlation value — nearly every Solana wallet touches them. Only
+ * D5-F §30: commonality penalty for ENTITY_OVERLAP. Popular entities carry
+ * a small correlation value — nearly every Solana wallet touches them. Only
  * uncommon verified entities meaningfully separate wallets.
- *
- * The set stores entity NAMES (registry `name`), and the penalty is applied
- * by matching the shared entity name (and its protocol category).
  */
 export const COMMON_ENTITIES = new Set([
   "Jupiter",
-  "Raydium AMM",
+  "Raydium",
   "Pump.fun",
   "Wormhole",
   "Orca",
   "Meteora",
   "Marinade",
-  "Metaplex"
+  "Metaplex",
+  "Magic Eden",
+  "Solana Program Library",
+  "Oracles"
 ]);
 
 /** D5-F §30: verified common entities contribute this fraction of their
