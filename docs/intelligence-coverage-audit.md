@@ -197,3 +197,25 @@ clean performance baseline.
 - **Webhook SDK:** current signed webhook contract is testable, but no package
   is published and it is not a freeze blocker.
 - **$AEX:** planned only and not required by any live product.
+
+
+## Correction found after this audit: `jsonParsed` field names
+
+This audit measured *protocol instruction* coverage and was accurate for that
+question. It did not measure whether the transfers underneath those
+transactions were being read at all, and they were not.
+
+`parseSystemTransfer` required `info.from`/`info.to`; Solana's `jsonParsed`
+encoding emits `info.source`/`info.destination`. `parseSplTransfer` handled
+`transfer`, `mintTo` and `burn` but not `transferChecked`, which sampled
+mainnet blocks show is the most frequent spl-token instruction by roughly 2:1
+over the unchecked form.
+
+Both failures were silent — no parse failure, no unknown program, no
+unclassified interaction — so no coverage metric in this document moved when
+they were wrong, and none moves now that they are fixed. Protocol semantic
+coverage and transfer extraction are independent measurements; a future audit
+should report both.
+
+The percentages above therefore remain valid as stated, and remain
+sample-based rather than ecosystem-wide.

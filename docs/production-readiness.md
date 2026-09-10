@@ -1,6 +1,6 @@
 # AEGIX Public-Beta Production Readiness
 
-Evidence date: 2026-09-08. This document describes the release candidate, not
+Evidence date: 2026-09-11. This document describes the release candidate, not
 a completed production deployment.
 
 ## Release decision and scope
@@ -26,6 +26,7 @@ work.
 | D7 functionality | VERIFIED | actual `test:e2e-d7` suite |
 | Public-beta notifications | VERIFIED | actual `test:e2e-monitor`; wallet-only user with `email = NULL` receives `IN_APP`, with no email row/job |
 | Deterministic intelligence | VERIFIED | wallet, classification, monitor, correlation, correlation-dataset, and correlation-block2 golden suites |
+| Full `processAnalysis` wiring | VERIFIED | `pnpm test:pipeline-wiring` — real worker path against a local Solana JSON-RPC stub; engines, scoring, persistence and coverage disclosure all asserted on persisted output |
 | Program catalog identity | VERIFIED | `pnpm verify:programs` — all catalog program IDs resolve to executable, loader-owned mainnet accounts |
 | Container builds | VERIFIED | API, worker, web, and migration production Dockerfiles |
 | Disposable backup/restore | VERIFIED | logical backup restored to a separate disposable database with schema/data checks |
@@ -150,6 +151,73 @@ Response steps are in `docs/deployment-runbook.md`.
 - Images contain no `.env` files or build-time secrets and run application
   processes as non-root users.
 
+## Transfer parsing corrected against real `jsonParsed` field names
+
+The pre-deployment wiring test drove `processAnalysis` end to end for the
+first time — earlier E2E suites seeded repository rows and never executed the
+worker's analysis path — and its fixture used the field names a real RPC
+returns. Two parsers did not.
+
+| Parser | Expected | `jsonParsed` actually sends | Effect |
+|---|---|---|---|
+| System transfer | `info.from`, `info.to` | `info.source`, `info.destination` | **every native SOL transfer silently dropped** |
+| SPL token | `transfer`, `mintTo`, `burn` | `transferChecked` is the most frequent spl-token instruction on mainnet, ~2× the unchecked `transfer` | majority of token movement silently dropped |
+
+Both were verified against finalized mainnet blocks before changing anything,
+and both failed silently: no error, no parse failure, no unknown-program
+count. The transfers table simply stayed empty, so the funding engine
+reported `NO_INCOMING_FUNDING` for funded wallets, the counterparty engine
+reported `NO_COUNTERPARTIES`, and amount-based transaction-pattern measures
+had nothing to work with. Unit tests passed throughout because their fixtures
+were written with the same wrong field names as the parser.
+
+Both parsers now accept the shapes mainnet sends, keep accepting the legacy
+fixture shape, and take the mint directly from the checked forms that carry
+it. In the wiring test the same wallet went from 7 persisted signals to 10,
+with `NO_INCOMING_FUNDING`/`NO_COUNTERPARTIES` replaced by `REPEATED_FUNDING`,
+`FUNDING_CONCENTRATION`, `REPEATED_COUNTERPARTY`, `REPEATED_EXACT_AMOUNT` and
+`LARGE_TRANSFER_OUTLIER`. Regression tests pin the real mainnet field names.
+
+Normalizer throughput moved from 5µs to 6µs per transaction. The extra work
+is the parsing that previously did not happen: the same benchmark produced 0
+transfers before and 40,000 after.
+
+## Engine and scoring version change
+
+This candidate bumps two stamped versions, because the exposure score's
+inputs changed:
+
+| Constant | From | To | Where |
+|---|---|---|---|
+| `ANALYSIS_PIPELINE_VERSION` | `aegix-pipeline-v1.0.0` | `aegix-pipeline-v1.1.0` | `packages/types/src/version.ts` |
+| `DEFAULT_SCORING_CONFIG.scoringVersion` | `score-v1.0.0` | `score-v1.1.0` | `packages/scoring/src/config.ts` |
+| `SCORING_ENGINE_VERSION` | `scoring-v1.0.0` | `scoring-v1.1.0` | `packages/scoring/src/scoring.ts` |
+| `PARSER_VERSION` | `normalizer-v1.0.0` | `normalizer-v1.1.0` | `packages/normalizer/src/types.ts` |
+| `COMMONALITY_VERSION` | `population-commonality-v1.0.0` | `population-commonality-v1.1.0` | `packages/config`, `packages/commonality` |
+
+The bump is required, not cosmetic. Three engines were added — transaction
+pattern, public attribution and linkability — and two scoring components that
+were previously stood in by a hard-coded `0` (`public_attribution`) and a
+shared transaction-count proxy (`large_transfers`, `high_frequency`) now
+receive measured values. Scores therefore move for reasons that have nothing
+to do with the wallets.
+
+**Operational consequence.** For every monitored wallet, the first
+re-analysis after this deploy compares across a version change.
+`computeComparability` in `@aegix/diff` marks the pair non-comparable, which
+suppresses score-based monitor alerts (`PRIVACY_EXPOSURE_INCREASED`,
+`IDENTITY_LINKABILITY_INCREASED`) and discounts confidence for that one
+cycle. This is the intended behavior: without the bump, a scoring change
+would have been delivered to users as a privacy exposure increase. Expect one
+quiet monitor cycle per wallet after deploy, then normal alerting.
+
+The API's analysis dedup lock is namespaced by the same pipeline version, so
+in-flight locks from the previous version are not reused.
+
+No migration is required. `exposure_signals.category` is free text with no
+check constraint, so the three new signal categories insert without a schema
+change, and no score dimension was added or removed.
+
 ## Release checklist
 
 - [x] Production-hardening diff reviewed; unrelated `.commandcode/` and `front/` work excluded
@@ -170,11 +238,14 @@ Response steps are in `docs/deployment-runbook.md`.
 
 ## Known public-beta limitations
 
-- No global Solana indexer; transaction history is bounded.
+- No global Solana indexer; transaction history is bounded by disclosed
+  signature, transaction, RPC-call, history-day, and execution-time budgets.
 - Entity registry and protocol/NFT semantic coverage are incomplete. Program
-  identity is now consolidated in a single verified catalog — see
-  `docs/program-catalog.md`; instruction-level coverage remains partial for
-  Drift, Kamino and Raydium AMM v4.
+  identity is consolidated in a single verified catalog — see
+  `docs/program-catalog.md` and `docs/intelligence-coverage-audit.md`.
+  Instruction-level coverage remains partial for Raydium Router, Drift,
+  Tensor Bid, and Pump.fun/PumpSwap. Bounded-sample percentages are not
+  ecosystem-wide estimates.
 - Population commonality activates only when the existing real-data
   sufficiency gate passes; a feature flag alone never enables the penalty.
 - Email is not part of the required public-beta notification path.

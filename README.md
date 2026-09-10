@@ -3,8 +3,10 @@
 AEGIX is an on-chain privacy intelligence platform that helps wallet owners understand what publicly observable blockchain activity may reveal about them.
 
 **Primary chain:** Solana
-**Core products:** Wallet X-Ray, Attack My Wallet, Privacy Threat Monitor, Wallet Reputation API, Privacy Intelligence API
-**Primary principle:** *Know What the Blockchain Knows.*
+**Live products:** Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Threat Monitor, Developer Intelligence API
+**Planned:** Market Intelligence, AI Copilot, Wallet Reputation API, $AEX economic layer, multi-chain — see [docs/whitepaper.md](docs/whitepaper.md)
+**Primary principle:** *See What Others Don't.*
+**Privacy pillar principle:** *Know What the Blockchain Knows.*
 
 > AEGIX must be able to explain why it believes a wallet is exposed. It never returns an unexplained score.
 
@@ -23,16 +25,27 @@ packages/
   database/  Schema migrations + repository layer
   blockchain/ RPC abstraction layer (Solana provider)
   normalizer/ Transaction parsing and normalization
-  intelligence/ Signal engines (funding, counterparty, behavior, entities)
+  intelligence/ Signal engines (funding, counterparty, behavior, entities,
+                clusters, transaction patterns, public attribution, linkability)
   scoring/   Privacy exposure scoring + confidence
   graph/     Relationship graph + Attack My Wallet path engine
+  correlation/ Cross-wallet correlation (funding provenance, temporal, overlap)
+  commonality/ Population commonality baselines
+  monitor/   Privacy Threat Monitor pipeline + threat detection
+  diff/      Analysis diffing for monitor events
+  explanation/ Deterministic signal and path explanations
+  webhook-delivery/ Signed webhook delivery
   queue/     BullMQ queue setup
   cache/     Redis cache layer
   logging/   Structured JSON logging + trace/privacy-safe wallet refs
 infra/       Docker / deployment scaffolding
-docs/        Architecture and design documents
+docs/        Architecture, whitepaper and design documents
 tests/       Shared test fixtures and integration tests
 ```
+
+Every signal an engine emits belongs to one of the categories in
+[docs/signal-taxonomy.md](docs/signal-taxonomy.md), which maps them to the
+seven exposure dimensions of the Privacy Exposure Score.
 
 ## Getting started
 
