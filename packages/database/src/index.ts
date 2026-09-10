@@ -16,7 +16,8 @@ export {
   type WalletAnalyticsRepo,
   type TransactionRow,
   type TransferRow,
-  type ProgramInteractionRow
+  type ProgramInteractionRow,
+  type UnknownProgramReportRow
 } from "./repositories/wallet-analytics.js";
 export {
   createIntelligenceRepo,

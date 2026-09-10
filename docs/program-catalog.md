@@ -156,7 +156,7 @@ Raydium AMM v4 indices 9 and 11 each nested exactly two SPL transfers under a
 | Metaplex Bubblegum | no — unknown program | `TRANSFER`, `MINT_COMPRESSED_NFT`, `UPDATE_METADATA`, `BURN_NFT` |
 | Metaplex Token Metadata | yes, but no action ever matched | `TRANSFER`, `CREATE_METADATA`, `DELEGATE` |
 | Tensor Compressed | no — unknown program | `BID`, `EDIT_LISTING`, `LIST`, `DELIST` |
-| TensorSwap | no — unknown program | `DEPOSIT`, `WITHDRAW` |
+| Tensor Escrow (formerly TensorSwap at the reused program ID) | no — unknown program | `DEPOSIT`, `WITHDRAW` |
 | Raydium AMM v4 | no — dead address | `SWAP` |
 | Orca Whirlpools | no — dead address | `SWAP` |
 | Kamino Lending | no — dead address | `FLASH_BORROW`, `FLASH_REPAY`, `REFRESH_STATE` |
@@ -211,15 +211,14 @@ public chain queries.
 
 ## 4. Known remaining gaps
 
-- **Unattributed discriminators.** Sampling 20 recent mainnet transactions for
-  each of the 21 programs that carry instruction-data semantics found **26
-  distinct discriminators the parser does not map**, across 13 programs — the
-  largest groups being Kamino (5), Pump.fun bonding curve (3), PumpSwap (3),
-  and 2 each for Jupiter v6, Tensor Bid, Magic Eden v2, Sharky and Squads v4.
-  This is a floor, not a total: a wider sample will surface more. Their method
-  names are not guessed; those instructions report as `PARTIALLY_PARSED`.
-- **Partial instruction coverage** for Drift, Kamino and Raydium AMM v4: the
-  high-volume instructions are mapped, the long tail is not.
+- **Unattributed selectors.** The 2026-09-11 bounded coverage-hardening sample
+  began with 18 distinct selectors and ended with 14 after evidence-backed
+  attribution. The remaining high-volume groups are Raydium Router, Pump.fun
+  event/unknown selectors, rejected Drift calls, and Tensor Bid. This is a
+  sample floor, not a global total. See `docs/intelligence-coverage-audit.md`.
+- **Partial instruction coverage** for Drift, Tensor Bid, Pump.fun/PumpSwap,
+  and Raydium Router. Kamino was fully mapped in the bounded sample, but that
+  does not prove full method coverage.
 - **Metaplex Token Metadata legacy indices** are deliberately unmapped until
   observed, so historical pre-unified-instruction NFT activity parses less
   than it could.
@@ -227,3 +226,27 @@ public chain queries.
   wallets remain deliberately absent: program identity and custodial address
   attribution have different epistemic standards, and weak attribution must
   not become fact.
+
+---
+
+## 5. Coverage-hardening provenance (2026-09-11)
+
+The following additions passed the stricter `program ID + selector + pinned
+official source/version + mainnet sample` gate:
+
+| Program | Selector | Action | Source commit | Mainnet evidence |
+|---|---|---|---|---|
+| Raydium AMM v4 | u8 `16` | `SWAP` (`SwapBaseInV2`) | `raydium-io/raydium-amm@d26944b` | 5 finalized samples |
+| Raydium CLMM | `2b04ed0b1ac91e62` | `SWAP` (`swap_v2`) | `raydium-io/raydium-clmm@ed7c84a` | 6 finalized samples |
+| Raydium CPMM | `8fbe5adac41e33de` | `SWAP` (`swap_base_input`) | `raydium-io/raydium-cp-swap@59fb845` | 1 finalized sample |
+| Metaplex Core | u8 `14` | `TRANSFER` (`TransferV1`) | `metaplex-foundation/mpl-core@e72d63e` | 8 finalized samples |
+
+Tensor's own current documentation and
+`tensor-foundation/escrow@ab2a30d` identify `TSWAP…` as **Tensor Escrow**.
+Obsolete pool/listing mappings were removed from that program ID; only the
+current margin-account escrow entry points remain.
+
+Compute Budget and SPL Associated Token Account were added as non-entity
+infrastructure parsers. Both are common runtime infrastructure, so neither
+becomes attribution evidence; recognizing them prevents routine Solana
+plumbing from inflating the unknown-program ratio.

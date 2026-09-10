@@ -29,8 +29,8 @@ const OBSERVED: Array<[program: string, method: string, discriminator: string]> 
   ["TCOMP", "buy_core", "a9e357ff4c56ff19"],
   ["TCOMP", "list_core", "ad4ca77d76470199"],
   ["TCOMP", "delist_core", "3818e702e3130e44"],
-  ["TensorSwap", "deposit_margin_account", "be55f23c775121c0"],
-  ["TensorSwap", "withdraw_margin_account", "364996d0cf051211"],
+  ["Tensor Escrow", "deposit_margin_account", "be55f23c775121c0"],
+  ["Tensor Escrow", "withdraw_margin_account", "364996d0cf051211"],
   ["Tensor Bid", "close_expired_bid", "53146943f84468be"],
   ["Magic Eden MMM", "update_pool", "efd6aa4e24231e22"],
   ["Magic Eden MMM", "sol_deposit_buy", "42e50b366da455ee"]
@@ -124,7 +124,7 @@ test("Token Metadata transfers parse from the shank u8 index", () => {
 });
 
 test("an unmapped instruction returns null rather than a guessed action", () => {
-  // TensorSwap has no fallback on purpose: a generic action for an
+  // Tensor Escrow has no fallback on purpose: a generic action for an
   // instruction we did not identify would inflate semanticCoverage, which is
   // exactly the metric that caps reported confidence.
   const parser = parserFor(TENSORSWAP)!;

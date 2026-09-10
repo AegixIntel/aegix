@@ -38,6 +38,18 @@ export interface TransactionRow {
   created_at: string;
 }
 
+/** Bounded operator backlog for program IDs outside the canonical registry. */
+export interface UnknownProgramReportRow {
+  programId: string;
+  interactionFrequency: number;
+  walletCoverage: number;
+  firstObservedSlot: string;
+  lastObservedSlot: string;
+  sampleSignatures: string[];
+  /** Unknown programs are not assigned an impact level without semantic evidence. */
+  potentialIntelligenceImpact: "UNASSESSED";
+}
+
 export interface WalletAnalyticsRepo {
   insertTransaction(input: {
     signature: string;
@@ -57,6 +69,8 @@ export interface WalletAnalyticsRepo {
   counterpartiesForWallet(walletId: string, limit?: number): Promise<{ counterparty: string; txCount: number; totalValue: number }[]>;
   /** Program interactions for a wallet (population aggregation, D6-G). */
   programInteractionsForWallet(walletId: string, limit?: number): Promise<ProgramInteractionRow[]>;
+  /** Operator-only unknown-program backlog; never returns raw transaction payloads. */
+  topUnknownPrograms(knownProgramIds: string[], limit?: number): Promise<UnknownProgramReportRow[]>;
 }
 
 export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
@@ -162,6 +176,31 @@ export function createWalletAnalyticsRepo(sql: Sql): WalletAnalyticsRepo {
         order by block_time desc
         limit ${limit}
       `;
+    },
+
+    async topUnknownPrograms(knownProgramIds, limit = 50) {
+      const boundedLimit = Math.max(1, Math.min(limit, 100));
+      const rows = await sql<
+        Array<Omit<UnknownProgramReportRow, "potentialIntelligenceImpact">>
+      >`
+        select
+          pi.program_id as "programId",
+          count(*)::int as "interactionFrequency",
+          count(distinct pi.wallet_id)::int as "walletCoverage",
+          min(tx.slot)::text as "firstObservedSlot",
+          max(tx.slot)::text as "lastObservedSlot",
+          (array_agg(distinct tx.signature))[1:3] as "sampleSignatures"
+        from program_interactions pi
+        join transactions tx on tx.id = pi.transaction_id
+        where not (pi.program_id = any(${knownProgramIds}::text[]))
+        group by pi.program_id
+        order by count(*) desc, count(distinct pi.wallet_id) desc, pi.program_id asc
+        limit ${boundedLimit}
+      `;
+      return rows.map((row) => ({
+        ...row,
+        potentialIntelligenceImpact: "UNASSESSED" as const
+      }));
     }
   };
 }

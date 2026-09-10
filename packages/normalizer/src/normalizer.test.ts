@@ -215,7 +215,7 @@ test("a Token Metadata instruction index AEGIX knows is parsed, not generalised"
 });
 
 test("an unmapped instruction on a multi-purpose program is not guessed at", () => {
-  // TensorSwap has no fallback: claiming a generic action for an instruction
+  // Tensor Escrow has no fallback: claiming a generic action for an instruction
   // we did not identify would inflate semanticCoverage, and semanticCoverage
   // is what caps the confidence AEGIX reports.
   const outcome = normalizeTransaction({
@@ -230,8 +230,25 @@ test("an unmapped instruction on a multi-purpose program is not guessed at", () 
   assert.ok(outcome.semanticCoverage < 1, `coverage ${outcome.semanticCoverage}`);
   const r = unwrap(outcome);
   // Attribution survives even without an action: label and category are kept.
-  assert.equal(r.interactions[0]!.programLabel, "TensorSwap");
+  assert.equal(r.interactions[0]!.programLabel, "Tensor Escrow");
   assert.equal(r.interactions[0]!.protocolCategory, "NFT");
+});
+
+test("unknown-program observations are grouped while common runtime infrastructure is excluded", () => {
+  const unknown = "Unkn111111111111111111111111111111111111111";
+  const outcome = normalizeTransaction({
+    signature: "sig-unknown-programs",
+    raw: tx([
+      { programId: "ComputeBudget111111111111111111111111111111", program: "unknown", data: "3" },
+      { programId: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", program: "unknown", data: "" },
+      { programId: unknown, program: "unknown", data: "2" },
+      { programId: unknown, program: "unknown", data: "3" }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  assert.equal(outcome.unknownProgramCount, 2);
+  assert.deepEqual(outcome.unknownPrograms, [{ programId: unknown, instructionCount: 2 }]);
 });
 
 test("marketplace programs without parsed actions classify as MARKETPLACE_INTERACTION", () => {

@@ -64,7 +64,7 @@ test("u8 instruction maps only contain evidence-backed indices", () => {
   }
 
   const raydium = PROTOCOL_PARSERS.find((p) => p.programId === "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8")!;
-  assert.deepEqual(Object.keys(raydium.byteActions ?? {}).map(Number).sort((a, b) => a - b), [9, 11]);
+  assert.deepEqual(Object.keys(raydium.byteActions ?? {}).map(Number).sort((a, b) => a - b), [9, 11, 16]);
 });
 
 test("only programs with an established u8 encoding carry a u8 map", () => {
@@ -73,6 +73,19 @@ test("only programs with an established u8 encoding carry a u8 map", () => {
   const withByteMaps = PROTOCOL_PARSERS.filter((p) => p.byteActions).map((p) => p.programId);
   assert.deepEqual(withByteMaps.sort(), [
     "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8", // Raydium AMM v4
+    "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d", // Metaplex Core
     "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"   // Metaplex Token Metadata
   ].sort());
+});
+
+test("evidence-backed coverage-hardening samples map without generic fallbacks", () => {
+  const samples: Array<[string, string, string]> = [
+    ["675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8", "A7NFwYtM45HeNa5XdtQa9VH", "SWAP"],
+    ["CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK", "ASCsAbe1UnDuHhuyQqHuicoMzCUKuHCp9nTw36u7Y5HWqmj3pevmWuoW", "SWAP"],
+    ["CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C", "E73fXHPWvSRUqbcrS5a8yeVZqeK6yMKHR", "SWAP"],
+    ["CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d", "24o", "TRANSFER"]
+  ];
+  for (const [programId, data, expected] of samples) {
+    assert.deepEqual(parserFor(programId)?.parse({ programId, program: "unknown", data }), { actionType: expected });
+  }
 });

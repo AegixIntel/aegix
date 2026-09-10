@@ -6,7 +6,7 @@ import type {
   TransactionClass
 } from "@aegix/types";
 
-export const PARSER_VERSION = "normalizer-v1.0.0";
+export const PARSER_VERSION = "normalizer-v1.1.0";
 
 /**
  * A parsed instruction from a Solana transaction (getParsedTransaction shape).
@@ -49,6 +49,8 @@ export interface ParseOutcome {
   failed: boolean;
   failureReason: string | null;
   unknownProgramCount: number;
+  /** Bounded upstream by one transaction; aggregated with stricter caps by the worker. */
+  unknownPrograms: Array<{ programId: string; instructionCount: number }>;
   /**
    * Semantic classification of the parse, see milestone D2 Phase 19:
    * - FULLY_PARSED: at least one known protocol instruction with a mapped action

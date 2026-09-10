@@ -95,7 +95,7 @@ test("Metaplex and Tensor program families are covered", () => {
   }
 
   const tensor = labelsFor("Tensor");
-  for (const expected of ["TensorSwap", "Tensor Compressed NFT", "Tensor Bid", "Tensor Lock"]) {
+  for (const expected of ["Tensor Escrow", "Tensor Compressed NFT", "Tensor Bid", "Tensor Lock"]) {
     assert.ok(tensor.includes(expected), `Tensor missing ${expected}`);
   }
 });

@@ -314,7 +314,7 @@ export const CANONICAL_ENTITIES: CanonicalEntity[] = [
     programs: [
       // Replaces the classifier's TSWAPaqyCsxBPKKhB9A9d3SxJS1QyJzUHVN5VKHTWA,
       // which decoded to 31 bytes and was therefore not a pubkey at all.
-      { programId: "TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN", label: "TensorSwap", category: "NFT", status: "VERIFIED", confidence: 0.95, evidenceSource: "https://docs.tensor.trade/", role: "PROGRAM" },
+      { programId: "TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN", label: "Tensor Escrow", category: "NFT", status: "VERIFIED", confidence: 0.95, evidenceSource: "https://docs.tensor.foundation/tensor-protocols", role: "ESCROW" },
       { programId: "TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp", label: "Tensor Compressed NFT", category: "NFT", status: "VERIFIED", confidence: 0.95, evidenceSource: "https://docs.tensor.trade/", role: "PROGRAM" },
       { programId: "TB1Dqt8JeKQh7RLDzfYDJsq8KS4fS2yt87avRjyRxMv", label: "Tensor Bid", category: "NFT", status: "VERIFIED", confidence: 0.9, evidenceSource: "https://docs.tensor.trade/", role: "ESCROW" },
       { programId: "TLoCKic2wGJm7VhZKumih4Lc35fUhYqVMgA4j389Buk", label: "Tensor Lock", category: "NFT", status: "VERIFIED", confidence: 0.9, evidenceSource: "https://docs.tensor.trade/", role: "ESCROW" }
@@ -434,6 +434,8 @@ export const CANONICAL_ENTITIES: CanonicalEntity[] = [
     sourceType: DOC,
     seedAsEntity: false,
     programs: [
+      { programId: "ComputeBudget111111111111111111111111111111", label: "Solana Compute Budget", category: "SYSTEM", status: "VERIFIED", confidence: 0.99, evidenceSource: "https://github.com/anza-xyz/agave/tree/master/programs/compute-budget", role: "PROGRAM" },
+      { programId: "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", label: "SPL Associated Token Account", category: "SYSTEM", status: "VERIFIED", confidence: 0.99, evidenceSource: "https://spl.solana.com/associated-token-account", role: "PROGRAM" },
       { programId: "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr", label: "SPL Memo v2", category: "SYSTEM", status: "VERIFIED", confidence: 0.99, evidenceSource: "https://spl.solana.com/memo", role: "PROGRAM" },
       { programId: "SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy", label: "SPL Stake Pool", category: "STAKING", status: "VERIFIED", confidence: 0.99, evidenceSource: "https://spl.solana.com/stake-pool", role: "PROGRAM", transactionClass: "STAKE" },
       { programId: "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK", label: "SPL Account Compression", category: "SYSTEM", status: "VERIFIED", confidence: 0.95, evidenceSource: "https://spl.solana.com/account-compression", role: "PROGRAM" },

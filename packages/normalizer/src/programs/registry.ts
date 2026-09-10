@@ -114,10 +114,46 @@ const SEMANTICS: Record<string, ActionSemantics> = {
     // 17-byte instruction, which is the swap layout. A wrong u8 mapping would
     // invent an action, unlike a wrong Anchor method name, so the rest are
     // left unmapped.
-    byteActions: { 9: "SWAP", 11: "SWAP" }
+    // Tag 16 (SwapBaseInV2) is pinned by raydium-amm commit d26944b and was
+    // observed in five finalized mainnet transactions on 2026-09-11.
+    byteActions: { 9: "SWAP", 11: "SWAP", 16: "SWAP" }
   },
-  CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK: { actions: SWAP_ACTIONS },
-  CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C: { actions: SWAP_ACTIONS },
+  CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK: {
+    actions: SWAP_ACTIONS,
+    // raydium-clmm commit ed7c84a; `swap_v2` was observed six times in the
+    // bounded 2026-09-11 mainnet sample. The other entries are exact public
+    // source entry points scoped to this declared program ID.
+    anchorActions: {
+      swap: "SWAP",
+      swap_v2: "SWAP",
+      swap_router_base_in: "SWAP",
+      create_pool: "CREATE_POOL",
+      open_position: "OPEN_POSITION",
+      open_position_v2: "OPEN_POSITION",
+      open_position_with_token22_nft: "OPEN_POSITION",
+      close_position: "CLOSE_POSITION",
+      increase_liquidity: "ADD_LIQUIDITY",
+      increase_liquidity_v2: "ADD_LIQUIDITY",
+      decrease_liquidity: "REMOVE_LIQUIDITY",
+      decrease_liquidity_v2: "REMOVE_LIQUIDITY",
+      collect_protocol_fee: "COLLECT_FEES",
+      collect_fund_fee: "COLLECT_FEES",
+      collect_remaining_rewards: "COLLECT_REWARD"
+    }
+  },
+  CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C: {
+    actions: SWAP_ACTIONS,
+    // raydium-cp-swap commit 59fb845; `swap_base_input` matched the observed
+    // 8fbe5ada… discriminator in a finalized mainnet transaction.
+    anchorActions: {
+      initialize: "CREATE_POOL",
+      initialize_with_permission: "CREATE_POOL",
+      deposit: "ADD_LIQUIDITY",
+      withdraw: "REMOVE_LIQUIDITY",
+      swap_base_input: "SWAP",
+      swap_base_output: "SWAP"
+    }
+  },
   routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS: { actions: SWAP_ACTIONS },
   whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc: {
     actions: { ...SWAP_ACTIONS, openPosition: "OPEN_POSITION", closePosition: "CLOSE_POSITION", increaseLiquidity: "ADD_LIQUIDITY", decreaseLiquidity: "REMOVE_LIQUIDITY" },
@@ -335,26 +371,24 @@ const SEMANTICS: Record<string, ActionSemantics> = {
     }
   },
   auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg: { fallbackAction: "AUTH_RULE_CHECK" },
+  CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d: {
+    // mpl-core IDL at commit e72d63e: TransferV1 is enum index 14. Index 14
+    // was observed in all eight resolved transactions in the bounded sample.
+    byteActions: { 14: "TRANSFER" }
+  },
 
   // ---------------- Tensor ----------------
   TSWAPaqyCSx2KABk68Shruf4rp7CxcNi8hAsbdwmHbN: {
     anchorActions: {
-      buy_nft: "BUY",
-      buy_single_listing: "BUY",
-      sell_nft_token_pool: "SELL",
-      sell_nft_trade_pool: "SELL",
-      list: "LIST",
-      delist: "DELIST",
-      edit_single_listing: "EDIT_LISTING",
-      init_pool: "INITIALIZE",
-      close_pool: "CLOSE_POOL",
-      edit_pool: "EDIT_POOL",
-      deposit_nft: "DEPOSIT_NFT",
-      withdraw_nft: "WITHDRAW_NFT",
-      deposit_sol: "DEPOSIT",
-      withdraw_sol: "WITHDRAW",
+      // The reused TSWAP address is now Tensor Escrow. Exact entry points
+      // from tensor-foundation/escrow commit ab2a30d.
+      init_update_tswap: "INITIALIZE",
+      init_margin_account: "INITIALIZE",
+      close_margin_account: "CLOSE_ESCROW",
       deposit_margin_account: "DEPOSIT",
-      withdraw_margin_account: "WITHDRAW"
+      withdraw_margin_account: "WITHDRAW",
+      withdraw_margin_account_cpi_tamm: "WITHDRAW",
+      withdraw_margin_account_cpi_tcomp: "WITHDRAW"
     }
   },
   TCMPhJdwDryooaGtiocG1u3xcYbRpiJzb283XfCZsDp: {
@@ -431,6 +465,8 @@ const SEMANTICS: Record<string, ActionSemantics> = {
     anchorActions: { multisig_create: "MULTISIG_CREATE", vault_transaction_create: "MULTISIG_PROPOSE", proposal_create: "MULTISIG_PROPOSE", proposal_approve: "MULTISIG_APPROVE", vault_transaction_execute: "MULTISIG_EXECUTE" }
   },
   T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt: { fallbackAction: "MEV_TIP" },
+  ComputeBudget111111111111111111111111111111: { fallbackAction: "COMPUTE_BUDGET" },
+  ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL: { fallbackAction: "ASSOCIATED_TOKEN_ACCOUNT" },
   MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr: { fallbackAction: "MEMO" },
   cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK: { fallbackAction: "STATE_COMPRESSION" },
   noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV: { fallbackAction: "STATE_COMPRESSION_LOG" },

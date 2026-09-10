@@ -81,9 +81,13 @@ export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
     const timestamp = blockTime ?? new Date(0).toISOString();
     const accountKeyByIndex = new Map(accountKeys.map((k, i) => [i, k.pubkey]));
     const tokenBalances = buildTokenBalanceMap(raw);
-    const unknownProgramCount = allInstructions.filter(
-      (ix) => !isSystemProgram(ix.programId) && !isTokenProgram(ix.programId) && !parserFor(ix.programId)
-    ).length;
+    const unknownProgramCounts = new Map<string, number>();
+    for (const ix of allInstructions) {
+      if (isSystemProgram(ix.programId) || isTokenProgram(ix.programId) || parserFor(ix.programId)) continue;
+      unknownProgramCounts.set(ix.programId, (unknownProgramCounts.get(ix.programId) ?? 0) + 1);
+    }
+    const unknownPrograms = [...unknownProgramCounts].map(([programId, instructionCount]) => ({ programId, instructionCount }));
+    const unknownProgramCount = unknownPrograms.reduce((sum, item) => sum + item.instructionCount, 0);
 
     const transfers: NormalizedTransfer[] = [];
     const interactions: NormalizedProgramInteraction[] = [];
@@ -196,6 +200,7 @@ export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
       failed: false,
       failureReason: null,
       unknownProgramCount,
+      unknownPrograms,
       parseClass,
       semanticCoverage
     };
@@ -205,6 +210,7 @@ export function normalizeTransaction(input: NormalizeInput): ParseOutcome {
       failed: true,
       failureReason: err instanceof Error ? err.message : String(err),
       unknownProgramCount: 0,
+      unknownPrograms: [],
       parseClass: "FAILED",
       semanticCoverage: 0
     };
