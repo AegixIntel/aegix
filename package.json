@@ -35,7 +35,8 @@
     "loadtest:correlation": "node --import tsx tests/load-test-correlation.ts",
     "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts",
     "loadtest:public": "node --import tsx tests/load-test-public.ts",
-    "verify:programs": "node --import tsx scripts/verify-programs.ts"
+    "verify:programs": "node --import tsx scripts/verify-programs.ts",
+    "test:pipeline-wiring": "node --import tsx tests/e2e-pipeline-wiring.ts"
   },
   "devDependencies": {
     "@aegix/blockchain": "workspace:*",

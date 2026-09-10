@@ -73,6 +73,7 @@ process.env.REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { loadConfig } from "@aegix/config";
+import { ANALYSIS_PIPELINE_VERSION } from "@aegix/types";
 import {
   createDb,
   createWalletRepo,
@@ -163,7 +164,10 @@ function walletFromSeed(seed: string): WalletFixture {
 // cache/lock keys the server uses so the measured dedup is trustworthy.
 const CACHE_PREFIX = "analysis-result";
 const ENGINE_SCOPE = "full";
-const PIPELINE_VERSION = "aegix-pipeline-v1.0.0";
+// Derived, never copied: this harness asserts on the very lock key the server
+// writes, so a hard-coded version would silently measure a key that does not
+// exist and report perfect dedup.
+const PIPELINE_VERSION = ANALYSIS_PIPELINE_VERSION;
 function analysisCacheKey(address: string): string {
   return `${CACHE_PREFIX}:${address}`;
 }
