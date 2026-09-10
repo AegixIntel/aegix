@@ -2,7 +2,7 @@ import type { Confidence, IntelligenceSignal, ScoreValue } from "@aegix/types";
 import { DEFAULT_SCORING_CONFIG } from "./config.js";
 import type { ScoringConfig } from "@aegix/types";
 
-export const SCORING_ENGINE_VERSION = "scoring-v1.0.0";
+export const SCORING_ENGINE_VERSION = "scoring-v1.1.0";
 
 export interface ScoreDimensionInput {
   repeatedFunding: number; // 0 – 100
@@ -22,10 +22,21 @@ export interface ScoreDimensionInput {
   unknownProgramRatio?: number;
   /** 0-1 ratio of RPC requests that failed */
   rpcFailureRatio?: number;
-  /** how many independent engines support the exposure hypothesis (0-5) */
+  /** how many independent engines support the exposure hypothesis (0-7) */
   supportingEngines?: number;
   /** 0-1 entity label certainty of matched entities (avg) */
   entityCertainty?: number;
+  /**
+   * 0-100 public attribution exposure from the public attribution engine.
+   * Before this input existed the `public_attribution` weight of identity
+   * linkability was carried by a hard-coded zero.
+   */
+  publicAttribution?: number;
+  /** 0-100 transaction pattern components, from the transaction pattern engine. */
+  largeTransferExposure?: number;
+  highFrequencyExposure?: number;
+  oddHourExposure?: number;
+  regularIntervalExposure?: number;
 }
 
 export interface ScoreResult {
@@ -55,7 +66,7 @@ export function scoreWallet(input: ScoreDimensionInput, config: ScoringConfig = 
     [input.repeatedFunding, config.identityLinkability.repeated_funding ?? 0.3],
     [input.repeatedCounterparty, config.identityLinkability.repeated_counterparty ?? 0.3],
     [input.clusterLinks, config.identityLinkability.shared_counterparty ?? 0.2],
-    [0, config.identityLinkability.public_attribution ?? 0.2]
+    [input.publicAttribution ?? 0, config.identityLinkability.public_attribution ?? 0.2]
   ]);
 
   const fundingExposure = weighted([
@@ -75,7 +86,7 @@ export function scoreWallet(input: ScoreDimensionInput, config: ScoringConfig = 
   const behavioralFingerprint = weighted([
     [input.behavioralSignals, config.behavioralFingerprint.narrow_activity_window ?? 0.4],
     [input.behavioralSignals, config.behavioralFingerprint.single_protocol_use ?? 0.3],
-    [input.behavioralSignals, config.behavioralFingerprint.regular_intervals ?? 0.3]
+    [input.regularIntervalExposure ?? 0, config.behavioralFingerprint.regular_intervals ?? 0.3]
   ]);
 
   const counterpartyExposure = weighted([
@@ -89,10 +100,13 @@ export function scoreWallet(input: ScoreDimensionInput, config: ScoringConfig = 
     [input.knownEntityInteractions, config.entityExposure.exchange_interaction ?? 0.4]
   ]);
 
+  // Measured components from the transaction pattern engine. Missing
+  // evidence fails closed to zero; transaction volume and generic behavioral
+  // severity are not substitutes for these distinct observations.
   const transactionPatternExposure = weighted([
-    [Math.min(100, input.transactionCount * 0.5), config.transactionPatternExposure.large_transfers ?? 0.4],
-    [Math.min(100, input.transactionCount * 0.5), config.transactionPatternExposure.high_frequency ?? 0.3],
-    [input.behavioralSignals, config.transactionPatternExposure.odd_hours ?? 0.3]
+    [input.largeTransferExposure ?? 0, config.transactionPatternExposure.large_transfers ?? 0.4],
+    [input.highFrequencyExposure ?? 0, config.transactionPatternExposure.high_frequency ?? 0.3],
+    [input.oddHourExposure ?? 0, config.transactionPatternExposure.odd_hours ?? 0.3]
   ]);
 
   const dimensions = {
@@ -168,6 +182,7 @@ export function computeConfidence(input: ScoreDimensionInput): Confidence {
     input.repeatedFunding === 0 &&
     input.repeatedCounterparty === 0 &&
     input.knownEntityInteractions === 0 &&
+    (input.publicAttribution ?? 0) === 0 &&
     input.behavioralSignals > 0;
   if (evidenceIsBehavioralOnly) confidence = Math.min(confidence, 0.6);
 

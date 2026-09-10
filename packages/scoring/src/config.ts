@@ -5,7 +5,9 @@ import type { ScoringConfig } from "@aegix/types";
  * Weights are committed with code and versioned; never hard-coded in engines.
  */
 export const DEFAULT_SCORING_CONFIG: ScoringConfig = {
-  scoringVersion: "score-v1.0.0",
+  // v1.1.0 — public attribution and measured transaction-pattern components
+  // replaced the hard-coded zero and the transaction-count proxies.
+  scoringVersion: "score-v1.1.0",
   fundingExposure: {
     repeated_funder: 0.25,
     concentration: 0.2,

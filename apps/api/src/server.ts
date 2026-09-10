@@ -51,6 +51,7 @@ import { registerDeveloperIntelligence } from "./developer-intelligence.js";
 import { registerWebhookRoutes } from "./webhooks.js";
 import { registerNotificationEmailRoutes } from "./notification-email.js";
 import { decodeNotificationCursor } from "./notification-cursor.js";
+import { ANALYSIS_PIPELINE_VERSION } from "@aegix/types";
 import type { IntelligenceSignal } from "@aegix/types";
 
 export interface ApiDeps {
@@ -588,7 +589,7 @@ export async function buildServer(deps: ApiDeps) {
         });
       }
 
-      const engineVersion = "aegix-pipeline-v1.0.0";
+      const engineVersion = ANALYSIS_PIPELINE_VERSION;
 
       // 1. Fresh cached analysis? Return it immediately. Cache hits do not
       // consume quota, see D3-C §24.

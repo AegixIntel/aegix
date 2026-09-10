@@ -10,3 +10,4 @@ export * from "./report.js";
 export * from "./monitor.js";
 export * from "./correlation.js";
 export * from "./programs.js";
+export * from "./version.js";

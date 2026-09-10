@@ -67,6 +67,56 @@ export function explainSignal(signal: IntelligenceSignal): string {
     case "NO_COUNTERPARTIES":
       return "No transfer counterparties were observed in the analyzed window, so counterparty relationships could not be established.";
 
+    case "LARGE_TRANSFER_OUTLIER": {
+      const ratio = evidence.ratio ?? 0;
+      const largest = evidence.largest_transfer;
+      const considered = evidence.transfers_considered ?? 0;
+      return `The largest observed transfer (${largest}) is ${ratio}× this wallet's own median across ${considered} transfer(s). Distinctive amounts are easy for an observer to follow from one address to the next.`;
+    }
+
+    case "HIGH_FREQUENCY_ACTIVITY": {
+      const perDay = evidence.transactions_per_day ?? 0;
+      const days = evidence.days_covered ?? 0;
+      return `Activity averages ${perDay} transaction(s) per day across ${days} day(s) of history. A distinctive rate narrows the set of wallets that look like this one.`;
+    }
+
+    case "ODD_HOUR_CONCENTRATION": {
+      const share = Number(evidence.odd_hour_share ?? 0);
+      const baseline = Number(evidence.baseline_share ?? 0);
+      return `${Math.round(share * 100)}% of transactions fall inside the low-activity UTC band, against ${Math.round(baseline * 100)}% for a wallet active around the clock. This is a timing pattern, not a claim about where the operator is.`;
+    }
+
+    case "REPEATED_EXACT_AMOUNT": {
+      const occurrences = evidence.occurrences ?? 0;
+      const share = Number(evidence.repeated_share ?? 0);
+      return `An identical transfer amount recurs ${occurrences} time(s), covering ${Math.round(share * 100)}% of transfers. Matching exact amounts is one of the cheapest ways for an observer to correlate two addresses.`;
+    }
+
+    case "REGULAR_INTERVAL_ACTIVITY": {
+      const regularity = evidence.interval_regularity ?? 0;
+      const gap = evidence.median_interval_hours;
+      return `Gaps between transactions are highly regular (regularity ${regularity}, median gap ${gap} hour(s)), which is consistent with scheduled or automated activity rather than ad-hoc use.`;
+    }
+
+    case "PUBLICLY_ATTRIBUTED_COUNTERPARTY": {
+      const entity = evidence.entity ?? "a labelled address";
+      const type = String(evidence.entity_type ?? "entity").toLowerCase();
+      const status = String(evidence.label_status ?? "UNVERIFIED").toLowerCase();
+      return `One end of this relationship is publicly labelled as ${entity} (${type}, label ${status}). An outside observer can look that address up, which gives them a named anchor next to this wallet — it says nothing about who controls the wallet itself.`;
+    }
+
+    case "CUSTODIAL_DEPOSIT_ADDRESS_USE": {
+      const entity = evidence.entity ?? "a custodial service";
+      return `This wallet moved value with an address publicly labelled as a ${entity} deposit address. Deposit addresses are issued per customer, so an observer can infer that a custodial account sits behind this relationship, but not whose account it is.`;
+    }
+
+    case "CONVERGING_LINKABILITY_EVIDENCE": {
+      const classes = evidence.converging_classes ?? 0;
+      const observed = evidence.observed_classes ?? 0;
+      const list = evidence.class_list ?? "";
+      return `Linkability evidence appears in ${classes} independent class(es) (${list}), ${observed} of them from directly observed on-chain relationships rather than statistical similarity. Converging evidence narrows the plausible explanations for this activity; it does not establish who controls the wallet.`;
+    }
+
     default:
       return `${signal.title}. ${signal.summary}`;
   }

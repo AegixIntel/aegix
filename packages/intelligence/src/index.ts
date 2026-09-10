@@ -31,3 +31,25 @@ export {
   type ClusterAnalysisInput,
   type ClusterAnalysisResult
 } from "./engines/cluster.js";
+export {
+  TRANSACTION_PATTERN_ENGINE_VERSION,
+  analyzeTransactionPatterns,
+  type TransactionPatternAnalysisInput,
+  type TransactionPatternAnalysisResult,
+  type TransactionPatternFeatures
+} from "./engines/transaction-pattern.js";
+export {
+  PUBLIC_ATTRIBUTION_ENGINE_VERSION,
+  analyzePublicAttribution,
+  type PublicAttributionAnalysisInput,
+  type PublicAttributionAnalysisResult,
+  type PublicAttributionRecord
+} from "./engines/public-attribution.js";
+export {
+  LINKABILITY_ENGINE_VERSION,
+  analyzeLinkability,
+  type LinkabilityAnalysisInput,
+  type LinkabilityAnalysisResult,
+  type LinkabilityContribution,
+  type LinkabilityEvidenceClass
+} from "./engines/linkability.js";

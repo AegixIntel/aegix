@@ -18,6 +18,7 @@ import {
   type EntitySeedRow
 } from "@aegix/database";
 import { normalizeTransaction, type ParsedTransactionLike } from "@aegix/normalizer";
+import { ANALYSIS_PIPELINE_VERSION } from "@aegix/types";
 import type { IntelligenceSignal, NormalizedTransaction, WalletRelationship } from "@aegix/types";
 import {
   analyzeBehavior,
@@ -25,6 +26,9 @@ import {
   analyzeCounterparties,
   analyzeEntities,
   analyzeFunding,
+  analyzeLinkability,
+  analyzePublicAttribution,
+  analyzeTransactionPatterns,
   type EntityRegistry
 } from "@aegix/intelligence";
 import { scoreWallet, computeDataQuality, type ScoreResult } from "@aegix/scoring";
@@ -35,10 +39,11 @@ import { walletRef } from "@aegix/logging";
 import type { AnalysisJobData } from "@aegix/queue";
 import type { ProcessorContext } from "../worker.js";
 
-const PIPELINE_VERSION = "aegix-pipeline-v1.0.0";
+const PIPELINE_VERSION = ANALYSIS_PIPELINE_VERSION;
 
 interface FetchStats {
   signaturesFetched: number;
+  transactionsRequested: number;
   transactionsReceived: number;
   transactionsParsed: number;
   parserFailures: number;
@@ -51,6 +56,16 @@ interface FetchStats {
   genericParsed: number;
   /** average semantic coverage across parsed transactions, 0-1 */
   semanticCoverage: number;
+  signaturePages: number;
+  rpcBudgetExhausted: boolean;
+  timeBudgetExhausted: boolean;
+  unknownPrograms: Map<string, {
+    instructionCount: number;
+    transactionCount: number;
+    sampleSignatures: string[];
+    firstObservedSlot: number;
+    lastObservedSlot: number;
+  }>;
 }
 
 /**
@@ -94,6 +109,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     const wallet = await walletRepo.findOrCreate(chain, walletAddress);
     const stats: FetchStats = {
       signaturesFetched: 0,
+      transactionsRequested: 0,
       transactionsReceived: 0,
       transactionsParsed: 0,
       parserFailures: 0,
@@ -104,12 +120,18 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       fullyParsed: 0,
       partiallyParsed: 0,
       genericParsed: 0,
-      semanticCoverage: 0
+      semanticCoverage: 0,
+      signaturePages: 0,
+      rpcBudgetExhausted: false,
+      timeBudgetExhausted: false,
+      unknownPrograms: new Map()
     };
 
     // 1. Fetch signatures with pagination (bounded pages) and rate limiting
     const fetchStarted = Date.now();
-    const signatures = await fetchSignaturesPaged(provider, walletAddress, config);
+    const signatureResult = await fetchSignaturesPaged(provider, walletAddress, config);
+    const signatures = signatureResult.signatures;
+    stats.signaturePages = signatureResult.pagesAttempted;
     const fetchMs = Date.now() - fetchStarted;
     stats.signaturesFetched = signatures.length;
     if (signatures.length === 0) {
@@ -122,10 +144,19 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
 
     // 2. Fetch + normalize transactions — one bad tx must not kill the analysis
     const transactions: NormalizedTransaction[] = [];
-    const txBudget = config.ANALYSIS_MAX_TRANSACTIONS;
+    const txBudget = Math.min(
+      config.ANALYSIS_MAX_TRANSACTIONS,
+      Math.max(0, config.ANALYSIS_MAX_RPC_CALLS - stats.signaturePages - 1)
+    );
+    if (txBudget < signatures.length) stats.rpcBudgetExhausted = true;
+    stats.transactionsRequested = Math.min(signatures.length, txBudget);
     const pool = createPool(config.ANALYSIS_RPC_CONCURRENCY);
 
     const tasks = signatures.slice(0, txBudget).map((sig) => async () => {
+      if (Date.now() - startedAt >= config.ANALYSIS_TIMEOUT_MS) {
+        stats.timeBudgetExhausted = true;
+        return;
+      }
       let raw;
       try {
         raw = await provider.getTransaction(sig.signature);
@@ -143,6 +174,24 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         rawProvider: provider.name
       });
       stats.unknownProgramCount += outcome.unknownProgramCount;
+      for (const unknown of outcome.unknownPrograms) {
+        const current = stats.unknownPrograms.get(unknown.programId);
+        if (current) {
+          current.instructionCount += unknown.instructionCount;
+          current.transactionCount += 1;
+          current.firstObservedSlot = Math.min(current.firstObservedSlot, sig.slot);
+          current.lastObservedSlot = Math.max(current.lastObservedSlot, sig.slot);
+          if (current.sampleSignatures.length < 3) current.sampleSignatures.push(sig.signature);
+        } else if (stats.unknownPrograms.size < 50) {
+          stats.unknownPrograms.set(unknown.programId, {
+            instructionCount: unknown.instructionCount,
+            transactionCount: 1,
+            sampleSignatures: [sig.signature],
+            firstObservedSlot: sig.slot,
+            lastObservedSlot: sig.slot
+          });
+        }
+      }
 
       if (outcome.failed || !outcome.result) {
         stats.parserFailures += 1;
@@ -257,11 +306,39 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     } catch (err) {
       logger.warn("shared-counterparty discovery failed, cluster engine empty", { error: err instanceof Error ? err.message : String(err) });
     }
+    // Transaction-pattern and public-attribution evidence. These populate the
+    // TRANSACTION_PATTERN and PUBLIC_ATTRIBUTION signal categories and supply
+    // the score components that were previously stood in by proxies.
+    const txPatterns = analyzeTransactionPatterns({ walletAddress, transactions, transfers: allTransfers });
+    const publicAttribution = analyzePublicAttribution({
+      walletAddress,
+      transfers: allTransfers,
+      matches: entities.matches,
+      registry
+    });
+
+    // Linkability reads the other engines' output rather than chain data, so
+    // it runs last. Its exposure value is deliberately not fed back into
+    // scoring — identityLinkability is already computed from the same
+    // underlying evidence, and feeding it back would double-count.
+    const evidenceSignals = [
+      ...funding.signals,
+      ...counterparty.signals,
+      ...behavior.signals,
+      ...entities.signals,
+      ...clusters.signals,
+      ...txPatterns.signals,
+      ...publicAttribution.signals
+    ];
+    const linkability = analyzeLinkability({ walletAddress, signals: evidenceSignals });
+
     const enginesMs = Date.now() - enginesStarted;
     logger.info("intelligence engines complete", {
       stage: "engines",
       durationMs: enginesMs,
-      signals: [funding, counterparty, behavior, entities, clusters].reduce((sum, e) => sum + e.signals.length, 0)
+      signals: evidenceSignals.length + linkability.signals.length,
+      publicAttributionExposure: publicAttribution.publicAttributionExposure,
+      linkabilityConverged: linkability.converged
     });
 
     await jobRepo.updateStatus(analysisId, "SCORING", 70);
@@ -287,14 +364,21 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       transactionCount: transactions.length,
       historyDays,
       parserFailures: stats.parserFailures,
-      transactionsRequested: stats.transactionsReceived,
-      transactionsReceived: stats.transactionsParsed,
+      transactionsRequested: stats.transactionsRequested,
+      transactionsReceived: stats.transactionsReceived,
       // D2 §17-§20: calibrated confidence inputs
       unknownProgramRatio:
         allInteractions.length > 0 ? stats.unknownProgramCount / allInteractions.length : 0,
       rpcFailureRatio:
-        stats.signaturesFetched > 0 ? stats.rpcFailures / stats.signaturesFetched : 0,
-      supportingEngines: [funding, counterparty, behavior, entities, clusters].filter((e) => e.signals.length > 0).length,
+        stats.transactionsRequested > 0 ? stats.rpcFailures / stats.transactionsRequested : 0,
+      supportingEngines: [funding, counterparty, behavior, entities, clusters, txPatterns, publicAttribution].filter(
+        (e) => e.signals.length > 0
+      ).length,
+      publicAttribution: publicAttribution.publicAttributionExposure,
+      largeTransferExposure: txPatterns.largeTransferExposure,
+      highFrequencyExposure: txPatterns.highFrequencyExposure,
+      oddHourExposure: txPatterns.oddHourExposure,
+      regularIntervalExposure: txPatterns.regularIntervalExposure,
       entityCertainty:
         entities.matches.length > 0
           ? entities.matches.reduce((sum, m) => sum + m.confidence, 0) / entities.matches.length
@@ -305,7 +389,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
 
     // D2 §15-§16: formal data quality model — measures the dataset, not the wallet
     const dataQualityResult = computeDataQuality({
-      transactionsRequested: stats.transactionsReceived,
+      transactionsRequested: stats.transactionsRequested,
       transactionsReceived: stats.transactionsReceived,
       transactionsParsed: stats.transactionsParsed,
       parserFailures: stats.parserFailures,
@@ -335,13 +419,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     await jobRepo.updateStatus(analysisId, "EXPLANATION", 92);
 
     // 7. Persist intelligence outputs (source of truth)
-    const allSignals = [
-      ...funding.signals,
-      ...counterparty.signals,
-      ...behavior.signals,
-      ...entities.signals,
-      ...clusters.signals
-    ];
+    const allSignals = [...evidenceSignals, ...linkability.signals];
     await intelligenceRepo.insertSignals(
       allSignals.map((s) => ({
         analysisId,
@@ -631,7 +709,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
     const poolStats = provider instanceof ProviderPool ? provider.getStats() : null;
     const dataQuality = {
       ...dataQualityResult,
-      transactionsRequested: stats.transactionsReceived,
+      transactionsRequested: stats.transactionsRequested,
       transactionsReceived: stats.transactionsReceived,
       transactionsParsed: stats.transactionsParsed,
       parserFailures: stats.parserFailures,
@@ -647,6 +725,22 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
       semanticCoverage:
         stats.transactionsParsed > 0 ? Math.round((stats.semanticCoverage / stats.transactionsParsed) * 1000) / 10 : 0,
       signaturesFetched: stats.signaturesFetched,
+      signaturePages: stats.signaturePages,
+      coverageDisclosure: {
+        scope: "MOST_RECENT_BOUNDED",
+        maxSignatures: config.ANALYSIS_MAX_TRANSACTIONS,
+        maxTransactions: txBudget,
+        maxRpcCalls: config.ANALYSIS_MAX_RPC_CALLS,
+        maxHistoryDays: config.ANALYSIS_MAX_HISTORY_DAYS,
+        maxExecutionTimeMs: config.ANALYSIS_TIMEOUT_MS,
+        rpcBudgetExhausted: stats.rpcBudgetExhausted,
+        timeBudgetExhausted: stats.timeBudgetExhausted,
+        someInteractionsUnclassified: stats.unknownProgramCount > 0 || stats.partiallyParsed > 0
+      },
+      unknownPrograms: [...stats.unknownPrograms.entries()]
+        .map(([programId, metric]) => ({ programId, ...metric }))
+        .sort((a, b) => b.instructionCount - a.instructionCount || b.transactionCount - a.transactionCount)
+        .slice(0, 20),
       rpc: poolStats
         ? {
             lastProvider: poolStats.lastProvider,
@@ -724,17 +818,23 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
   }
 }
 
-async function fetchSignaturesPaged(provider: BlockchainProvider, address: string, config: AppConfig): Promise<Array<{ signature: string; slot: number }>> {
+async function fetchSignaturesPaged(provider: BlockchainProvider, address: string, config: AppConfig): Promise<{ signatures: Array<{ signature: string; slot: number }>; pagesAttempted: number }> {
   const all: Array<{ signature: string; slot: number }> = [];
   let before: string | undefined;
   const seen = new Set<string>();
-  const pageSize = 100;
+  const maxPageSize = 1000;
+  const historyCutoffSeconds = Math.floor(Date.now() / 1000) - config.ANALYSIS_MAX_HISTORY_DAYS * 86_400;
   let consecutiveFailures = 0;
+  let pagesAttempted = 0;
 
   for (let page = 0; page < config.ANALYSIS_MAX_SIGNATURE_PAGES; page++) {
+    pagesAttempted += 1;
     let sigs;
     try {
-      sigs = await provider.getSignatures(address, { limit: pageSize, before });
+      sigs = await provider.getSignatures(address, {
+        limit: Math.min(maxPageSize, config.ANALYSIS_MAX_TRANSACTIONS - all.length),
+        before
+      });
     } catch {
       // A failed signature page must not fail the whole analysis: rate limits
       // and transient RPC errors are expected under load. Skip forward and
@@ -747,15 +847,16 @@ async function fetchSignaturesPaged(provider: BlockchainProvider, address: strin
     if (sigs.length === 0) break;
     for (const s of sigs) {
       if (s.blockTime == null) continue;
+      if (s.blockTime < historyCutoffSeconds) return { signatures: all, pagesAttempted };
       if (seen.has(s.signature)) continue;
       seen.add(s.signature);
       all.push({ signature: s.signature, slot: s.slot });
-      if (all.length >= config.ANALYSIS_MAX_TRANSACTIONS) return all;
+      if (all.length >= config.ANALYSIS_MAX_TRANSACTIONS) return { signatures: all, pagesAttempted };
     }
     before = sigs[sigs.length - 1]?.signature;
     if (!before) break;
   }
-  return all;
+  return { signatures: all, pagesAttempted };
 }
 
 /** Bounded parallel pool for RPC fetch tasks, see architecture.md §41. */
