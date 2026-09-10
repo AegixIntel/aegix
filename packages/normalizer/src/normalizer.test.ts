@@ -264,3 +264,110 @@ test("marketplace programs without parsed actions classify as MARKETPLACE_INTERA
   assert.equal(outcome.parseClass, "FULLY_PARSED");
   assert.equal(r.interactions[0]!.actionType, "MARKETPLACE_INTERACTION");
 });
+
+// ---------------------------------------------------------------------------
+// jsonParsed field names, captured from finalized mainnet blocks.
+// ---------------------------------------------------------------------------
+
+test("native SOL transfers parse from the field names mainnet actually sends", () => {
+  // Real shape: {"info":{"destination":"…","lamports":279075734,"source":"…"}}.
+  // The parser previously required `from`/`to`, which no mainnet transaction
+  // carries, so every native SOL transfer was dropped and funded wallets
+  // reported NO_INCOMING_FUNDING.
+  const outcome = normalizeTransaction({
+    signature: "sig-sol-source-destination",
+    raw: tx([
+      {
+        programId: SYSTEM_PROGRAM,
+        program: "system",
+        parsed: { type: "transfer", info: { source: "walletA", destination: "walletB", lamports: 279_075_734 } }
+      }
+    ]),
+    walletAddress: "walletA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(r.transfers.length, 1);
+  assert.equal(r.transfers[0]!.fromAddress, "walletA");
+  assert.equal(r.transfers[0]!.toAddress, "walletB");
+  assert.equal(r.transfers[0]!.assetType, "SOL");
+  assert.equal(r.transfers[0]!.amountRaw, "279075734");
+});
+
+test("hand-written from/to fixtures still parse", () => {
+  const outcome = normalizeTransaction({
+    signature: "sig-sol-from-to",
+    raw: tx([
+      { programId: SYSTEM_PROGRAM, program: "system", parsed: { type: "transfer", info: { from: "a", to: "b", lamports: 1000 } } }
+    ]),
+    walletAddress: "a",
+    rawProvider: "test"
+  });
+  assert.equal(unwrap(outcome).transfers.length, 1);
+});
+
+test("SPL transferChecked is parsed, not dropped", () => {
+  // transferChecked is the most common spl-token instruction on mainnet —
+  // roughly twice as frequent as the unchecked `transfer` the parser used to
+  // handle alone. Its info also carries the mint directly.
+  const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const outcome = normalizeTransaction({
+    signature: "sig-spl-transfer-checked",
+    raw: tx([
+      {
+        programId: TOKEN,
+        program: "spl-token",
+        parsed: {
+          type: "transferChecked",
+          info: {
+            authority: "ownerA",
+            source: "tokenAccountA",
+            destination: "tokenAccountB",
+            mint: MINT,
+            tokenAmount: { amount: "1500000", decimals: 6 }
+          }
+        }
+      }
+    ]),
+    walletAddress: "ownerA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(r.transfers.length, 1);
+  assert.equal(r.transfers[0]!.transferType, "TRANSFER");
+  assert.equal(r.transfers[0]!.mint, MINT, "the checked form carries its own mint");
+  assert.equal(r.transfers[0]!.amountRaw, "1500000");
+});
+
+test("SPL burn names its debited account `account`, not `source`", () => {
+  const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const outcome = normalizeTransaction({
+    signature: "sig-spl-burn",
+    raw: tx([
+      {
+        programId: TOKEN,
+        program: "spl-token",
+        parsed: { type: "burn", info: { account: "tokenAccountA", authority: "ownerA", mint: "mintX", amount: "99" } }
+      }
+    ]),
+    walletAddress: "ownerA",
+    rawProvider: "test"
+  });
+  const r = unwrap(outcome);
+  assert.equal(r.transfers.length, 1);
+  assert.equal(r.transfers[0]!.transferType, "BURN");
+});
+
+test("an unsupported spl-token instruction is still not treated as a transfer", () => {
+  const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const outcome = normalizeTransaction({
+    signature: "sig-spl-close",
+    raw: tx([
+      { programId: TOKEN, program: "spl-token", parsed: { type: "closeAccount", info: { account: "a", destination: "b", owner: "o" } } }
+    ]),
+    walletAddress: "o",
+    rawProvider: "test"
+  });
+  assert.equal(unwrap(outcome).transfers.length, 0);
+});

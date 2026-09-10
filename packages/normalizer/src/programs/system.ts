@@ -8,32 +8,63 @@ const STAKE_PROGRAM = "Stake11111111111111111111111111111111111111";
 const VOTE_PROGRAM = "Vote111111111111111111111111111111111111111";
 
 export interface SolTransferInfo {
+  /** The field names Solana's jsonParsed encoding actually emits. */
+  source?: string;
+  destination?: string;
+  /** Accepted as aliases so hand-written fixtures keep working. */
   from?: string;
   to?: string;
   lamports?: number;
 }
 
-/** Parses system program transfers (native SOL). */
+/**
+ * Parses system program transfers (native SOL).
+ *
+ * `jsonParsed` names these fields `source` and `destination`. This function
+ * used to accept only `from`/`to`, which no mainnet transaction carries, so
+ * every native SOL transfer was silently dropped: the transfers table stayed
+ * empty, the funding engine reported NO_INCOMING_FUNDING for funded wallets,
+ * and counterparty/pattern analysis had nothing to measure.
+ */
 export function parseSystemTransfer(ix: ParsedInstruction): { from: string; to: string; lamports: number } | null {
   if (ix.programId !== SYSTEM_PROGRAM) return null;
-  if (ix.parsed?.type === "transfer") {
-    const info = ix.parsed.info as SolTransferInfo;
-    if (info?.from && info?.to && typeof info.lamports === "number") {
-      return { from: info.from, to: info.to, lamports: info.lamports };
-    }
-  }
-  return null;
+  const type = ix.parsed?.type;
+  if (type !== "transfer" && type !== "transferWithSeed") return null;
+  const info = ix.parsed?.info as SolTransferInfo | undefined;
+  if (!info || typeof info.lamports !== "number") return null;
+  const from = info.source ?? info.from;
+  const to = info.destination ?? info.to;
+  if (!from || !to) return null;
+  return { from, to, lamports: info.lamports };
 }
 
 export interface SplTransferInfo {
   authority?: string;
   source?: string;
   destination?: string;
+  account?: string;
+  mint?: string;
   amount?: string;
   tokenAmount?: { amount?: string; decimals?: number };
 }
 
-/** Parses SPL token transfers (mint, transfer, burn). */
+/**
+ * SPL instruction types that move token balance, mapped to their direction.
+ *
+ * The `*Checked` variants matter: `transferChecked` is the most common SPL
+ * token instruction on mainnet by a wide margin, and handling only the
+ * unchecked `transfer` dropped the majority of real token movement.
+ */
+const SPL_TRANSFER_TYPES: Record<string, "TRANSFER" | "MINT" | "BURN"> = {
+  transfer: "TRANSFER",
+  transferChecked: "TRANSFER",
+  mintTo: "MINT",
+  mintToChecked: "MINT",
+  burn: "BURN",
+  burnChecked: "BURN"
+};
+
+/** Parses SPL token movement (transfer, mint, burn, and their checked forms). */
 export function parseSplTransfer(ix: ParsedInstruction): {
   type: "TRANSFER" | "MINT" | "BURN";
   from: string;
@@ -43,19 +74,26 @@ export function parseSplTransfer(ix: ParsedInstruction): {
 } | null {
   if (ix.programId !== TOKEN_PROGRAM && ix.programId !== TOKEN_2022_PROGRAM) return null;
   const type = ix.parsed?.type;
-  if (type === "transfer" || type === "mintTo" || type === "burn") {
-    const info = ix.parsed?.info as SplTransferInfo | undefined;
-    const amount = info?.tokenAmount?.amount ?? info?.amount;
-    if (!info || !amount) return null;
-    return {
-      type: type === "mintTo" ? "MINT" : type === "burn" ? "BURN" : "TRANSFER",
-      from: info.authority ?? info.source ?? "",
-      to: info.destination ?? "",
-      amount,
-      mint: null // resolved from pre/post token balances by the caller
-    };
-  }
-  return null;
+  if (!type) return null;
+  const direction = SPL_TRANSFER_TYPES[type];
+  if (!direction) return null;
+
+  const info = ix.parsed?.info as SplTransferInfo | undefined;
+  const amount = info?.tokenAmount?.amount ?? info?.amount;
+  if (!info || !amount) return null;
+
+  // Burns name the debited token account `account`; transfers name it `source`.
+  const from = info.authority ?? info.source ?? info.account ?? "";
+  const to = info.destination ?? "";
+  return {
+    type: direction,
+    from,
+    to,
+    // The checked forms carry the mint directly; otherwise the caller
+    // resolves it from pre/post token balances.
+    mint: info.mint ?? null,
+    amount
+  };
 }
 
 export function isSystemProgram(id: string): boolean {
