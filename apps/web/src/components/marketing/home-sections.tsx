@@ -215,7 +215,7 @@ export function DeveloperInfra() {
   const facts = ["Scoped API keys", "Metered quota", "Usage reporting", "Signed webhooks"];
   return (
     <section className="border-b border-white/10">
-      <div className="grid gap-14 px-4 py-20 md:py-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
+      <div className="grid grid-cols-1 gap-14 px-4 py-20 md:py-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
         <div className="min-w-0">
           <Reveal>
             <p className="section-label">Developers</p>
