@@ -91,7 +91,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
-      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - name: Migration safety and idempotency
         run: mkdir -p artifacts && set -o pipefail && pnpm test:migrations 2>&1 | tee artifacts/migrations.log
       - name: API integration tests
@@ -138,7 +138,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
-      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - run: pnpm --filter @aegix/database migrate
       - name: Run every deterministic golden test
         run: |
@@ -193,7 +193,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
-      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - name: Run E2E
         run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-d7 2>&1 | tee artifacts/e2e.log
       - name: Upload E2E logs on failure
@@ -237,7 +237,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
-      - run: redis-cli CONFIG SET maxmemory-policy noeviction
+      - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - name: Run monitor E2E
         run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-monitor 2>&1 | tee artifacts/e2e-monitor.log
       - name: Upload monitor logs on failure
