@@ -77,11 +77,17 @@ export function decideLifecycleAction(
 ): { action: BillingAction; boundary: string; reason: string } | null {
   const at = now.getTime();
 
-  // A grace window that has closed ends the subscription: entitlements have
-  // already degraded to free (the resolver does not wait for this sweep);
-  // this makes the row say so too.
-  if (row.status === "PAST_DUE" && row.grace_period_end && Date.parse(row.grace_period_end) <= at) {
-    return { action: "EXPIRE", boundary: row.grace_period_end, reason: "GRACE_ELAPSED" };
+  // A past-due subscription has exactly two futures: it recovers (a payment
+  // provider tells us so) or its grace window closes and it ends. It never
+  // renews — that would advance the period and silently clear the failure.
+  if (row.status === "PAST_DUE") {
+    // A closed grace window ends it. Entitlements have already degraded to
+    // free (the resolver does not wait for this sweep); this makes the row
+    // say so too.
+    if (row.grace_period_end && Date.parse(row.grace_period_end) <= at) {
+      return { action: "EXPIRE", boundary: row.grace_period_end, reason: "GRACE_ELAPSED" };
+    }
+    return null;
   }
 
   // A trial cannot convert without a way to charge for what comes next, and

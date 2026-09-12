@@ -137,6 +137,10 @@ export function transition(input: TransitionInput): TransitionResult {
 
     case "RENEW": {
       if (subscription.status === "EXPIRED") invalid(action, from);
+      // A past-due subscription must recover before it can renew. Renewing
+      // it would advance the period and set it ACTIVE again, silently
+      // clearing a payment failure nobody resolved.
+      if (subscription.status === "PAST_DUE") invalid(action, from);
       // Renewing a subscription already scheduled for cancellation is the
       // moment it actually ends. Handling it here keeps the periodic job
       // from having to branch, and from forgetting to.

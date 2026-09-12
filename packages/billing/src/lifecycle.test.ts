@@ -116,6 +116,16 @@ test("RENEW of a subscription scheduled for cancellation ends it", () => {
   assert.equal(result.event.detail.reason, "CANCELLED_AT_PERIOD_END");
 });
 
+test("a past-due subscription cannot be renewed back into good standing", () => {
+  // Renewing would advance the period and set ACTIVE, silently clearing a
+  // payment failure nobody resolved. It must recover or expire.
+  const pastDue = live({ status: "PAST_DUE", gracePeriodEnd: "2026-09-20T12:00:00.000Z" });
+  assert.throws(
+    () => transition({ subscription: pastDue, action: "RENEW", plan: pro, now }),
+    (error: unknown) => error instanceof BillingError && error.code === "INVALID_TRANSITION"
+  );
+});
+
 test("CANCEL schedules, RESUME revokes", () => {
   const canceled = transition({ subscription: live(), action: "CANCEL", plan: pro, now });
   assert.equal(canceled.subscription.status, "CANCELED");
