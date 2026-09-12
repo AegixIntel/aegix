@@ -21,7 +21,9 @@ async function main() {
       ["/app/context", ["Wallet Context", "Load context"]],
       ["/app/markets", ["Markets Intelligence", "BTC", "ETH", "SOL", "Load market"]],
       ["/markets", ["Open Markets", "Temporal correlation does not establish causation"]],
-      ["/app/billing", ["Plan &amp; usage", "Usage this period", "Invoices"]]
+      // Server-rendered shell only: plan, usage and invoice data arrive
+      // client-side after an authenticated fetch.
+      ["/app/billing", ["Plan &amp; usage", "Invoices", "No invoices yet"]]
     ] as const) {
       const response = await fetch(`http://127.0.0.1:${port}${route}`, { signal: AbortSignal.timeout(10000) });
       assert.equal(response.status, 200, route);
@@ -33,4 +35,10 @@ async function main() {
     if (child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
   }
 }
-main().catch(() => { console.error("Restored production UI route rendering: FAIL"); process.exitCode = 1; });
+main().catch((error) => {
+  // Report which assertion failed: a bare "FAIL" makes a route or copy
+  // change indistinguishable from the server failing to start.
+  console.error("Restored production UI route rendering: FAIL");
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});
