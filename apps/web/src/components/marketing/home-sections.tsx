@@ -21,9 +21,9 @@ export function CategoryStrip() {
     { label: "Intelligence Network", status: "RESEARCH" }
   ];
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-b border-white/10 px-4 py-3 lg:px-8">
+    <div className="flex items-center gap-x-8 overflow-x-auto whitespace-nowrap border-b border-white/10 px-4 py-3 [scrollbar-width:none] lg:flex-wrap lg:px-8">
       {items.map((it) => (
-        <span key={it.label} className="flex items-center gap-2.5">
+        <span key={it.label} className="flex flex-none items-center gap-2.5">
           <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{it.label}</span>
           <StatusBadge label={it.status} />
         </span>
@@ -216,7 +216,7 @@ export function DeveloperInfra() {
   return (
     <section className="border-b border-white/10">
       <div className="grid gap-14 px-4 py-20 md:py-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
-        <div>
+        <div className="min-w-0">
           <Reveal>
             <p className="section-label">Developers</p>
             <h2 className="section-title mt-5">Intelligence is infrastructure.</h2>
@@ -245,7 +245,7 @@ export function DeveloperInfra() {
             </Link>
           </Reveal>
         </div>
-        <Reveal delay={120}>
+        <Reveal delay={120} className="min-w-0">
           <TypedRequest />
         </Reveal>
       </div>

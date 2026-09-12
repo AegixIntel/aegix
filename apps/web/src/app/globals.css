@@ -229,6 +229,16 @@
     animation-fill-mode: both;
   }
 
+  /* Trace labels are in SVG user units; enlarge them where the SVG scales down. */
+  .trace-label {
+    font-size: 10.5px;
+  }
+  @media (max-width: 639px) {
+    .trace-label {
+      font-size: 14px;
+    }
+  }
+
   /* System map stage visuals — replay whenever the stage remounts. */
   .sm-in > * {
     animation: aegix-in-x 0.5s var(--ease-out) both;

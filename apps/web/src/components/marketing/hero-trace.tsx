@@ -235,8 +235,7 @@ export function HeroTrace() {
                   x={n.x + n.lx}
                   y={n.y + n.ly}
                   textAnchor={n.anchor}
-                  className="font-mono"
-                  fontSize="10.5"
+                  className="trace-label font-mono"
                   letterSpacing="0.02em"
                   fill={hot ? "#f2f2f2" : "rgba(156,163,175,0.75)"}
                 >
@@ -273,7 +272,6 @@ export function HeroTrace() {
                 active ? "text-marble" : "text-muted-2 hover:text-muted-foreground"
               )}
             >
-              <span className="mr-2 text-muted-2">{String(i + 1).padStart(2, "0")}</span>
               {s.family}
               {active &&
                 (playing ? (
