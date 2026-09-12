@@ -20,14 +20,15 @@ async function main() {
     for (const [route, texts] of [
       ["/app/context", ["Wallet Context", "Load context"]],
       ["/app/markets", ["Markets Intelligence", "BTC", "ETH", "SOL", "Load market"]],
-      ["/markets", ["Open Markets", "Temporal correlation does not establish causation"]]
+      ["/markets", ["Open Markets", "Temporal correlation does not establish causation"]],
+      ["/app/billing", ["Plan &amp; usage", "Usage this period", "Invoices"]]
     ] as const) {
       const response = await fetch(`http://127.0.0.1:${port}${route}`, { signal: AbortSignal.timeout(10000) });
       assert.equal(response.status, 200, route);
       const html = await response.text();
       for (const text of texts) assert.ok(html.includes(text), `${route} renders ${text}`);
     }
-    console.log("D8/D10 production UI route rendering: PASS");
+    console.log("D8/D10/D11 production UI route rendering: PASS");
   } finally {
     if (child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
   }

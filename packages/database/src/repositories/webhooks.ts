@@ -54,6 +54,8 @@ export interface WebhookRepo {
     secretKeyVersion: string;
   }): Promise<DeveloperWebhookRow>;
   listForUser(userId: string): Promise<DeveloperWebhookRow[]>;
+  /** Active endpoints, for the D11 `webhooks.active` entitlement. */
+  countActiveForUser(userId: string): Promise<number>;
   getForUser(userId: string, id: string): Promise<DeveloperWebhookRow | null>;
   getById(id: string): Promise<DeveloperWebhookRow | null>;
   updateForUser(userId: string, id: string, patch: { url?: string; eventTypes?: WebhookEventType[]; status?: WebhookStatus; disabledReason?: string | null }): Promise<DeveloperWebhookRow | null>;
@@ -108,6 +110,15 @@ export function createWebhookRepo(sql: Sql): WebhookRepo {
         where user_id = ${userId}
         order by created_at desc
       `;
+    },
+
+    async countActiveForUser(userId) {
+      const [row] = await sql<Array<{ count: string }>>`
+        select count(*)::text as count
+        from developer_webhooks
+        where user_id = ${userId} and status = 'ACTIVE'
+      `;
+      return row ? Number(row.count) : 0;
     },
 
     async getForUser(userId, id) {

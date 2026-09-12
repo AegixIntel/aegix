@@ -11,6 +11,9 @@ importers:
       '@aegix/ai':
         specifier: workspace:*
         version: link:packages/ai
+      '@aegix/billing':
+        specifier: workspace:*
+        version: link:packages/billing
       '@aegix/blockchain':
         specifier: workspace:*
         version: link:packages/blockchain
@@ -71,6 +74,9 @@ importers:
       '@aegix/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@aegix/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@aegix/blockchain':
         specifier: workspace:*
         version: link:../../packages/blockchain
@@ -208,6 +214,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@aegix/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@aegix/blockchain':
         specifier: workspace:*
         version: link:../../packages/blockchain
@@ -275,6 +284,18 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/billing:
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

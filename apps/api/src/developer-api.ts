@@ -91,6 +91,12 @@ export interface DeveloperAuthDeps {
   sql: Sql;
   config: AppConfig;
   logger: AegixLogger;
+  /**
+   * Daily quota for a developer's owning user (D11). Defaults to the
+   * deployment-wide DEVELOPER_DAILY_QUOTA, which is also the free plan's
+   * entitlement — so the default and the free plan agree by construction.
+   */
+  quotaFor?(userId: string): Promise<number>;
 }
 
 export type DeveloperAuthResult =
@@ -197,11 +203,19 @@ export function createDeveloperAuth(deps: DeveloperAuthDeps) {
      */
     async checkAndClaimQuota(developer: DeveloperContext, opts: { units?: number } = {}): Promise<{ allowed: boolean; summary: { limit: number; used: number; remaining: number; resetAt: string } }> {
       const now = new Date();
+      // D11: the ceiling is the owning user's plan entitlement, not a fixed
+      // deployment constant. Keys still cannot multiply it (D6-D §69).
+      const limit = deps.quotaFor ? await deps.quotaFor(developer.userId) : config.DEVELOPER_DAILY_QUOTA;
 
       // Atomic claim first (no read-then-write race, D6-D §70).
-      const claimed = await usageRepo.tryClaim(developer.userId, opts.units ?? 1, config.DEVELOPER_DAILY_QUOTA, now);
-      const summary = await usageRepo.summaryForUser(developer.userId, config.DEVELOPER_DAILY_QUOTA, now);
+      const claimed = await usageRepo.tryClaim(developer.userId, opts.units ?? 1, limit, now);
+      const summary = await usageRepo.summaryForUser(developer.userId, limit, now);
       return { allowed: claimed, summary };
+    },
+
+    /** The owning user's daily developer quota, for reporting surfaces. */
+    async quotaLimitFor(userId: string): Promise<number> {
+      return deps.quotaFor ? deps.quotaFor(userId) : config.DEVELOPER_DAILY_QUOTA;
     }
   };
 }

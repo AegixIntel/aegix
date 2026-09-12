@@ -6,6 +6,7 @@ import { createWorker, type ProcessorContext } from "./worker.js";
 import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
+import { runBillingLifecycle } from "./processors/billing.js";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -35,6 +36,9 @@ const allWorkers = [...analysisWorkers, ...monitorWorkers, ...webhookWorkers];
 
 let shuttingDown = false;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let billingTimer: ReturnType<typeof setInterval> | null = null;
+/** Billing boundaries are hourly at finest; a 5-minute sweep is ample. */
+const BILLING_SWEEP_INTERVAL_MS = 300_000;
 let schedulerReady = !config.ENABLE_MONITOR_SCHEDULER || !config.ENABLE_MONITORING;
 
 async function writeHeartbeat(): Promise<boolean> {
@@ -56,6 +60,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   logger.info("received shutdown signal, draining workers", { signal });
   if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (billingTimer) clearInterval(billingTimer);
   const close = async () => {
     await Promise.all(allWorkers.map((w) => w.close()));
     await queues.close();
@@ -202,6 +207,22 @@ try {
   schedulerReady = await registerMonitorScheduler(queues, config, logger);
   if (!(await writeHeartbeat())) throw new Error("initial worker readiness check failed");
   heartbeatTimer = setInterval(() => void writeHeartbeat(), 10_000);
+  // D11: subscriptions age on wall-clock boundaries, not on requests. The
+  // sweep is cheap (an indexed scan of due rows) and idempotent across
+  // replicas, so it runs on a plain interval rather than needing its own
+  // queue. A failure is logged and retried on the next tick; it never fails
+  // the heartbeat, because billing being late is not the product being down.
+  if (config.ENABLE_BILLING) {
+    billingTimer = setInterval(() => {
+      void runBillingLifecycle({ config, sql, logger })
+        .then((result) => {
+          if (result.scanned > 0) logger.info("billing lifecycle sweep", { ...result });
+        })
+        .catch((error: unknown) => {
+          logger.error("billing lifecycle sweep failed", { error: error instanceof Error ? error.message : "unknown" });
+        });
+    }, BILLING_SWEEP_INTERVAL_MS);
+  }
   logger.info("worker started", {
     queues: allWorkers.map((w) => w.name),
     concurrency: config.ANALYSIS_WORKER_CONCURRENCY

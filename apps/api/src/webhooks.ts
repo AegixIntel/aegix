@@ -20,6 +20,8 @@ export interface WebhookRoutesDeps {
   config: AppConfig;
   logger: AegixLogger;
   requireUser: (req: FastifyRequest, reply: FastifyReply) => Promise<AuthUser | null>;
+  /** Active-endpoint ceiling for this identity (D11 `webhooks.active`). */
+  activeWebhookLimit: (userId: string) => Promise<number>;
 }
 
 /** URL validation: http(s) only, no credentials, no fragments. */
@@ -86,6 +88,17 @@ export function registerWebhookRoutes(deps: WebhookRoutesDeps): void {
         return reply.code(400).send({ error: { code: "INVALID_REQUEST", message: `Unknown event type(s): ${unknown.join(", ")}` }, meta: { requestId } });
       }
       const eventTypes = [...new Set(rawTypes)] as WebhookEventType[];
+
+      // D11: webhook endpoints are a plan-controlled concurrent level.
+      // Before D11 this resource was unbounded per identity.
+      const webhookLimit = await deps.activeWebhookLimit(user.id);
+      const activeWebhooks = await webhookRepo.countActiveForUser(user.id);
+      if (activeWebhooks >= webhookLimit) {
+        return reply.code(429).send({
+          error: { code: "WEBHOOK_LIMIT_REACHED", message: `Active webhook limit reached (${webhookLimit})` },
+          meta: { requestId }
+        });
+      }
 
       let material;
       try {

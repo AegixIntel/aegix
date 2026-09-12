@@ -16,6 +16,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aegix/billing": "workspace:*",
     "@aegix/blockchain": "workspace:*",
     "@aegix/commonality": "workspace:^",
     "@aegix/config": "workspace:*",

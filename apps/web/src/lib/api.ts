@@ -992,3 +992,108 @@ export async function askMarket(asset: MarketAsset, question: string, wallet?: s
   }
   return { ...(await response.json()), wallet: wallet ?? asset, analysisId: "" } as AskResponse;
 }
+
+// ---- D11: billing / entitlements ----
+
+export type PlanCode = "free" | "pro" | "team";
+
+export interface BillingPlan {
+  code: PlanCode;
+  name: string;
+  tier: number;
+  priceCents: number;
+  currency: string;
+  interval: "NONE" | "MONTH" | "YEAR";
+  entitlements: Record<string, number>;
+  catalogVersion: string;
+}
+
+export interface BillingPlansResponse {
+  plans: BillingPlan[];
+  currency: string;
+  /** False while no payment provider is configured: upgrades are granted. */
+  selfServe: boolean;
+  provider: string;
+}
+
+export interface BillingSubscription {
+  plan: BillingPlan | null;
+  subscribedPlan: BillingPlan | null;
+  status: "NONE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED";
+  /** True when the plan being paid for is not the plan being enforced. */
+  degraded: boolean;
+  entitlements: Record<string, number>;
+  period: { start: string; end: string };
+  cancelAtPeriodEnd: boolean;
+  gracePeriodEnd: string | null;
+  trialEnd: string | null;
+  selfServe: boolean;
+  engineVersion: string;
+}
+
+export interface BillingUsageDimension {
+  dimension: string;
+  units: number;
+  entitlementKey: string | null;
+  limit: number | null;
+  includedUnits: number | null;
+  overageUnits: number;
+}
+
+export interface BillingUsage {
+  planCode: PlanCode;
+  period: { start: string; end: string };
+  days: number;
+  dimensions: BillingUsageDimension[];
+  engineVersion: string;
+}
+
+export interface BillingInvoice {
+  id: string;
+  plan_code: string;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  status: "DRAFT" | "OPEN" | "PAID" | "VOID";
+  lines: Array<{ kind: string; description: string; quantity: number; unitCents: number; amountCents: number }>;
+  subtotal_cents: number;
+  total_cents: number;
+  issued_at: string | null;
+  paid_at: string | null;
+}
+
+async function billingRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...authHeaders(), ...init?.headers }
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export function getBillingPlans(): Promise<BillingPlansResponse> {
+  return billingRequest<BillingPlansResponse>("/v1/billing/plans");
+}
+
+export function getBillingSubscription(): Promise<BillingSubscription> {
+  return billingRequest<BillingSubscription>("/v1/billing/subscription");
+}
+
+export function getBillingUsage(): Promise<BillingUsage> {
+  return billingRequest<BillingUsage>("/v1/billing/usage");
+}
+
+export function getBillingInvoices(): Promise<{ invoices: BillingInvoice[] }> {
+  return billingRequest<{ invoices: BillingInvoice[] }>("/v1/billing/invoices");
+}
+
+export function cancelSubscription(immediate = false): Promise<{ status: string; cancelAtPeriodEnd: boolean; effectiveAt: string }> {
+  return billingRequest("/v1/billing/subscription/cancel", { method: "POST", body: JSON.stringify({ immediate }) });
+}
+
+export function resumeSubscription(): Promise<{ status: string; cancelAtPeriodEnd: boolean }> {
+  return billingRequest("/v1/billing/subscription/resume", { method: "POST" });
+}

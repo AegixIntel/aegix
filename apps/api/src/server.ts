@@ -43,6 +43,10 @@ import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
 import { createOpenAICompatibleProvider } from "@aegix/ai";
+import { createManualProvider } from "@aegix/billing";
+import { createBillingRepo } from "@aegix/database";
+import { createEntitlementService } from "./entitlements.js";
+import { registerBilling } from "./billing.js";
 import { registerAskAegix } from "./ask-aegix.js";
 import { claimDailyUsage } from "./metered-quota.js";
 import { createCoinPaprikaProvider, createMarketService, type MarketDataProvider } from "@aegix/markets";
@@ -189,7 +193,18 @@ export async function buildServer(deps: ApiDeps) {
   const cache = createCache(config.REDIS_URL, config.REDIS_CACHE_DB);
   const queues = createQueues(config);
   const provider = deps.provider ?? createProviderPoolFromConfig(config);
-  const developerAuth = createDeveloperAuth({ sql, config, logger });
+  const billingRepo = createBillingRepo(sql);
+  // D11: every plan-controlled limit below is read from here. The free plan
+  // is built from the same config values these enforcement points used
+  // before, so an identity without a subscription sees no change.
+  const entitlements = createEntitlementService({ config, repo: billingRepo, logger });
+  const paymentProvider = createManualProvider();
+  const developerAuth = createDeveloperAuth({
+    sql,
+    config,
+    logger,
+    quotaFor: (userId) => entitlements.limit(userId, "api.daily")
+  });
 
   // Analysis trace, see D2 §56: every API request carries a request_id that
   // flows into job records. Full wallet addresses are never logged.
@@ -649,7 +664,12 @@ export async function buildServer(deps: ApiDeps) {
         }
 
         // 5. Quota check, see D3-F: only expensive analyses consume quota.
-        const quota = await checkQuota(sql, config, quotaContext(req));
+        // The registered-user limit is the plan entitlement (D11); anonymous
+        // visitors keep the config limit, since a plan needs an identity.
+        const analysisActor = user && !user.isAnonymous ? user.id : null;
+        const quota = await checkQuota(sql, config, quotaContext(req), {
+          limitOverride: analysisActor ? await entitlements.limit(analysisActor, "analysis.daily") : undefined
+        });
         if (!quota.allowed) {
           return reply.code(429).send({
             code: "ANALYSIS_QUOTA_EXCEEDED",
@@ -949,7 +969,9 @@ export async function buildServer(deps: ApiDeps) {
         if (!admission.admitted) return reply.code(503).send(admission.body);
         const quota = await checkQuota(sql, config, quotaContext(req), {
           usageType: "comparison",
-          limitOverride: user && !user.isAnonymous ? config.COMPARE_DAILY_USER_LIMIT : config.COMPARE_DAILY_ANON_LIMIT
+          limitOverride: user && !user.isAnonymous
+            ? await entitlements.limit(user.id, "compare.daily")
+            : config.COMPARE_DAILY_ANON_LIMIT
         });
         if (!quota.allowed) {
           return reply.code(429).send({ code: "COMPARISON_QUOTA_EXCEEDED", resetAt: quota.resetAt, message: `Daily comparison limit reached (${quota.limit}), resets at ${quota.resetAt}`, requestId });
@@ -1379,9 +1401,10 @@ export async function buildServer(deps: ApiDeps) {
       }
       const scopes = [...new Set(requestedScopes)] as ApiKeyScope[];
 
+      const keyLimit = await entitlements.limit(user.id, "apiKeys.active");
       const activeCount = await developerKeyRepo.countActiveForUser(user.id);
-      if (activeCount >= config.MAX_ACTIVE_API_KEYS_PER_USER) {
-        return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${config.MAX_ACTIVE_API_KEYS_PER_USER})`, requestId });
+      if (activeCount >= keyLimit) {
+        return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${keyLimit})`, requestId });
       }
 
       const { key, keyPrefix, keyHash } = generateApiKey();
@@ -1447,9 +1470,10 @@ export async function buildServer(deps: ApiDeps) {
     if (existing.expires_at && new Date(existing.expires_at) < new Date()) {
       return reply.code(400).send({ code: "INVALID_REQUEST", message: "Cannot rotate an expired key — create a new key instead", requestId });
     }
+    const rotateKeyLimit = await entitlements.limit(user.id, "apiKeys.active");
     const activeCount = await developerKeyRepo.countActiveForUser(user.id);
-    if (activeCount >= config.MAX_ACTIVE_API_KEYS_PER_USER) {
-      return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${config.MAX_ACTIVE_API_KEYS_PER_USER})`, requestId });
+    if (activeCount >= rotateKeyLimit) {
+      return reply.code(429).send({ code: "KEY_LIMIT_REACHED", message: `Active API key limit reached (${rotateKeyLimit})`, requestId });
     }
 
     // Generate the new key first, then revoke the old one in the same
@@ -1505,7 +1529,7 @@ export async function buildServer(deps: ApiDeps) {
       const developer = await developerAuth.requireScope(req, reply, "usage:read");
       if (!developer) return;
 
-      const summary = await developerUsageRepo.summaryForUser(developer.userId, config.DEVELOPER_DAILY_QUOTA);
+      const summary = await developerUsageRepo.summaryForUser(developer.userId, await developerAuth.quotaLimitFor(developer.userId));
       setQuotaHeaders(reply, { limit: summary.limit, remaining: summary.remaining, resetAt: summary.resetAt }, { limit: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, remaining: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, resetAt: Math.floor(Date.now() / 1000) + 60 });
       await recordDeveloperUsage({
         developer,
@@ -1543,7 +1567,8 @@ export async function buildServer(deps: ApiDeps) {
     provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
     loadContext: loadWalletContextProfile,
     requireUser: requireUser as never,
-    checkDailyQuota: (userId, analysisId) => claimDailyUsage(sql, userId, "ask_aegix", config.ASK_AEGIX_DAILY_QUOTA, analysisId),
+    checkDailyQuota: async (userId, analysisId) =>
+      claimDailyUsage(sql, userId, "ask_aegix", await entitlements.limit(userId, "ask.daily"), analysisId),
     recordUsage: async () => { /* admission already persisted before provider work */ }
   });
 
@@ -1552,7 +1577,25 @@ export async function buildServer(deps: ApiDeps) {
     provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
     requireUser,
     loadWalletContext: loadWalletContextProfile,
-    claimQuota: (userId, ai) => claimDailyUsage(sql, userId, ai ? "ask_aegix" : "markets", ai ? config.ASK_AEGIX_DAILY_QUOTA : config.MARKETS_DAILY_QUOTA)
+    claimQuota: async (userId, ai) =>
+      claimDailyUsage(
+        sql,
+        userId,
+        ai ? "ask_aegix" : "markets",
+        await entitlements.limit(userId, ai ? "ask.daily" : "markets.daily")
+      )
+  });
+
+  // ---- D11: billing / entitlements (architecture.md §69) ----
+  registerBilling({
+    app,
+    config,
+    logger,
+    repo: billingRepo,
+    entitlements,
+    provider: paymentProvider,
+    requireUser,
+    countActiveMonitors: (userId) => monitorRepo.countActiveForUser(userId)
   });
 
   registerWebhookRoutes({
@@ -1560,7 +1603,8 @@ export async function buildServer(deps: ApiDeps) {
     sql,
     config,
     logger,
-    requireUser
+    requireUser,
+    activeWebhookLimit: (userId) => entitlements.limit(userId, "webhooks.active")
   });
 
   // ---- Privacy monitors, see milestone D4 (D4-A, D4-E, D4-F, D4-G) ----
@@ -1640,11 +1684,12 @@ export async function buildServer(deps: ApiDeps) {
         return reply.code(400).send({ code: "WALLET_NOT_SAVED", message: "Save the wallet before enabling monitoring", requestId: randomUUID() });
       }
 
+      const monitorLimit = await entitlements.limit(user.id, "monitors.active");
       const active = await monitorRepo.countActiveForUser(user.id);
-      if (active >= config.MAX_ACTIVE_MONITORS_PER_USER) {
+      if (active >= monitorLimit) {
         return reply.code(429).send({
           code: "MONITOR_LIMIT_REACHED",
-          message: `Monitor limit reached (${config.MAX_ACTIVE_MONITORS_PER_USER} active)`,
+          message: `Monitor limit reached (${monitorLimit} active)`,
           requestId: randomUUID()
         });
       }

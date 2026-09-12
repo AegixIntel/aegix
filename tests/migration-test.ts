@@ -58,15 +58,16 @@ async function main(): Promise<void> {
     const [fixture] = await sql<Array<{ id: string }>>`select id from profiles where id = ${fixtureId}`;
     assert.equal(fixture?.id, fixtureId, "existing fixture data survives idempotent migrations");
     const [count] = await sql<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.ok(Number(count?.count) >= 9, "all migrations are recorded");
-    assert.equal(Number(count?.count), 9, "exactly nine migrations are recorded");
+    assert.ok(Number(count?.count) >= 10, "all migrations are recorded");
+    assert.equal(Number(count?.count), 10, "exactly ten migrations are recorded");
   } finally {
     await sql.end();
   }
 
 
   // Real upgrade shape: install the committed D7 schema (0001..0008), seed
-  // existing user + notification data, then let the actual runner apply 0009.
+  // existing user + notification data, then let the actual runner apply the
+  // migrations added since (0009 keyset index, 0010 billing).
   const d7 = createDb(safe.databaseUrl);
   const d7User = randomUUID();
   let d7NotificationId = "";
@@ -92,14 +93,24 @@ async function main(): Promise<void> {
     const [preserved] = await upgraded<Array<{ body: string }>>`
       select body from notifications where id = ${d7NotificationId} and user_id = ${d7User}
     `;
-    assert.equal(preserved?.body, "preserve me", "D7 notification data survives migration 0009");
+    assert.equal(preserved?.body, "preserve me", "D7 notification data survives migrations 0009-0010");
     const [index] = await upgraded<Array<{ exists: boolean }>>`
       select to_regclass('public.idx_notifications_in_app_keyset') is not null as exists
     `;
     assert.equal(index?.exists, true, "migration 0009 keyset index exists after upgrade");
+    const [plans] = await upgraded<Array<{ count: string }>>`select count(*)::text as count from plans`;
+    assert.equal(Number(plans?.count), 3, "migration 0010 seeds the shipped plan catalog");
+    // D11 must be inert for identities that were already here: the upgraded
+    // D7 user has no subscription row, so nothing about its limits changes.
+    const [subscriptions] = await upgraded<Array<{ count: string }>>`
+      select count(*)::text as count from subscriptions where user_id = ${d7User}
+    `;
+    assert.equal(Number(subscriptions?.count), 0, "migration 0010 creates no subscription for existing users");
+    const [profile] = await upgraded<Array<{ plan: string }>>`select plan from profiles where id = ${d7User}`;
+    assert.equal(profile?.plan, "free", "an existing profile stays on the free plan");
     const [count] = await upgraded<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.equal(Number(count?.count), 9, "D7 upgrade records migration 0009 exactly once");
-    console.log("9 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
+    assert.equal(Number(count?.count), 10, "D7 upgrade records migrations 0009-0010 exactly once");
+    console.log("10 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
   } finally {
     await upgraded.end();
   }

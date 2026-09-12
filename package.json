@@ -30,6 +30,7 @@
     "test:e2e-d7": "node --import tsx tests/e2e-d7.ts",
     "test:e2e-d9": "node --import tsx tests/e2e-d9.ts",
     "test:e2e-d10": "node --import tsx tests/e2e-d10.ts",
+    "test:e2e-d11": "node --import tsx tests/e2e-d11.ts",
     "test:migrations": "node --import tsx tests/migration-test.ts",
     "test:web-routing": "node --import tsx tests/web-routing-smoke.ts",
     "test:web-restored": "node --import tsx tests/web-restored-smoke.ts",
@@ -41,7 +42,8 @@
     "verify:programs": "node --import tsx scripts/verify-programs.ts",
     "verify:ai-provider": "node --import tsx scripts/verify-ai-provider.ts",
     "verify:markets-provider": "node --import tsx scripts/verify-markets-provider.ts",
-    "test:pipeline-wiring": "node --import tsx tests/e2e-pipeline-wiring.ts"
+    "test:pipeline-wiring": "node --import tsx tests/e2e-pipeline-wiring.ts",
+    "billing:grant": "node --import tsx scripts/grant-plan.ts"
   },
   "devDependencies": {
     "@aegix/blockchain": "workspace:*",
@@ -62,6 +64,7 @@
     "bullmq": "^5.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
-    "@aegix/ai": "workspace:*"
+    "@aegix/ai": "workspace:*",
+    "@aegix/billing": "workspace:*"
   }
 }

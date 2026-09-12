@@ -38,6 +38,7 @@ run test:e2e-monitor
 run test:pipeline-wiring
 run test:e2e-d9
 run test:e2e-d10
+run test:e2e-d11
 run test:wallets
 run test:account-classification
 run test:monitors

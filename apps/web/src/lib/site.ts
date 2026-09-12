@@ -88,6 +88,10 @@ export const appNavGroups: AppNavGroup[] = [
     ]
   },
   {
+    label: "Account",
+    items: [{ label: "Plan & usage", href: "/app/billing" }]
+  },
+  {
     label: "Developers",
     items: [
       { label: "API Keys", href: "/developers/api-keys" },

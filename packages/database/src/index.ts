@@ -147,3 +147,20 @@ export {
   type WebhookEventType,
   type WebhookStatus
 } from "./repositories/webhooks.js";
+export {
+  createBillingRepo,
+  type ApplyTransitionInput,
+  type ApplyTransitionResult,
+  type BillingEventRow,
+  type BillingEventWrite,
+  type BillingRepo,
+  type InvoiceRow,
+  type InvoiceStatus,
+  type InvoiceWrite,
+  type PlanRow,
+  type PlanSnapshot,
+  type SubscriptionRow,
+  type SubscriptionStatusValue,
+  type SubscriptionWrite,
+  type UsageTotal
+} from "./repositories/billing.js";

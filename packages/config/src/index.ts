@@ -218,6 +218,8 @@ const envSchema = z.object({
   CORRELATION_ALERT_MIN_DELTA: z.coerce.number().int().positive().default(10),
 
   ENABLE_WEBHOOK_DELIVERY: z.preprocess(boolEnv, z.boolean()).default(true),
+  /** Max active webhook endpoints per user; the free-plan baseline (D11). */
+  MAX_ACTIVE_WEBHOOKS_PER_USER: z.coerce.number().int().nonnegative().default(5),
   WEBHOOK_ENCRYPTION_KEY: z.string().default(""),
   WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
@@ -226,6 +228,32 @@ const envSchema = z.object({
   WEBHOOK_PAYLOAD_MAX_BYTES: z.coerce.number().int().positive().default(65536),
   WEBHOOK_ALLOWED_PORTS: z.string().default("80,443"),
   WEBHOOK_DEV_ALLOW_PRIVATE: z.preprocess(boolEnv, z.boolean()).default(false),
+
+  // D11: billing / entitlements. See docs/milestone-d11.md.
+  //
+  // The free plan is defined as the limits above (FREE_USER_DAILY_LIMIT,
+  // COMPARE_DAILY_USER_LIMIT, MAX_ACTIVE_MONITORS_PER_USER, …), so turning
+  // billing on changes nothing for an identity without a subscription. Only
+  // paid plans scale those numbers, and they scale them from the same knobs.
+  ENABLE_BILLING: z.preprocess(boolEnv, z.boolean()).default(true),
+  /**
+   * Payment processor. `manual` is the only implementation in this baseline
+   * (architecture.md PR-12: the beta operates without payment
+   * infrastructure); paid plans are granted by an operator and recorded in
+   * the billing ledger like any other transition.
+   */
+  BILLING_PROVIDER: z.enum(["manual"]).default("manual"),
+  BILLING_CURRENCY: z.string().length(3).default("USD"),
+  /** Trial length applied to a first paid subscription; 0 disables trials. */
+  BILLING_TRIAL_DAYS: z.coerce.number().int().nonnegative().default(0),
+  /**
+   * How long a PAST_DUE subscription keeps its paid entitlements before
+   * degrading to free. A failed payment never deletes data — it only stops
+   * the identity spending above the free baseline.
+   */
+  BILLING_GRACE_DAYS: z.coerce.number().int().nonnegative().default(7),
+  /** Page size cap for billing ledger and invoice listings. */
+  BILLING_HISTORY_LIMIT: z.coerce.number().int().positive().max(200).default(50),
 
   /** API request body cap (D6-J §62): field-level limits in route schemas
    *  remain the real bounds; this is a coarse ceiling against oversized
