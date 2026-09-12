@@ -16,6 +16,7 @@ import {
   type ContextCoverage,
   type ContextDimension,
   type ContextIndicator,
+  type ContextSupportingEvidence,
   type KnownRiskCheck,
   type LinkabilityAssessment,
   type SuppressedIndicator,
@@ -39,6 +40,7 @@ export interface WalletContextInput {
   /** Score dimensions as the caller already labels them. */
   dimensions: Array<{ key: string; label: string; score: number }>;
   coverage: ContextCoverage;
+  supportingEvidence?: ContextSupportingEvidence[];
 }
 
 const KNOWN_RISK: KnownRiskCheck = {
@@ -107,6 +109,13 @@ export function buildWalletContext(input: WalletContextInput): WalletContextProf
     ),
     coverage: input.coverage,
     limitations: buildLimitations(sufficiency, suppressed, input.coverage),
+    supportingEvidence: [...(input.supportingEvidence ?? [])]
+      .filter((e) => sufficiency === "SUFFICIENT" || e.category !== "CORRELATION")
+      .sort((a, b) => a.id.localeCompare(b.id) || JSON.stringify(a).localeCompare(JSON.stringify(b)))
+      .filter((e, index, all) => all.findIndex((other) => other.id === e.id) === index)
+      .slice(0, 30).map((e) => ({ ...e,
+        title: containsUnsafeClaim(e.title) ? e.category : e.title,
+        description: containsUnsafeClaim(e.description) ? neutralDescription(e.category, e.sourceEngine) : e.description })),
     engineVersions: {
       context: CONTEXT_ENGINE_VERSION,
       pipeline: input.pipelineVersion,

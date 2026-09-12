@@ -171,6 +171,17 @@ export default function WalletContextPage({ initialAddress = "" }: { initialAddr
             <p className="mt-2 text-xs text-slate-500">{data.linkability.note}</p>
           </div>
 
+          {data.supportingEvidence?.length ? <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Persisted supporting evidence</h2>
+            <p className="mt-2 text-xs text-slate-500">These paths and comparisons provide context for existing indicators. They are not additional independent findings.</p>
+            <ul className="mt-3 space-y-3">{data.supportingEvidence.map((entry) => <li key={entry.id} className="rounded-lg border border-white/10 p-4">
+              <h3 className="text-sm text-slate-200">{entry.title}</h3><p className="mt-2 text-sm text-slate-400">{entry.description}</p>
+              <p className="mt-2 text-xs text-slate-500">{entry.id} · {entry.sourceEngine} {entry.engineVersion} · confidence {(entry.confidence * 100).toFixed(0)}% · observed {entry.observedAt} · {entry.analysisId ? "this analysis" : "separate persisted window"}</p>
+              <details className="mt-2 text-xs text-slate-400"><summary>Evidence references</summary>{entry.evidence.map((item) => <p className="mt-1 break-all" key={item.key}>{item.label}: {String(item.value)}</p>)}</details>
+              {entry.limitations.map((text) => <p key={text} className="mt-2 text-xs text-slate-500">{text}</p>)}
+            </li>)}</ul>
+          </div> : null}
+
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Known-risk check</h2>
             <p className="mt-3 text-sm text-slate-300">

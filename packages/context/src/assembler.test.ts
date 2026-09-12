@@ -64,6 +64,17 @@ test("duplicate signal types yield one stable indicator regardless of row order"
   assert.equal(forward.indicators[0]!.severity, 60);
 });
 
+test("supporting provenance, paths and correlation never duplicate indicators; sparse correlation is withheld", () => {
+  const supportingEvidence = ["FUNDING_PROVENANCE", "GRAPH_PATH", "CORRELATION"].map((category) => ({
+    id: `cov:${category}`, category: category as "FUNDING_PROVENANCE" | "GRAPH_PATH" | "CORRELATION",
+    title: "Persisted evidence", description: "Observed within its own bounded window.",
+    confidence: 0.7, sourceEngine: "existing", engineVersion: "existing-v1", evidence: [], observedAt: "2026-09-01", analysisId: null, limitations: ["Separate window."] }));
+  const full = buildWalletContext(input({ supportingEvidence: [...supportingEvidence, supportingEvidence[0]!] }));
+  assert.equal(full.supportingEvidence!.length, 3); assert.equal(full.indicators.length, 0);
+  const sparse = buildWalletContext(input({ supportingEvidence, coverage: { transactionsParsed: 1, historyStart: null, historyEnd: null, grade: "LOW", dataQualityScore: 10 } }));
+  assert.ok(!sparse.supportingEvidence!.some((e) => e.category === "CORRELATION"));
+});
+
 test("rule 1: absence signals never become indicators", () => {
   const profile = buildWalletContext(
     input({
@@ -202,6 +213,11 @@ test("an unsupported claim in a summary is replaced, not passed through", () => 
   assert.ok(!containsUnsafeClaim(indicator.description));
   assert.ok(indicator.description.includes("REPEATED_FUNDING"));
   assert.ok(indicator.description.includes("funding"));
+});
+
+test("a safety verdict cannot enter through an indicator title", () => {
+  const profile = buildWalletContext(input({ signals: [signal({ type: "ENTITY_EVENT", category: "ENTITY", title: "Safe wallet" })] }));
+  assert.equal(profile.indicators[0]!.title, "ENTITY_EVENT");
 });
 
 test("every rendered string stays within the safe-language policy", () => {

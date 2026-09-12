@@ -178,6 +178,12 @@ const envSchema = z.object({
   AI_TIMEOUT_MS: z.coerce.number().int().positive().default(20000),
   /** Output ceiling; a response cut off by it is reported as TRUNCATED. */
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
+  ENABLE_MARKETS: z.preprocess(boolEnv, z.boolean()).default(true),
+  MARKETS_BASE_URL: z.string().url().default("https://api.coinpaprika.com/v1"),
+  MARKETS_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(15000),
+  MARKETS_CACHE_SECONDS: z.coerce.number().int().min(1).max(300).default(60),
+  MARKETS_DAILY_QUOTA: z.coerce.number().int().positive().default(200),
+  MARKETS_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 
   // D6 Block 2: wallet-only auth (D6-P), developer intelligence (D6-E),
   // population commonality (D6-G), correlation alerts (D6-F), webhooks (D6-H).

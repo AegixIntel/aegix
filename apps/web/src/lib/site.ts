@@ -11,7 +11,7 @@ export const primaryNav: NavGroup[] = [
     label: "Product",
     items: [
       { label: "Privacy Intelligence", href: "/privacy", status: "LIVE" },
-      { label: "Market Intelligence", href: "/markets", status: "IN DEVELOPMENT" },
+      { label: "Market Intelligence", href: "/markets", status: "LIVE" },
       { label: "Wallet X-Ray", href: "/app/analyze" },
       { label: "Compare", href: "/app/compare" },
       { label: "Monitor", href: "/app/monitors" }
@@ -62,7 +62,7 @@ export const siteRail: NavLinkItem[] = [
   { label: "Compare", href: "/app/compare", status: "LIVE" },
   { label: "Monitor", href: "/app/monitors", status: "LIVE" },
   { label: "Developers", href: "/developers", status: "LIVE" },
-  { label: "Market Intel", href: "/markets", status: "SOON" }
+  { label: "Market Intel", href: "/app/markets", status: "LIVE" }
 ];
 
 export type AppNavItem = { label: string; href: string };
@@ -75,7 +75,9 @@ export const appNavGroups: AppNavGroup[] = [
       { label: "Wallet X-Ray", href: "/app/analyze" },
       { label: "Attack My Wallet", href: "/app/attack" },
       { label: "Compare", href: "/app/compare" },
-      { label: "Monitors", href: "/app/monitors" }
+      { label: "Monitors", href: "/app/monitors" },
+      { label: "Wallet Context", href: "/app/context" },
+      { label: "Markets", href: "/app/markets" }
     ]
   },
   {

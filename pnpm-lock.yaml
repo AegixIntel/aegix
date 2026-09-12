@@ -101,6 +101,9 @@ importers:
       '@aegix/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@aegix/markets':
+        specifier: workspace:*
+        version: link:../../packages/markets
       '@aegix/monitor':
         specifier: workspace:^
         version: link:../../packages/monitor
@@ -150,6 +153,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aegix/markets':
+        specifier: workspace:*
+        version: link:../../packages/markets
       '@solana/wallet-adapter-base':
         specifier: ^0.9.27
         version: 0.9.27(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
@@ -486,6 +492,22 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/markets:
+    dependencies:
+      '@aegix/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
       typescript:
         specifier: ^5.5.4
         version: 5.9.3

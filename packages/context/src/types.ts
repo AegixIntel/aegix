@@ -123,9 +123,25 @@ export interface WalletContextProfile {
   dimensions: ContextDimension[];
   coverage: ContextCoverage;
   limitations: string[];
+  supportingEvidence?: ContextSupportingEvidence[];
   engineVersions: {
     context: string;
     pipeline: string | null;
     scoring: string | null;
   };
+}
+
+/** Persisted supporting observations are not additional indicators or independent corroboration. */
+export interface ContextSupportingEvidence {
+  id: string;
+  category: "FUNDING_PROVENANCE" | "GRAPH_PATH" | "CORRELATION";
+  title: string;
+  description: string;
+  confidence: Confidence;
+  sourceEngine: string;
+  engineVersion: string;
+  evidence: Evidence[];
+  observedAt: string;
+  analysisId: string | null;
+  limitations: string[];
 }

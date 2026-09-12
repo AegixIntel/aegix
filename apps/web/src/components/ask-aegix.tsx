@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AskAegixError, askAegix, type AskResponse } from "@/lib/api";
+import React, { useEffect, useRef, useState } from "react";
+import { AskAegixError, askAegix, askMarket, type AskResponse, type MarketAsset } from "@/lib/api";
 
 /**
  * Ask AEGIX.
@@ -9,7 +9,7 @@ import { AskAegixError, askAegix, type AskResponse } from "@/lib/api";
  * The panel shows what the model was allowed to see and what was removed from
  * what it returned. A summary alone would hide both.
  */
-export default function AskAegix({ wallet }: { wallet: string }) {
+export default function AskAegix({ wallet, market }: { wallet: string; market?: MarketAsset }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export default function AskAegix({ wallet }: { wallet: string }) {
   useEffect(() => {
     generation.current++;
     setAnswer(null); setUnavailable(null); setLoading(false);
-  }, [wallet]);
+  }, [wallet, market]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,7 +29,7 @@ export default function AskAegix({ wallet }: { wallet: string }) {
     const current = ++generation.current;
     setUnavailable(null);
     try {
-      const result = await askAegix(wallet, trimmed);
+      const result = market ? await askMarket(market, trimmed, wallet || undefined) : await askAegix(wallet, trimmed);
       if (current !== generation.current) return;
       setAnswer(result);
     } catch (err) {
@@ -62,7 +62,7 @@ export default function AskAegix({ wallet }: { wallet: string }) {
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="What does the funding evidence show?"
+          placeholder={market ? "What do the market observations show?" : "What does the funding evidence show?"}
           maxLength={500}
           className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100"
         />

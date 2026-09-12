@@ -45,6 +45,9 @@ import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
 import { createOpenAICompatibleProvider } from "@aegix/ai";
 import { registerAskAegix } from "./ask-aegix.js";
 import { claimDailyUsage } from "./metered-quota.js";
+import { createCoinPaprikaProvider, createMarketService, type MarketDataProvider } from "@aegix/markets";
+import { registerMarkets } from "./markets.js";
+import { loadContextSupporting } from "./context-supporting.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
@@ -61,6 +64,7 @@ import type { IntelligenceSignal } from "@aegix/types";
 export interface ApiDeps {
   config: AppConfig;
   provider?: BlockchainProvider;
+  marketProvider?: MarketDataProvider;
 }
 
 const ENGINE_SCOPE = "full";
@@ -803,6 +807,7 @@ export async function buildServer(deps: ApiDeps) {
       pipelineVersion: latest.engine_version,
       scoringVersion: score?.scoring_version ?? null,
       signals: signals.map(toIntelligenceSignal),
+      supportingEvidence: await loadContextSupporting(sql, wallet.id, address, latest.id),
       dimensions: scoreDimensions(score),
       coverage: {
         transactionsParsed: typeof dataQuality.transactionsParsed === "number" ? dataQuality.transactionsParsed : 0,
@@ -1540,6 +1545,14 @@ export async function buildServer(deps: ApiDeps) {
     requireUser: requireUser as never,
     checkDailyQuota: (userId, analysisId) => claimDailyUsage(sql, userId, "ask_aegix", config.ASK_AEGIX_DAILY_QUOTA, analysisId),
     recordUsage: async () => { /* admission already persisted before provider work */ }
+  });
+
+  registerMarkets({ app, config, logger,
+    service: createMarketService({ provider: deps.marketProvider ?? createCoinPaprikaProvider({ baseUrl: config.MARKETS_BASE_URL, timeoutMs: config.MARKETS_TIMEOUT_MS }), cache, cacheSeconds: config.MARKETS_CACHE_SECONDS }),
+    provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
+    requireUser,
+    loadWalletContext: loadWalletContextProfile,
+    claimQuota: (userId, ai) => claimDailyUsage(sql, userId, ai ? "ask_aegix" : "markets", ai ? config.ASK_AEGIX_DAILY_QUOTA : config.MARKETS_DAILY_QUOTA)
   });
 
   registerWebhookRoutes({

@@ -48,5 +48,5 @@ export function enforceGrounding(answer: StructuredAnswer, knownIds: Iterable<st
 }
 
 function unsupportedClaim(text: string): boolean {
-  return /\b(clean|safe|trustworthy|fraudulent|scammer|criminal|malicious|trust score|owned by|belongs to|same owner|proves ownership|buy|sell|long|short|predict(?:s|ed|ion)?|will rise|will fall)\b/i.test(text);
+  return /\b(clean|safe|trustworthy|fraudulent|scammer|criminal|malicious|trust score|owned by|operated by|controlled by|owner is|identity is|belongs to|same owner|proves ownership|buy|sell|long|short|predict(?:s|ed|ion)?|will rise|will fall)\b/i.test(text);
 }

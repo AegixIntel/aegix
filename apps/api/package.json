@@ -9,13 +9,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/developer-keys.test.ts src/notification-cursor.test.ts src/server.test.ts src/wallet-auth.test.ts src/wallet-context.test.ts src/ask-aegix.test.ts",
+    "test": "node --import tsx --test src/developer-keys.test.ts src/notification-cursor.test.ts src/server.test.ts src/wallet-auth.test.ts src/wallet-context.test.ts src/ask-aegix.test.ts src/markets.test.ts",
     "test:integration": "node --import tsx --test src/developer-api.test.ts src/notifications.integration.test.ts",
     "test:email:optional": "node --import tsx --test src/notification-email.test.ts",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aegix/markets": "workspace:*",
     "@aegix/ai": "workspace:*",
     "@aegix/blockchain": "workspace:*",
     "@aegix/cache": "workspace:*",

@@ -48,6 +48,7 @@ export const SPARSE_SENSITIVE_CATEGORIES: ReadonlySet<SignalCategory> = new Set<
  * whole words so that ordinary wording is not caught.
  */
 const UNSAFE_CLAIM_PATTERNS: readonly RegExp[] = [
+  /\b(clean|safe|trustworthy|trust score)\b/i,
   /\bbelongs? to\b/i,
   /\bowned by\b/i,
   /\bsame (owner|person|individual|user)\b/i,

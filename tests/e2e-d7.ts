@@ -355,6 +355,7 @@ async function main(): Promise<void> {
     ok("D8: authenticated Context reuses persisted analysis", context.statusCode === 200 && contextBody.analysisId === xrayBody.analysis.id);
     ok("D8: seven existing dimensions preserved", contextBody.dimensions?.length === 7);
     ok("D8: every indicator has source and evidence references", contextBody.indicators?.every((i: { sourceEngine: string; engineVersion: string; evidenceRefs: string[] }) => i.sourceEngine && i.engineVersion && i.evidenceRefs?.length > 0));
+    ok("D8: persisted graph paths reused as supporting evidence", contextBody.supportingEvidence?.some((e: { category: string; analysisId: string }) => e.category === "GRAPH_PATH" && e.analysisId === contextBody.analysisId));
 
     // ============ FLOW 4: compare ============
     const compare = await app.inject({ method: "POST", url: "/v1/compare", payload: { walletA: WALLET_A, walletB: WALLET_B } });

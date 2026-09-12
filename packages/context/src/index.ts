@@ -21,6 +21,7 @@ export {
   type ContextCoverage,
   type ContextDimension,
   type ContextIndicator,
+  type ContextSupportingEvidence,
   type KnownRiskCheck,
   type KnownRiskMatch,
   type LinkabilityAssessment,

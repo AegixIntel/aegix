@@ -873,6 +873,7 @@ export interface SuppressedIndicator {
 
 export interface WalletContext {
   wallet: string;
+  supportingEvidence?: Array<{ id: string; category: string; title: string; description: string; confidence: number; sourceEngine: string; engineVersion: string; evidence: XRayEvidence[]; observedAt: string; analysisId: string | null; limitations: string[] }>;
   analysisId: string;
   sufficiency: "SUFFICIENT" | "INSUFFICIENT_ACTIVITY";
   indicators: ContextIndicator[];
@@ -960,4 +961,34 @@ export async function askAegix(address: string, question: string): Promise<AskRe
     );
   }
   return res.json() as Promise<AskResponse>;
+}
+
+export type MarketAsset = "BTC" | "ETH" | "SOL";
+export interface MarketResponse {
+  asset: MarketAsset;
+  snapshot: import("@aegix/markets").MarketSnapshot;
+  temporalContext: Array<{ id: string; evidenceRefs: string[]; marketTimestamp: string; onChainTimestamp: string; priceUsd: number; offsetSeconds: number; note: string }>;
+  contextLimitations?: string[];
+  quota: { used: number; limit: number; resetAt: string };
+}
+export async function getMarket(asset: MarketAsset, wallet?: string): Promise<MarketResponse> {
+  const query = wallet ? `?wallet=${encodeURIComponent(wallet)}` : "";
+  const response = await fetch(`${API_BASE_URL}/v1/markets/${asset}${query}`, { headers: authHeaders() });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+  }
+  return response.json() as Promise<MarketResponse>;
+}
+export async function askMarket(asset: MarketAsset, question: string, wallet?: string): Promise<AskResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/markets/${asset}/ask`, {
+    method: "POST", headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ question, ...(wallet ? { wallet } : {}) })
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new AskAegixError({ code: body?.code ?? "AI_UNAVAILABLE", reason: body?.reason,
+      message: body?.message ?? "Market explanation is unavailable" });
+  }
+  return { ...(await response.json()), wallet: wallet ?? asset, analysisId: "" } as AskResponse;
 }

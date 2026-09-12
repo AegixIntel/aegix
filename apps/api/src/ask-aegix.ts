@@ -88,6 +88,11 @@ export function profileToEvidence(profile: WalletContextProfile): EvidenceItem[]
     });
   }
 
+  for (const observation of profile.supportingEvidence ?? []) items.push({
+    id: observation.id, label: observation.title,
+    detail: `${observation.description} ${observation.evidence.map((e) => `${e.label}=${String(e.value)}`).join("; ")} Source ${observation.sourceEngine} ${observation.engineVersion}; observed ${observation.observedAt}; analysis ${observation.analysisId ?? "separate wallet-level window"}. ${observation.limitations.join(" ")}`,
+    severity: 35, confidence: observation.confidence, untrusted: true });
+
   items.push({
     id: "cov:analysis",
     label: "Coverage",

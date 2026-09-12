@@ -55,9 +55,10 @@ test("grounded findings survive while uncited summary and limitations cannot byp
 test("uncited invented summary and safety claims with valid citations are removed", () => {
   const result = enforceGrounding(answer({ summary: "The owner is a criminal.",
     findings: [{ statement: "This wallet is clean and safe.", evidenceIds: ["sig:A"] },
+      { statement: "The wallet is operated by Alice.", evidenceIds: ["sig:A"] },
       { statement: "Funding observed.", evidenceIds: ["sig:A", "sig:A", "sig:unknown"] }],
     limitations: ["Buy SOL now."] }), ["sig:A"]);
-  assert.equal(result.droppedFindings, 1);
+  assert.equal(result.droppedFindings, 2);
   assert.equal(result.droppedReferences, 1);
   assert.equal(result.answer.summary, "Funding observed.");
   assert.deepEqual(result.answer.findings[0]!.evidenceIds, ["sig:A"]);

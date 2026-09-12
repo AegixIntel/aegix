@@ -23,6 +23,7 @@ import { createLogger } from "@aegix/logging";
 import { SEEDABLE_ENTITIES } from "@aegix/types";
 import type { IntelligenceSignal } from "@aegix/types";
 import { buildWalletContext } from "../packages/context/src/index.js";
+import { loadContextSupporting } from "../apps/api/src/context-supporting.js";
 import { processAnalysis } from "../apps/worker/src/processors/analysis.js";
 
 let pass = 0;
@@ -284,6 +285,7 @@ async function main(): Promise<void> {
       pipelineVersion: finished?.engine_version ?? null,
       scoringVersion: score?.scoring_version ?? null,
       dimensions: [],
+      supportingEvidence: await loadContextSupporting(sql, wallet.id, WALLET, job.id),
       signals: signals.map((s): IntelligenceSignal => ({
         type: s.signal_type, category: s.category as IntelligenceSignal["category"],
         severity: s.severity, confidence: Number(s.confidence), title: s.title,
