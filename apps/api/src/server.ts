@@ -41,6 +41,7 @@ import {
 import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
+import { buildWalletContext } from "@aegix/context";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
@@ -772,6 +773,78 @@ export async function buildServer(deps: ApiDeps) {
 
     return reply.send({ ...buildXRayResponse({ address, job: latest, score, signals, paths }), correlations });
   });
+
+  // ---- Wallet Context profile (D8) ----
+
+  app.get<{ Params: { address: string } }>(
+    "/v1/wallets/:address/context",
+    {
+      config: {
+        rateLimit: {
+          max: config.WALLET_CONTEXT_RATE_LIMIT_PER_MINUTE,
+          timeWindow: "1 minute"
+        }
+      }
+    },
+    async (req, reply) => {
+      if (!config.ENABLE_WALLET_CONTEXT) {
+        return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Wallet context is disabled", requestId: randomUUID() });
+      }
+
+      const { address } = req.params;
+      if (!isValidSolanaAddress(address)) {
+        return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address", requestId: randomUUID() });
+      }
+
+      // The target wallet is whatever the caller asks about. It is deliberately
+      // unrelated to the wallet they signed in with: context is a read over
+      // public chain analysis, not a statement about the session.
+      const user = await requireUser(req, reply);
+      if (!user || user.isAnonymous) return;
+
+      const wallet = await walletRepo.findByAddress("solana", address);
+      if (!wallet) {
+        return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "Wallet not found", requestId: randomUUID() });
+      }
+
+      const latest = await jobRepo.latestForWallet(wallet.id);
+      if (!latest) {
+        return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "No analysis available for this wallet", requestId: randomUUID() });
+      }
+
+      // No re-analysis: D8 assembles what the pipeline already persisted, so
+      // it consumes no analysis quota. The read is still metered.
+      const [score, signals] = await Promise.all([
+        intelligenceRepo.scoreForAnalysis(latest.id),
+        intelligenceRepo.signalsForAnalysis(latest.id)
+      ]);
+
+      const dataQuality = (latest.data_quality ?? {}) as Record<string, unknown>;
+      const profile = buildWalletContext({
+        walletAddress: address,
+        analysisId: latest.id,
+        pipelineVersion: latest.engine_version,
+        scoringVersion: score?.scoring_version ?? null,
+        signals: signals.map(toIntelligenceSignal),
+        dimensions: scoreDimensions(score),
+        coverage: {
+          transactionsParsed: typeof dataQuality.transactionsParsed === "number" ? dataQuality.transactionsParsed : 0,
+          historyStart: typeof dataQuality.historyStart === "string" ? dataQuality.historyStart : null,
+          historyEnd: typeof dataQuality.historyEnd === "string" ? dataQuality.historyEnd : null,
+          dataQualityScore: typeof dataQuality.dataQualityScore === "number" ? dataQuality.dataQualityScore : null,
+          grade: typeof dataQuality.grade === "string" ? dataQuality.grade : null
+        }
+      });
+
+      try {
+        await recordQuotaUsage(sql, quotaContext(req), latest.id, "wallet_context");
+      } catch {
+        // Metering must never fail the read it is measuring.
+      }
+
+      return reply.send(profile);
+    }
+  );
 
   // ---- Wallet comparison (D5-I §19-§26, §45-§48) ----
 
@@ -1819,16 +1892,7 @@ function buildXRayResponse(input: {
     title: s.title,
     summary: s.summary,
     evidence: (s.evidence_json as Array<{ key: string; value: string | number | boolean; label: string }>) ?? [],
-    explanation: explainSignal({
-      type: s.signal_type,
-      category: s.category as IntelligenceSignal["category"],
-      severity: s.severity,
-      confidence: Number(s.confidence),
-      title: s.title,
-      summary: s.summary ?? "",
-      evidence: (s.evidence_json as Array<{ key: string; value: string | number | boolean; label: string }>) ?? [],
-      engineVersion: s.engine_version ?? ""
-    })
+    explanation: explainSignal(toIntelligenceSignal(s))
   }));
 
   return {
@@ -1856,17 +1920,7 @@ function buildXRayResponse(input: {
           scoringVersion: score.scoring_version
         }
       : null,
-    dimensions: score
-      ? [
-          { key: "identityLinkability", label: "Identity Linkability", score: score.identity_linkability },
-          { key: "fundingExposure", label: "Funding Exposure", score: score.funding_exposure },
-          { key: "walletClusterExposure", label: "Wallet Cluster Exposure", score: score.wallet_cluster_exposure },
-          { key: "behavioralFingerprint", label: "Behavioral Fingerprint", score: score.behavioral_fingerprint },
-          { key: "counterpartyExposure", label: "Counterparty Exposure", score: score.counterparty_exposure },
-          { key: "entityExposure", label: "Entity Exposure", score: score.entity_exposure },
-          { key: "transactionPatternExposure", label: "Transaction Pattern Exposure", score: score.transaction_pattern_exposure }
-        ]
-      : [],
+    dimensions: scoreDimensions(score),
     topSignals,
     relationships: [],
     entities: [],
@@ -1890,6 +1944,34 @@ function buildXRayResponse(input: {
       scoring: score?.scoring_version ?? null
     }
   };
+}
+
+/** Signal rows as the engines' own type, so consumers never see column names. */
+function toIntelligenceSignal(s: SignalRow): IntelligenceSignal {
+  return {
+    type: s.signal_type,
+    category: s.category as IntelligenceSignal["category"],
+    severity: s.severity,
+    confidence: Number(s.confidence),
+    title: s.title,
+    summary: s.summary ?? "",
+    evidence: (s.evidence_json as IntelligenceSignal["evidence"]) ?? [],
+    engineVersion: s.engine_version ?? ""
+  };
+}
+
+/** One definition of the dimension labels, shared by X-Ray and context. */
+function scoreDimensions(score: ScoreRow | null): Array<{ key: string; label: string; score: number }> {
+  if (!score) return [];
+  return [
+    { key: "identityLinkability", label: "Identity Linkability", score: score.identity_linkability },
+    { key: "fundingExposure", label: "Funding Exposure", score: score.funding_exposure },
+    { key: "walletClusterExposure", label: "Wallet Cluster Exposure", score: score.wallet_cluster_exposure },
+    { key: "behavioralFingerprint", label: "Behavioral Fingerprint", score: score.behavioral_fingerprint },
+    { key: "counterpartyExposure", label: "Counterparty Exposure", score: score.counterparty_exposure },
+    { key: "entityExposure", label: "Entity Exposure", score: score.entity_exposure },
+    { key: "transactionPatternExposure", label: "Transaction Pattern Exposure", score: score.transaction_pattern_exposure }
+  ];
 }
 
 function coverageDays(dataQuality: Record<string, unknown>): number | null {

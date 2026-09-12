@@ -847,3 +847,59 @@ export async function deleteNotificationEmail(): Promise<NotificationEmailState>
   const body = (await res.json()) as { data: NotificationEmailState };
   return body.data;
 }
+
+// ---- D8: wallet context profile ----
+
+export interface ContextIndicator {
+  id: string;
+  signalType: string;
+  category: string;
+  severity: number;
+  confidence: number;
+  title: string;
+  description: string;
+  sourceEngine: string;
+  engineVersion: string;
+  evidence: XRayEvidence[];
+}
+
+export interface SuppressedIndicator {
+  id: string;
+  signalType: string;
+  category: string;
+  reason: "ABSENCE_NOT_EVIDENCE" | "AGGREGATE_OF_LISTED_EVIDENCE" | "INSUFFICIENT_ACTIVITY";
+}
+
+export interface WalletContext {
+  wallet: string;
+  analysisId: string;
+  sufficiency: "SUFFICIENT" | "INSUFFICIENT_ACTIVITY";
+  indicators: ContextIndicator[];
+  suppressed: SuppressedIndicator[];
+  linkability: {
+    converged: boolean;
+    contributingCategories: string[];
+    severity: number | null;
+    confidence: number | null;
+    note: string;
+  };
+  knownRisk: { dataset: string; match: string; note: string };
+  dimensions: XRayDimension[];
+  coverage: {
+    transactionsParsed: number;
+    historyStart: string | null;
+    historyEnd: string | null;
+    dataQualityScore: number | null;
+    grade: string | null;
+  };
+  limitations: string[];
+  engineVersions: { context: string; pipeline: string | null; scoring: string | null };
+}
+
+export async function getWalletContext(address: string): Promise<WalletContext> {
+  const res = await fetch(`${API_BASE_URL}/v1/wallets/${encodeURIComponent(address)}/context`, {
+    headers: authHeaders()
+  });
+  if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
+  return res.json() as Promise<WalletContext>;
+}

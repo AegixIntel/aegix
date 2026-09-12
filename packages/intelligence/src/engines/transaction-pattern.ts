@@ -7,8 +7,12 @@ export const TRANSACTION_PATTERN_ENGINE_VERSION = "transaction-pattern-v1.0.0";
  * Minimum sample sizes. Below these the corresponding measure is not
  * reported at all rather than reported weakly — a wallet with three
  * transfers has no meaningful amount distribution.
+ *
+ * `MIN_TRANSFERS_FOR_DISTRIBUTION` is exported because the wallet context
+ * assembler suppresses the same statistical categories below it, and the two
+ * thresholds must not drift apart.
  */
-const MIN_TRANSFERS_FOR_DISTRIBUTION = 5;
+export const MIN_TRANSFERS_FOR_DISTRIBUTION = 5;
 const MIN_TRANSACTIONS_FOR_FREQUENCY = 20;
 const MIN_TRANSACTIONS_FOR_HOUR_SHARE = 10;
 const MIN_INTERVALS_FOR_REGULARITY = 5;

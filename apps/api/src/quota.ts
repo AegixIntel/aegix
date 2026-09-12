@@ -77,7 +77,7 @@ export async function recordQuotaUsage(
   sql: Sql,
   ctx: QuotaContext,
   analysisId: string | null,
-  usageType: "expensive_analysis" | "comparison" = "expensive_analysis"
+  usageType: "expensive_analysis" | "comparison" | "wallet_context" = "expensive_analysis"
 ): Promise<void> {
   const key = ctx.userId ?? ctx.anonymousKey ?? `ip:${ctx.ip}`;
   await sql`

@@ -33,6 +33,7 @@ export {
 } from "./engines/cluster.js";
 export {
   TRANSACTION_PATTERN_ENGINE_VERSION,
+  MIN_TRANSFERS_FOR_DISTRIBUTION,
   analyzeTransactionPatterns,
   type TransactionPatternAnalysisInput,
   type TransactionPatternAnalysisResult,

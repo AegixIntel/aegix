@@ -157,6 +157,13 @@ const envSchema = z.object({
   /** Daily developer quota per user (D6-D §66-§69); keys cannot multiply it. */
   DEVELOPER_DAILY_QUOTA: z.coerce.number().int().positive().default(500),
 
+  // D8: wallet context profile. A read over persisted analysis results, so
+  // it consumes no analysis quota; the per-minute limit bounds the read
+  // itself and the kill switch retires the surface without touching D1-D7.
+  ENABLE_WALLET_CONTEXT: z.preprocess(boolEnv, z.boolean()).default(true),
+  /** Per-minute rate limit for wallet context reads (D8 §10). */
+  WALLET_CONTEXT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+
   // D6 Block 2: wallet-only auth (D6-P), developer intelligence (D6-E),
   // population commonality (D6-G), correlation alerts (D6-F), webhooks (D6-H).
   // See docs/d6-block2.md.
