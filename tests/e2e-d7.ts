@@ -350,6 +350,11 @@ async function main(): Promise<void> {
     ok("FLOW3: x-ray topSignals present", Array.isArray(xrayBody?.topSignals) && (xrayBody.topSignals as unknown[]).length > 0, `${(xrayBody?.topSignals as unknown[])?.length}`);
     ok("FLOW3: x-ray attackPaths present", Array.isArray(xrayBody?.attackPaths) && (xrayBody.attackPaths as unknown[]).length > 0, `${(xrayBody?.attackPaths as unknown[])?.length}`);
     ok("FLOW3: x-ray engineVersions present", xrayBody?.engineVersions?.scoring === "score-v1.0.0", JSON.stringify(xrayBody?.engineVersions));
+    const context = await app.inject({ method: "GET", url: `/v1/wallets/${WALLET_A}/context`, headers: { authorization: `Bearer ${loginA.token}` } });
+    const contextBody = context.json();
+    ok("D8: authenticated Context reuses persisted analysis", context.statusCode === 200 && contextBody.analysisId === xrayBody.analysis.id);
+    ok("D8: seven existing dimensions preserved", contextBody.dimensions?.length === 7);
+    ok("D8: every indicator has source and evidence references", contextBody.indicators?.every((i: { sourceEngine: string; engineVersion: string; evidenceRefs: string[] }) => i.sourceEngine && i.engineVersion && i.evidenceRefs?.length > 0));
 
     // ============ FLOW 4: compare ============
     const compare = await app.inject({ method: "POST", url: "/v1/compare", payload: { walletA: WALLET_A, walletB: WALLET_B } });

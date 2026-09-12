@@ -46,11 +46,22 @@ test("indicator carries its source engine, engine version and evidence", () => {
   assert.equal(profile.indicators.length, 1);
   const indicator = profile.indicators[0]!;
   assert.equal(indicator.id, "ind:REPEATED_FUNDING");
+  assert.deepEqual(indicator.evidenceRefs, ["sig:REPEATED_FUNDING"]);
   assert.equal(indicator.sourceEngine, "funding");
   assert.equal(indicator.engineVersion, "funding-v1.2.0");
   assert.deepEqual(indicator.evidence, [{ key: "count", value: 3, label: "Occurrences" }]);
   assert.equal(indicator.confidence, 0.7);
   assert.equal(profile.engineVersions.context, CONTEXT_ENGINE_VERSION);
+});
+
+test("duplicate signal types yield one stable indicator regardless of row order", () => {
+  const signals = [signal({ type: "REPEATED_FUNDING", category: "FUNDING", severity: 20 }),
+    signal({ type: "REPEATED_FUNDING", category: "FUNDING", severity: 60 })];
+  const forward = buildWalletContext(input({ signals }));
+  const reverse = buildWalletContext(input({ signals: [...signals].reverse() }));
+  assert.deepEqual(forward, reverse);
+  assert.equal(forward.indicators.length, 1);
+  assert.equal(forward.indicators[0]!.severity, 60);
 });
 
 test("rule 1: absence signals never become indicators", () => {

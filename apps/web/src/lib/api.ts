@@ -861,6 +861,7 @@ export interface ContextIndicator {
   sourceEngine: string;
   engineVersion: string;
   evidence: XRayEvidence[];
+  evidenceRefs?: string[];
 }
 
 export interface SuppressedIndicator {

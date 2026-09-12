@@ -21,6 +21,8 @@ import { createDb, createAnalysisJobRepo, createWalletRepo, createIntelligenceRe
 import { loadConfig } from "@aegix/config";
 import { createLogger } from "@aegix/logging";
 import { SEEDABLE_ENTITIES } from "@aegix/types";
+import type { IntelligenceSignal } from "@aegix/types";
+import { buildWalletContext } from "../packages/context/src/index.js";
 import { processAnalysis } from "../apps/worker/src/processors/analysis.js";
 
 let pass = 0;
@@ -277,6 +279,28 @@ async function main(): Promise<void> {
 
     // --- bounded-history + coverage disclosure reached the result ---
     const dq = (finished?.data_quality ?? {}) as Record<string, unknown>;
+    const context = buildWalletContext({
+      walletAddress: WALLET, analysisId: job.id,
+      pipelineVersion: finished?.engine_version ?? null,
+      scoringVersion: score?.scoring_version ?? null,
+      dimensions: [],
+      signals: signals.map((s): IntelligenceSignal => ({
+        type: s.signal_type, category: s.category as IntelligenceSignal["category"],
+        severity: s.severity, confidence: Number(s.confidence), title: s.title,
+        summary: s.summary ?? "", evidence: s.evidence_json as IntelligenceSignal["evidence"],
+        engineVersion: s.engine_version ?? ""
+      })),
+      coverage: {
+        transactionsParsed: Number(dq.transactionsParsed ?? 0),
+        historyStart: typeof dq.historyStart === "string" ? dq.historyStart : null,
+        historyEnd: typeof dq.historyEnd === "string" ? dq.historyEnd : null,
+        dataQualityScore: Number(dq.dataQualityScore ?? 0),
+        grade: typeof dq.grade === "string" ? dq.grade : null
+      }
+    });
+    ok("CONTEXT: actual RPC source/destination funding reaches indicators", context.indicators.some((i) => i.category === "FUNDING"));
+    ok("CONTEXT: every indicator references persisted deterministic signal", context.indicators.every((i) => i.evidenceRefs.every((id) => types.has(id.slice(4)))));
+    ok("CONTEXT: aggregate evidence is not duplicated", !context.indicators.some((i) => i.signalType === "CONVERGING_LINKABILITY_EVIDENCE"));
     const disclosure = dq.coverageDisclosure as Record<string, unknown> | undefined;
     ok("COVERAGE: disclosure persisted", disclosure !== undefined);
     ok("COVERAGE: scope is bounded, not lifetime", disclosure?.scope === "MOST_RECENT_BOUNDED", String(disclosure?.scope));

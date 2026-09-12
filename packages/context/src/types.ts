@@ -72,6 +72,7 @@ export interface ContextIndicator {
   sourceEngine: string;
   engineVersion: string;
   evidence: Evidence[];
+  evidenceRefs: string[];
 }
 
 export interface SuppressedIndicator {

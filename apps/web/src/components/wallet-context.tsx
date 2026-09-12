@@ -140,6 +140,7 @@ export default function WalletContextPage({ initialAddress = "" }: { initialAddr
                         {selected?.id === indicator.id ? (
                           <div className="mt-3 border-t border-white/10 pt-3">
                             <p className="text-sm text-slate-300">{indicator.description}</p>
+                            <p className="mt-2 font-mono text-xs text-slate-500">{indicator.id} · {indicator.evidenceRefs?.join(", ")}</p>
                             {indicator.evidence.length > 0 ? (
                               <dl className="mt-3 grid gap-1 text-xs">
                                 {indicator.evidence.map((e) => (

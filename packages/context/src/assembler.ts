@@ -11,6 +11,7 @@ import {
   CONTEXT_ENGINE_VERSION,
   dimensionId,
   indicatorId,
+  signalEvidenceId,
   type ActivitySufficiency,
   type ContextCoverage,
   type ContextDimension,
@@ -66,7 +67,11 @@ export function buildWalletContext(input: WalletContextInput): WalletContextProf
   const suppressed: SuppressedIndicator[] = [];
   const aggregates: IntelligenceSignal[] = [];
 
-  for (const signal of input.signals) {
+  const uniqueSignals = [...input.signals].sort((a, b) =>
+    b.severity - a.severity || b.confidence - a.confidence ||
+    JSON.stringify(a).localeCompare(JSON.stringify(b))
+  ).filter((signal, index, all) => all.findIndex((s) => s.type === signal.type) === index);
+  for (const signal of uniqueSignals) {
     if (ABSENCE_SIGNAL_TYPES.has(signal.type)) {
       suppressed.push(suppress(signal, "ABSENCE_NOT_EVIDENCE"));
       continue;
@@ -124,11 +129,12 @@ function toIndicator(signal: IntelligenceSignal): ContextIndicator {
     category: signal.category,
     severity: signal.severity,
     confidence: signal.confidence,
-    title: signal.title,
+    title: containsUnsafeClaim(signal.title) ? signal.type : signal.title,
     description,
     sourceEngine,
     engineVersion: signal.engineVersion,
-    evidence: signal.evidence
+    evidence: signal.evidence,
+    evidenceRefs: [signalEvidenceId(signal.type)]
   };
 }
 
@@ -182,7 +188,9 @@ function buildLimitations(
   suppressed: SuppressedIndicator[],
   coverage: ContextCoverage
 ): string[] {
-  const limitations: string[] = [KNOWN_RISK.note];
+  const limitations: string[] = [KNOWN_RISK.note,
+    "Correlation does not prove ownership or identity. Missing evidence is not evidence of safety."
+  ];
 
   if (sufficiency === "INSUFFICIENT_ACTIVITY") {
     limitations.push(
@@ -212,4 +220,3 @@ function engineNameFromVersion(engineVersion: string): string {
   const marker = engineVersion.lastIndexOf("-v");
   return marker > 0 ? engineVersion.slice(0, marker) : engineVersion || "unknown";
 }
-

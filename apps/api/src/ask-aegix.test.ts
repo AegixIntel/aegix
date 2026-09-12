@@ -101,7 +101,8 @@ test("evidence: every indicator, dimension and coverage fact is citable", () => 
           description: "Observed repeated funding.",
           sourceEngine: "funding",
           engineVersion: "funding-v1.0.0",
-          evidence: [{ key: "count", value: 4, label: "Occurrences" }]
+          evidence: [{ key: "count", value: 4, label: "Occurrences" }],
+          evidenceRefs: ["sig:REPEATED_FUNDING"]
         }
       ],
       dimensions: [{ id: "dim:fundingExposure", key: "fundingExposure", label: "Funding Exposure", score: 55 }]
@@ -128,7 +129,8 @@ test("evidence: indicator text is marked untrusted so it is sanitised", () => {
           description: "d",
           sourceEngine: "entities",
           engineVersion: "entities-v1.0.0",
-          evidence: []
+          evidence: [],
+          evidenceRefs: ["sig:X"]
         }
       ]
     })
