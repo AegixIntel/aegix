@@ -903,3 +903,60 @@ export async function getWalletContext(address: string): Promise<WalletContext> 
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
   return res.json() as Promise<WalletContext>;
 }
+
+// ---- D9: Ask AEGIX ----
+
+export interface AskFinding {
+  statement: string;
+  evidenceIds: string[];
+}
+
+export interface AskAnswer {
+  summary: string;
+  findings: AskFinding[];
+  limitations: string[];
+}
+
+export interface AskResponse {
+  wallet: string;
+  analysisId: string;
+  question: string;
+  answer: AskAnswer;
+  evidenceOffered: string[];
+  contextTruncated: boolean;
+  contextDropped: number;
+  citationsDropped: number;
+  findingsDropped: number;
+  model: string;
+  engineVersion: string;
+}
+
+export interface AskUnavailable {
+  code: "AI_UNAVAILABLE" | "QUOTA_EXCEEDED" | "FEATURE_DISABLED";
+  reason?: string;
+  message: string;
+}
+
+export class AskAegixError extends Error {
+  readonly detail: AskUnavailable;
+  constructor(detail: AskUnavailable) {
+    super(detail.message);
+    this.name = "AskAegixError";
+    this.detail = detail;
+  }
+}
+
+export async function askAegix(address: string, question: string): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE_URL}/v1/wallets/${encodeURIComponent(address)}/ask`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ question })
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as AskUnavailable | null;
+    throw new AskAegixError(
+      body ?? { code: "AI_UNAVAILABLE", message: `Request failed with status ${res.status}` }
+    );
+  }
+  return res.json() as Promise<AskResponse>;
+}

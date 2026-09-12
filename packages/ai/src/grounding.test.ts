@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { enforceGrounding } from "./grounding.js";
+import type { StructuredAnswer } from "./types.js";
+
+function answer(over: Partial<StructuredAnswer> = {}): StructuredAnswer {
+  return { summary: "summary", findings: [], limitations: [], ...over };
+}
+
+test("a fabricated evidence id is removed", () => {
+  const result = enforceGrounding(
+    answer({ findings: [{ statement: "Funded repeatedly.", evidenceIds: ["ind:REPEATED_FUNDING", "ind:INVENTED"] }] }),
+    ["ind:REPEATED_FUNDING"]
+  );
+
+  assert.deepEqual(result.answer.findings[0]?.evidenceIds, ["ind:REPEATED_FUNDING"]);
+  assert.equal(result.droppedReferences, 1);
+  assert.equal(result.droppedFindings, 0);
+});
+
+test("a finding left with no valid citation is dropped entirely", () => {
+  const result = enforceGrounding(
+    answer({ findings: [{ statement: "This wallet is operated by an exchange.", evidenceIds: ["ind:MADE_UP"] }] }),
+    ["ind:REAL"]
+  );
+
+  assert.deepEqual(result.answer.findings, []);
+  assert.equal(result.droppedFindings, 1);
+  assert.equal(result.droppedReferences, 1);
+});
+
+test("dropping a finding is disclosed rather than hidden", () => {
+  const result = enforceGrounding(
+    answer({ findings: [{ statement: "Unsupported.", evidenceIds: ["ind:NOPE"] }] }),
+    ["ind:REAL"]
+  );
+
+  assert.ok(result.answer.limitations.some((l) => l.includes("cited evidence that does not exist")));
+});
+
+test("a fully grounded answer passes through unchanged", () => {
+  const original = answer({
+    findings: [{ statement: "Repeated funding observed.", evidenceIds: ["ind:A", "ind:B"] }],
+    limitations: ["Bounded history."]
+  });
+  const result = enforceGrounding(original, ["ind:A", "ind:B"]);
+
+  assert.deepEqual(result.answer, original);
+  assert.equal(result.droppedReferences, 0);
+  assert.equal(result.droppedFindings, 0);
+});
+
+test("only the ids supplied for this context count as known", () => {
+  const result = enforceGrounding(
+    answer({ findings: [{ statement: "From another analysis.", evidenceIds: ["ind:FROM_OTHER_WALLET"] }] }),
+    ["ind:THIS_WALLET"]
+  );
+
+  assert.equal(result.answer.findings.length, 0);
+});
+
+test("partial grounding keeps the finding and the citations that hold", () => {
+  const result = enforceGrounding(
+    answer({
+      findings: [
+        { statement: "Kept.", evidenceIds: ["ind:A", "ind:GHOST"] },
+        { statement: "Dropped.", evidenceIds: ["ind:GHOST2"] }
+      ]
+    }),
+    ["ind:A"]
+  );
+
+  assert.deepEqual(result.answer.findings.map((f) => f.statement), ["Kept."]);
+  assert.equal(result.droppedReferences, 2);
+  assert.equal(result.droppedFindings, 1);
+});

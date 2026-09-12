@@ -164,6 +164,20 @@ const envSchema = z.object({
   /** Per-minute rate limit for wallet context reads (D8 §10). */
   WALLET_CONTEXT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 
+  // D9: Ask AEGIX. The LLM explains deterministic output and decides none of
+  // it, so every knob here bounds cost and blast radius rather than quality.
+  // A provider is reached through LLM_BASE_URL/LLM_API_KEY/LLM_MODEL above;
+  // Groq is configured by pointing LLM_BASE_URL at its OpenAI-compatible path.
+  ENABLE_ASK_AEGIX: z.preprocess(boolEnv, z.boolean()).default(true),
+  /** Per-minute rate limit for Ask AEGIX requests (D9 §26). */
+  ASK_AEGIX_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(6),
+  /** Daily Ask AEGIX questions per user; bounds provider spend (D9 §26). */
+  ASK_AEGIX_DAILY_QUOTA: z.coerce.number().int().positive().default(25),
+  /** Hard ceiling on a provider call, after which it is a TIMEOUT. */
+  AI_TIMEOUT_MS: z.coerce.number().int().positive().default(20000),
+  /** Output ceiling; a response cut off by it is reported as TRUNCATED. */
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(900),
+
   // D6 Block 2: wallet-only auth (D6-P), developer intelligence (D6-E),
   // population commonality (D6-G), correlation alerts (D6-F), webhooks (D6-H).
   // See docs/d6-block2.md.

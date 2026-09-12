@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getWalletContext, type ContextIndicator, type WalletContext } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth-guard";
+import AskAegix from "@/components/ask-aegix";
 
 const SUPPRESSION_COPY: Record<string, string> = {
   ABSENCE_NOT_EVIDENCE:
@@ -195,6 +196,8 @@ export default function WalletContextPage({ initialAddress = "" }: { initialAddr
               </ul>
             </div>
           ) : null}
+
+          <AskAegix wallet={data.wallet} />
 
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Limitations</h2>
