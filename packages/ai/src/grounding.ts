@@ -26,22 +26,27 @@ export function enforceGrounding(answer: StructuredAnswer, knownIds: Iterable<st
   const kept: Finding[] = [];
 
   for (const finding of answer.findings) {
-    const valid = finding.evidenceIds.filter((id) => known.has(id));
-    droppedReferences += finding.evidenceIds.length - valid.length;
-    if (valid.length > 0) kept.push({ statement: finding.statement, evidenceIds: valid });
+    const references = finding.evidenceIds.filter((id) => known.has(id));
+    droppedReferences += finding.evidenceIds.length - references.length;
+    const valid = [...new Set(references)];
+    if (valid.length > 0 && !unsupportedClaim(finding.statement)) kept.push({ statement: finding.statement, evidenceIds: valid });
   }
 
   const droppedFindings = answer.findings.length - kept.length;
-  const limitations = [...answer.limitations];
+  const limitations = ["This explanation is limited to the deterministic evidence supplied. Correlation does not prove ownership or causation."];
   if (droppedFindings > 0) {
     limitations.push(
-      `${droppedFindings} statement(s) were removed because they cited evidence that does not exist in this analysis.`
+      `${droppedFindings} statement(s) were removed because they cited evidence that does not exist in this analysis or made an unsupported claim.`
     );
   }
 
   return {
-    answer: { summary: answer.summary, findings: kept, limitations },
+    answer: { summary: kept.length ? kept.map((f) => f.statement).join(" ").slice(0, 2000) : "No supported explanation could be grounded in the supplied evidence.", findings: kept, limitations },
     droppedReferences,
     droppedFindings
   };
+}
+
+function unsupportedClaim(text: string): boolean {
+  return /\b(clean|safe|trustworthy|fraudulent|scammer|criminal|malicious|trust score|owned by|belongs to|same owner|proves ownership|buy|sell|long|short|predict(?:s|ed|ion)?|will rise|will fall)\b/i.test(text);
 }

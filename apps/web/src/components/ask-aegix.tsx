@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AskAegixError, askAegix, type AskResponse } from "@/lib/api";
 
 /**
@@ -14,6 +14,11 @@ export default function AskAegix({ wallet }: { wallet: string }) {
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const generation = useRef(0);
+  useEffect(() => {
+    generation.current++;
+    setAnswer(null); setUnavailable(null); setLoading(false);
+  }, [wallet]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,10 +26,14 @@ export default function AskAegix({ wallet }: { wallet: string }) {
     if (trimmed.length < 3 || loading) return;
 
     setLoading(true);
+    const current = ++generation.current;
     setUnavailable(null);
     try {
-      setAnswer(await askAegix(wallet, trimmed));
+      const result = await askAegix(wallet, trimmed);
+      if (current !== generation.current) return;
+      setAnswer(result);
     } catch (err) {
+      if (current !== generation.current) return;
       setAnswer(null);
       if (err instanceof AskAegixError) {
         setUnavailable(
@@ -36,7 +45,7 @@ export default function AskAegix({ wallet }: { wallet: string }) {
         setUnavailable("Ask AEGIX is unavailable. The analysis above is unaffected.");
       }
     } finally {
-      setLoading(false);
+      if (current === generation.current) setLoading(false);
     }
   }
 

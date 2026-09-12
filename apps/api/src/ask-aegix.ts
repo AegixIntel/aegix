@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "@aegix/config";
 import type { Sql } from "@aegix/database";
+import { isValidSolanaAddress } from "@aegix/blockchain";
 import {
   AIError,
   ASK_AEGIX_SYSTEM_PROMPT,
@@ -37,7 +38,7 @@ export interface AskAegixDeps {
   /** Loads the D8 profile for a wallet, or null when there is no analysis. */
   loadContext: (address: string) => Promise<WalletContextProfile | null>;
   requireUser: (req: never, reply: never) => Promise<{ id: string; isAnonymous: boolean } | null>;
-  checkDailyQuota: (userId: string) => Promise<{ allowed: boolean; used: number; limit: number; resetAt: string }>;
+  checkDailyQuota: (userId: string, analysisId: string) => Promise<{ allowed: boolean; used: number; limit: number; resetAt: string }>;
   recordUsage: (userId: string, analysisId: string) => Promise<void>;
 }
 
@@ -69,6 +70,13 @@ export function profileToEvidence(profile: WalletContextProfile): EvidenceItem[]
     confidence: indicator.confidence,
     untrusted: true
   }));
+  for (const indicator of profile.indicators) {
+    for (const id of indicator.evidenceRefs) {
+      items.push({ id, label: indicator.title,
+        detail: `${indicator.sourceEngine} ${indicator.engineVersion}: ${indicator.evidence.map((e) => `${e.label}=${String(e.value)}`).join("; ")}`,
+        severity: indicator.severity, confidence: indicator.confidence, untrusted: true });
+    }
+  }
 
   for (const dimension of profile.dimensions) {
     items.push({
@@ -87,7 +95,7 @@ export function profileToEvidence(profile: WalletContextProfile): EvidenceItem[]
       profile.coverage.grade ?? "unknown"
     }; sufficiency ${profile.sufficiency}; known-risk dataset ${profile.knownRisk.dataset}, result ${
       profile.knownRisk.match
-    }.`,
+    }. History ${profile.coverage.historyStart ?? "unknown"} to ${profile.coverage.historyEnd ?? "unknown"}; bounded, not lifetime.`,
     severity: 100,
     confidence: 1
   });
@@ -119,8 +127,10 @@ export function registerAskAegix(deps: AskAegixDeps): void {
         return reply.code(403).send({ code: "FEATURE_DISABLED", message: "Ask AEGIX is disabled", requestId });
       }
 
+      if (!isValidSolanaAddress(req.params.address)) return reply.code(400).send({ code: "INVALID_WALLET", requestId });
       const user = await requireUser(req as never, reply as never);
-      if (!user || user.isAnonymous) return;
+      if (!user) return;
+      if (user.isAnonymous) return reply.code(401).send({ code: "UNAUTHENTICATED", requestId });
 
       // Reported before any provider work, so a caller can tell "not set up"
       // from "the model failed".
@@ -130,7 +140,11 @@ export function registerAskAegix(deps: AskAegixDeps): void {
           .send({ code: "AI_UNAVAILABLE", reason: "MISSING_CREDENTIAL", message: "No AI provider is configured", requestId });
       }
 
-      const quota = await checkDailyQuota(user.id);
+      const profile = await loadContext(req.params.address);
+      if (!profile) return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", requestId });
+      const question = sanitizeQuestion(req.body.question ?? "");
+      if (question.length < 3) return reply.code(400).send({ code: "INVALID_QUESTION", requestId });
+      const quota = await checkDailyQuota(user.id, profile.analysisId);
       if (!quota.allowed) {
         return reply.code(429).send({
           code: "QUOTA_EXCEEDED",
@@ -140,18 +154,6 @@ export function registerAskAegix(deps: AskAegixDeps): void {
           resetAt: quota.resetAt,
           requestId
         });
-      }
-
-      const profile = await loadContext(req.params.address);
-      if (!profile) {
-        return reply
-          .code(404)
-          .send({ code: "CHAIN_DATA_UNAVAILABLE", message: "No analysis available for this wallet", requestId });
-      }
-
-      const question = sanitizeQuestion(req.body.question ?? "");
-      if (question.length < 3) {
-        return reply.code(400).send({ code: "INVALID_QUESTION", message: "Question is empty after sanitisation", requestId });
       }
 
       const context = buildBoundedContext(profileToEvidence(profile));
@@ -175,6 +177,7 @@ export function registerAskAegix(deps: AskAegixDeps): void {
       }
 
       const grounded = enforceGrounding(generated.answer, context.includedIds);
+      grounded.answer.limitations.push(...profile.limitations);
 
       try {
         await recordUsage(user.id, profile.analysisId);

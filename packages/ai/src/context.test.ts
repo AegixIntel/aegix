@@ -62,6 +62,7 @@ test("the character bound stops the block from growing without limit", () => {
 
   assert.ok(ctx.includedIds.length < 20);
   assert.ok(ctx.truncated);
+  assert.ok(ctx.block.length <= 500, "the entire fenced prompt respects the character budget");
 });
 
 test("untrusted evidence is sanitised on the way into the context", () => {

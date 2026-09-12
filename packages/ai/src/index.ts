@@ -39,6 +39,8 @@ export { createOpenAICompatibleProvider, type OpenAICompatibleOptions } from "./
  */
 export const ASK_AEGIX_SYSTEM_PROMPT = [
   "You explain AEGIX wallet intelligence. You do not produce it.",
+  "Never determine scores, signals, entities, identity, correlations, indicators, funding provenance, or graph edges.",
+  "Never offer trading recommendations or price predictions. Anomaly is not manipulation.",
   "",
   "Answer only from the evidence block supplied with the question. Cite every",
   "statement with the evidence IDs it rests on, exactly as they are written.",

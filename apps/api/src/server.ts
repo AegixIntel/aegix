@@ -44,6 +44,7 @@ import { explainPath, explainSignal } from "@aegix/explanation";
 import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
 import { createOpenAICompatibleProvider } from "@aegix/ai";
 import { registerAskAegix } from "./ask-aegix.js";
+import { claimDailyUsage } from "./metered-quota.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
 import { checkQuota, recordCacheHit, recordQuotaUsage, type QuotaContext } from "./quota.js";
@@ -1537,16 +1538,8 @@ export async function buildServer(deps: ApiDeps) {
     provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
     loadContext: loadWalletContextProfile,
     requireUser: requireUser as never,
-    checkDailyQuota: async (userId) => {
-      const quota = await checkQuota(sql, config, { userId, anonymousKey: null, ip: "" }, {
-        usageType: "ask_aegix",
-        limitOverride: config.ASK_AEGIX_DAILY_QUOTA
-      });
-      return { allowed: quota.allowed, used: quota.used, limit: quota.limit, resetAt: quota.resetAt };
-    },
-    recordUsage: async (userId, analysisId) => {
-      await recordQuotaUsage(sql, { userId, anonymousKey: null, ip: "" }, analysisId, "ask_aegix");
-    }
+    checkDailyQuota: (userId, analysisId) => claimDailyUsage(sql, userId, "ask_aegix", config.ASK_AEGIX_DAILY_QUOTA, analysisId),
+    recordUsage: async () => { /* admission already persisted before provider work */ }
   });
 
   registerWebhookRoutes({

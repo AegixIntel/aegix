@@ -38,16 +38,30 @@ test("dropping a finding is disclosed rather than hidden", () => {
   assert.ok(result.answer.limitations.some((l) => l.includes("cited evidence that does not exist")));
 });
 
-test("a fully grounded answer passes through unchanged", () => {
+test("grounded findings survive while uncited summary and limitations cannot bypass grounding", () => {
   const original = answer({
     findings: [{ statement: "Repeated funding observed.", evidenceIds: ["ind:A", "ind:B"] }],
     limitations: ["Bounded history."]
   });
   const result = enforceGrounding(original, ["ind:A", "ind:B"]);
 
-  assert.deepEqual(result.answer, original);
+  assert.deepEqual(result.answer.findings, original.findings);
+  assert.equal(result.answer.summary, "Repeated funding observed.");
+  assert.ok(!result.answer.limitations.includes("Bounded history."));
   assert.equal(result.droppedReferences, 0);
   assert.equal(result.droppedFindings, 0);
+});
+
+test("uncited invented summary and safety claims with valid citations are removed", () => {
+  const result = enforceGrounding(answer({ summary: "The owner is a criminal.",
+    findings: [{ statement: "This wallet is clean and safe.", evidenceIds: ["sig:A"] },
+      { statement: "Funding observed.", evidenceIds: ["sig:A", "sig:A", "sig:unknown"] }],
+    limitations: ["Buy SOL now."] }), ["sig:A"]);
+  assert.equal(result.droppedFindings, 1);
+  assert.equal(result.droppedReferences, 1);
+  assert.equal(result.answer.summary, "Funding observed.");
+  assert.deepEqual(result.answer.findings[0]!.evidenceIds, ["sig:A"]);
+  assert.ok(!JSON.stringify(result.answer).includes("Buy SOL"));
 });
 
 test("only the ids supplied for this context count as known", () => {

@@ -61,22 +61,24 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
           })
         });
       } catch (err) {
+        clearTimeout(timer);
         if (err instanceof Error && err.name === "AbortError") {
           throw new AIError("TIMEOUT", `Provider did not respond within ${request.timeoutMs}ms`);
         }
         throw new AIError("PROVIDER_ERROR", "Provider request failed");
-      } finally {
-        clearTimeout(timer);
       }
 
       if (response.status === 429) {
+        clearTimeout(timer);
         throw new AIError("RATE_LIMIT", "Provider rate limit reached");
       }
       if (response.status === 401 || response.status === 403) {
+        clearTimeout(timer);
         // The body may quote the credential back; it is never surfaced.
         throw new AIError("MISSING_CREDENTIAL", "Provider rejected the configured credential");
       }
       if (!response.ok) {
+        clearTimeout(timer);
         throw new AIError("PROVIDER_ERROR", `Provider responded with status ${response.status}`);
       }
 
@@ -84,7 +86,10 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
       try {
         body = (await response.json()) as ChatCompletionResponse;
       } catch {
+        if (controller.signal.aborted) throw new AIError("TIMEOUT", "Provider response body timed out");
         throw new AIError("MALFORMED_RESPONSE", "Provider response was not JSON");
+      } finally {
+        clearTimeout(timer);
       }
 
       const choice = body.choices?.[0];

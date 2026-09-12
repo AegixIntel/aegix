@@ -41,6 +41,7 @@ const envSchema = z.object({
   RPC_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(2),
 
   LLM_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
   LLM_BASE_URL: z.string().url().optional(),
   LLM_MODEL: z.string().default("gpt-4o-mini"),
 
@@ -237,6 +238,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   const config = parsed.data;
+  if (config.GROQ_API_KEY && !config.LLM_API_KEY) {
+    config.LLM_API_KEY = config.GROQ_API_KEY;
+    config.LLM_BASE_URL = env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
+    config.LLM_MODEL = env.LLM_MODEL ?? "llama-3.3-70b-versatile";
+  }
 
   // Fail fast in production: never silently run with unsafe defaults, see
   // milestone D3-J §57. Development keeps the ergonomic defaults.

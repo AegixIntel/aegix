@@ -28,6 +28,7 @@
     "test:e2e-d6-block2": "node --import tsx tests/e2e-d6-block2.ts",
     "test:e2e-d6": "node --import tsx tests/e2e-d6.ts",
     "test:e2e-d7": "node --import tsx tests/e2e-d7.ts",
+    "test:e2e-d9": "node --import tsx tests/e2e-d9.ts",
     "test:migrations": "node --import tsx tests/migration-test.ts",
     "test:web-routing": "node --import tsx tests/web-routing-smoke.ts",
     "release:gate": "bash scripts/release-gate.sh",

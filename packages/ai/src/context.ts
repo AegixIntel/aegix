@@ -48,27 +48,29 @@ export function buildBoundedContext(
 
   const lines: string[] = [];
   const includedIds: string[] = [];
-  let chars = 0;
+  const headerFor = (count: number) => count < ranked.length
+    ? `Showing the ${count} highest-ranked items of ${ranked.length}. ${ranked.length - count} were omitted; say so if a question depends on what is missing.`
+    : `All ${count} available items are shown.`;
+  const seen = new Set<string>();
 
   for (const item of ranked) {
     if (includedIds.length >= bounds.maxItems) break;
+    if (!/^(sig|dim|ind|cov):[A-Za-z0-9_:.\-]+$/.test(item.id) || seen.has(item.id)) continue;
     const detail = item.untrusted ? sanitizeUntrusted(item.detail) : item.detail;
     const label = item.untrusted ? sanitizeUntrusted(item.label) : item.label;
     const line = `${item.id} | ${label} | severity ${item.severity} | confidence ${item.confidence.toFixed(2)} | ${detail}`;
-    if (chars + line.length > bounds.maxChars) break;
+    if (fenceUntrusted([headerFor(includedIds.length + 1), ...lines, line].join("\n")).length > bounds.maxChars) continue;
     lines.push(line);
     includedIds.push(item.id);
-    chars += line.length;
+    seen.add(item.id);
   }
 
   const droppedCount = ranked.length - includedIds.length;
-  const header =
-    droppedCount > 0
-      ? `Showing the ${includedIds.length} highest-ranked items of ${ranked.length}. ${droppedCount} were omitted; say so if a question depends on what is missing.`
-      : `All ${includedIds.length} available items are shown.`;
+  const header = headerFor(includedIds.length);
+  const block = fenceUntrusted([header, ...lines].join("\n"));
 
   return {
-    block: fenceUntrusted([header, ...lines].join("\n")),
+    block: block.length <= bounds.maxChars ? block : "",
     includedIds,
     droppedCount,
     truncated: droppedCount > 0
