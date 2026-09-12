@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AegixLogo } from "@/components/aegix-logo";
+import { NavDropdown } from "@/components/layout/nav-dropdown";
 import WalletAuthButton from "@/components/wallet-auth-button";
 import { cn } from "@/lib/cn";
 import { primaryNav, docsNavLink, roadmapNavLink, siteMenu, siteRail } from "@/lib/site";
@@ -118,7 +119,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
 
           <div className="hidden items-center gap-6 lg:flex">
             {primaryNav.map((group) => (
-              <span key={group.label} className="text-sm text-muted-foreground">{group.label}</span>
+              <NavDropdown key={group.label} group={group} />
             ))}
             <NavUnderline href={docsNavLink.href}>{docsNavLink.label}</NavUnderline>
             <NavUnderline href={roadmapNavLink.href}>{roadmapNavLink.label}</NavUnderline>

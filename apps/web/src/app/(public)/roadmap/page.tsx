@@ -1,18 +1,12 @@
 import Link from "next/link";
 import { SectionLabel, EditorialHeading, StatusBadge } from "@/components/ui/primitives";
 import type { Metadata } from "next";
+import { roadmapGroups as GROUPS } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Roadmap",
   description: "AEGIX status-driven roadmap — shipped, current, next and later direction."
 };
-
-const GROUPS = [
-  { label: "SHIPPED", items: ["Intelligence Core", "Wallet X-Ray", "Attack My Wallet", "Compare Intelligence", "Privacy Monitor", "Developer Intelligence API"] },
-  { label: "CURRENT", items: ["Public Product Launch", "Multi-User Production", "Documentation", "Infrastructure Hardening"] },
-  { label: "NEXT", items: ["Market Intelligence", "Narrative Radar", "Anomaly Detection", "Signal Engine"] },
-  { label: "LATER", items: ["AI Intelligence Copilot", "Wallet Reputation", "Intelligence Network", "$AEX Economic Layer", "Multi-Chain"] }
-];
 
 export default function RoadmapPage() {
   return (

@@ -25,7 +25,7 @@ export function NavDropdown({ group }: { group: NavGroup }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-white/10 bg-ink-deep p-2 shadow-xl shadow-black/40">
+        <div className="absolute left-0 top-full z-50 w-64 border border-white/10 bg-ink-deep p-1.5 pt-2">
           {group.items.map((item) => (
             <Link
               key={`${item.label}-${item.href}`}
