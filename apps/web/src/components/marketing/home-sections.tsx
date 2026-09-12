@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { InlineArrowLink, StatusBadge } from "@/components/ui/primitives";
 import LiveStatsPanel from "@/components/live-stats-panel";
@@ -257,7 +258,21 @@ export function DeveloperInfra() {
 export function Epistemic() {
   return (
     <section className="overflow-hidden border-b border-white/10 bg-white/[0.015]">
-      <Reveal fade={false} className="px-4 py-24 text-center md:py-32 lg:px-8">
+      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="plate relative min-h-[20rem] border-b border-white/10 lg:border-b-0 lg:border-r">
+          <Image
+            src="/assets/aegix-columns.jpg"
+            alt="Classical stone columns of an institutional building against a morning sky"
+            fill
+            sizes="(min-width: 1024px) 35vw, 100vw"
+            className="plate-img object-cover object-[35%_50%]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#090909]/80" aria-hidden="true" />
+          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(8)}>
+            A core principle
+          </p>
+        </div>
+        <div className="px-4 py-24 text-center md:py-32 lg:px-10">
         <div className="relative mx-auto h-40 max-w-lg" aria-hidden="true">
           <div
             className="gap-circle gap-a flex h-32 w-32 items-center justify-center rounded-full border border-accent-bright/60 bg-accent/[0.06]"
@@ -295,6 +310,7 @@ export function Epistemic() {
           AEGIX reports observable relationships, evidence and confidence. It does not turn correlation into
           unsupported claims about real-world ownership.
         </p>
+        </div>
       </Reveal>
     </section>
   );
@@ -346,26 +362,41 @@ export function NetworkAndRoadmap() {
 /* Final CTA. */
 export function FinalCta() {
   return (
-    <section className="px-4 py-28 text-center md:py-40 lg:px-8">
-      <Reveal fade={false}>
-        <h2 className="statement-lg">
-          <span className="rv-mask" style={at(0)}>
-            <span>Start with</span>
-          </span>
-          <span className="rv-mask" style={at(1)}>
-            <span>your own wallet.</span>
-          </span>
-        </h2>
-        <p className="rv mx-auto mt-8 max-w-md text-lg text-muted-foreground" style={at(4)}>
-          One address. Every observable link, with evidence and confidence attached.
-        </p>
-        <div className="rv mt-10 flex flex-col justify-center gap-3 sm:flex-row" style={at(5)}>
-          <Link href="/app/analyze" className="btn-primary">
-            Launch AEGIX <span className="btn-arrow text-inherit">→</span>
-          </Link>
-          <Link href="/docs" className="btn-secondary">
-            Read the docs
-          </Link>
+    <section className="overflow-hidden">
+      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="flex flex-col justify-center px-4 py-24 md:py-32 lg:px-8">
+          <h2 className="statement-lg">
+            <span className="rv-mask" style={at(0)}>
+              <span>Start with</span>
+            </span>
+            <span className="rv-mask" style={at(1)}>
+              <span>your own wallet.</span>
+            </span>
+          </h2>
+          <p className="rv mt-8 max-w-md text-lg text-muted-foreground" style={at(4)}>
+            One address. Every observable link, with evidence and confidence attached.
+          </p>
+          <div className="rv mt-10 flex flex-col gap-3 sm:flex-row" style={at(5)}>
+            <Link href="/app/analyze" className="btn-primary">
+              Launch AEGIX <span className="btn-arrow text-inherit">→</span>
+            </Link>
+            <Link href="/docs" className="btn-secondary">
+              Read the docs
+            </Link>
+          </div>
+        </div>
+        <div className="plate relative min-h-[26rem] border-t border-white/10 lg:border-l lg:border-t-0" style={{ transitionDelay: "150ms" }}>
+          <Image
+            src="/assets/aegix-observer.jpg"
+            alt="A person standing at a window, looking out over a city at night"
+            fill
+            sizes="(min-width: 1024px) 32vw, 100vw"
+            className="plate-img object-cover object-[50%_35%]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-deep via-transparent to-transparent lg:bg-gradient-to-r lg:from-ink-deep/80 lg:via-transparent lg:to-transparent" aria-hidden="true" />
+          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(7)}>
+            See what others don&apos;t
+          </p>
         </div>
       </Reveal>
     </section>
