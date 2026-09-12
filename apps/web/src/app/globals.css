@@ -229,6 +229,27 @@
     animation-fill-mode: both;
   }
 
+  /* Photo plates: toned down to sit in the palette; on reveal a curtain
+     lifts from the top while the image settles from a slight zoom. */
+  .plate-img {
+    filter: grayscale(0.3) brightness(0.8) contrast(1.05);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    [data-reveal] .plate {
+      clip-path: inset(0 0 0 0);
+      transition: clip-path 1.4s var(--ease-draw);
+    }
+    [data-reveal="waiting"] .plate {
+      clip-path: inset(0 0 100% 0);
+    }
+    [data-reveal] .plate-img {
+      transition: transform 2.2s var(--ease-out), filter 0.8s ease;
+    }
+    [data-reveal="waiting"] .plate-img {
+      transform: scale(1.14);
+    }
+  }
+
   /* Trace labels are in SVG user units; enlarge them where the SVG scales down. */
   .trace-label {
     font-size: 10.5px;
