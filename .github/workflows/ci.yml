@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -41,10 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
@@ -52,7 +52,7 @@ jobs:
         run: mkdir -p artifacts && set -o pipefail && pnpm test 2>&1 | tee artifacts/unit-tests.log
       - name: Upload unit logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: unit-test-logs, path: artifacts/unit-tests.log, retention-days: 7 }
 
   integration-tests:
@@ -84,10 +84,10 @@ jobs:
       EMAIL_ENABLED: "false"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
@@ -100,7 +100,7 @@ jobs:
         run: set -o pipefail && pnpm test:queue-integration 2>&1 | tee artifacts/queue-integration.log
       - name: Upload integration logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: integration-test-logs, path: artifacts/*.log, retention-days: 7 }
 
   golden-tests:
@@ -131,10 +131,10 @@ jobs:
       EMAIL_ENABLED: "false"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
@@ -154,7 +154,7 @@ jobs:
           } 2>&1 | tee artifacts/golden-tests.log
       - name: Upload golden logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: golden-test-logs, path: artifacts/golden-tests.log, retention-days: 7 }
 
   e2e-d7:
@@ -186,10 +186,10 @@ jobs:
       EMAIL_ENABLED: "false"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
@@ -198,7 +198,7 @@ jobs:
         run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-d7 2>&1 | tee artifacts/e2e.log
       - name: Upload E2E logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: e2e-d7-logs, path: artifacts/e2e.log, retention-days: 7 }
 
   e2e-monitor:
@@ -230,10 +230,10 @@ jobs:
       EMAIL_ENABLED: "false"
       ENABLE_EMAIL_NOTIFICATIONS: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
         with: { version: 9.15.9 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter "./packages/**" build
@@ -242,7 +242,7 @@ jobs:
         run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-monitor 2>&1 | tee artifacts/e2e-monitor.log
       - name: Upload monitor logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: e2e-monitor-logs, path: artifacts/e2e-monitor.log, retention-days: 7 }
 
   docker-images:
@@ -250,7 +250,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker build -f infra/docker/api.Dockerfile -t aegix-api:ci .
       - run: docker build -f infra/docker/worker.Dockerfile -t aegix-worker:ci .
       - run: docker build -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=/api -t aegix-web:ci .
