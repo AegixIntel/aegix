@@ -1,7 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { SITE_URL } from "@/lib/site";
+
+// Plex for interface and data, Newsreader for editorial statements.
+const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans", display: "swap" });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono", display: "swap" });
+const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif", display: "swap", axes: ["opsz"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -54,13 +60,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#05070d",
+  themeColor: "#050505",
   colorScheme: "dark"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable}`}>
       <body className="min-h-screen bg-ink-deep text-marble antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -65,6 +65,14 @@ export const siteRail: NavLinkItem[] = [
   { label: "Market Intel", href: "/app/markets", status: "LIVE" }
 ];
 
+/** Status-driven roadmap, shared by /roadmap and the landing page. */
+export const roadmapGroups = [
+  { label: "SHIPPED", items: ["Intelligence Core", "Wallet X-Ray", "Attack My Wallet", "Compare Intelligence", "Privacy Monitor", "Developer Intelligence API"] },
+  { label: "CURRENT", items: ["Public Product Launch", "Multi-User Production", "Documentation", "Infrastructure Hardening"] },
+  { label: "NEXT", items: ["Market Intelligence", "Narrative Radar", "Anomaly Detection", "Signal Engine"] },
+  { label: "LATER", items: ["AI Intelligence Copilot", "Wallet Reputation", "Intelligence Network", "$AEX Economic Layer", "Multi-Chain"] }
+];
+
 export type AppNavItem = { label: string; href: string };
 export type AppNavGroup = { label: string; items: AppNavItem[] };
 
