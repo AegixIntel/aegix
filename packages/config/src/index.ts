@@ -237,12 +237,28 @@ const envSchema = z.object({
   // paid plans scale those numbers, and they scale them from the same knobs.
   ENABLE_BILLING: z.preprocess(boolEnv, z.boolean()).default(true),
   /**
-   * Payment processor. `manual` is the only implementation in this baseline
-   * (architecture.md PR-12: the beta operates without payment
-   * infrastructure); paid plans are granted by an operator and recorded in
-   * the billing ledger like any other transition.
+   * Payment processor. `manual` (the default) grants paid plans by operator
+   * and stays valid next to any processor. `paddle` sells plans through
+   * Paddle Billing: hosted checkout, customer portal, signed webhooks.
    */
-  BILLING_PROVIDER: z.enum(["manual"]).default("manual"),
+  BILLING_PROVIDER: z.enum(["manual", "paddle"]).default("manual"),
+  /** Processor environment. `sandbox` moves no real money. */
+  BILLING_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  /** Server-side processor API key. Secret: env only, never logged, never sent to a browser. */
+  BILLING_SECRET_KEY: z.preprocess(urlOrUndefined, z.string().optional()),
+  /** Signing secret of the processor's webhook destination. Secret. */
+  BILLING_WEBHOOK_SECRET: z.preprocess(urlOrUndefined, z.string().optional()),
+  /** Client-side checkout token. Public by design: the checkout page needs it. */
+  BILLING_CLIENT_TOKEN: z.preprocess(urlOrUndefined, z.string().optional()),
+  /** Processor price per paid plan. The server maps plan → price; a browser never names one. */
+  BILLING_PRICE_PRO: z.preprocess(urlOrUndefined, z.string().optional()),
+  BILLING_PRICE_TEAM: z.preprocess(urlOrUndefined, z.string().optional()),
+  /** The web page that opens hosted checkout (the processor's default payment link). */
+  BILLING_CHECKOUT_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
+  /** How far a webhook signature timestamp may drift from now before it is refused. */
+  BILLING_WEBHOOK_TOLERANCE_SECONDS: z.coerce.number().int().min(5).max(900).default(300),
+  /** Webhook body cap; processor subscription events are a few kilobytes. */
+  BILLING_WEBHOOK_MAX_BYTES: z.coerce.number().int().min(1024).max(1_048_576).default(262_144),
   BILLING_CURRENCY: z.string().length(3).default("USD"),
   /** Trial length applied to a first paid subscription; 0 disables trials. */
   BILLING_TRIAL_DAYS: z.coerce.number().int().nonnegative().default(0),
@@ -282,6 +298,37 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     config.LLM_API_KEY = config.GROQ_API_KEY;
     config.LLM_BASE_URL = env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
     config.LLM_MODEL = env.LLM_MODEL ?? "llama-3.3-70b-versatile";
+  }
+
+  // A payment processor either has everything it needs or does not start.
+  // Messages name the missing setting, never a value.
+  if (config.BILLING_PROVIDER === "paddle") {
+    const missing = (
+      [
+        ["BILLING_SECRET_KEY", config.BILLING_SECRET_KEY],
+        ["BILLING_WEBHOOK_SECRET", config.BILLING_WEBHOOK_SECRET],
+        ["BILLING_CLIENT_TOKEN", config.BILLING_CLIENT_TOKEN],
+        ["BILLING_PRICE_PRO", config.BILLING_PRICE_PRO],
+        ["BILLING_CHECKOUT_URL", config.BILLING_CHECKOUT_URL]
+      ] as const
+    ).filter(([, value]) => !value).map(([key]) => key);
+    if (missing.length > 0) {
+      throw new Error(`Billing configuration error: BILLING_PROVIDER=paddle requires ${missing.join(", ")}`);
+    }
+    for (const [key, value] of [["BILLING_PRICE_PRO", config.BILLING_PRICE_PRO], ["BILLING_PRICE_TEAM", config.BILLING_PRICE_TEAM]] as const) {
+      if (value && !/^pri_[a-z0-9]+$/.test(value)) {
+        throw new Error(`Billing configuration error: ${key} must be a Paddle price id (pri_…)`);
+      }
+    }
+    const sandbox = config.BILLING_ENVIRONMENT === "sandbox";
+    if (!config.BILLING_CLIENT_TOKEN!.startsWith(sandbox ? "test_" : "live_")) {
+      throw new Error(`Billing configuration error: BILLING_CLIENT_TOKEN does not belong to the ${config.BILLING_ENVIRONMENT} environment`);
+    }
+    // Paddle API keys name their environment; a live key must never drive sandbox tests, nor the reverse.
+    const key = config.BILLING_SECRET_KEY!;
+    if ((sandbox && key.startsWith("pdl_live_")) || (!sandbox && key.startsWith("pdl_sdbx_"))) {
+      throw new Error(`Billing configuration error: BILLING_SECRET_KEY does not belong to the ${config.BILLING_ENVIRONMENT} environment`);
+    }
   }
 
   // Fail fast in production: never silently run with unsafe defaults, see

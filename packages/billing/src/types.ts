@@ -170,7 +170,9 @@ export type BillingEventType =
   | "SUBSCRIPTION_CANCELED"
   | "PAYMENT_FAILED"
   | "PAYMENT_RECOVERED"
-  | "SUBSCRIPTION_EXPIRED";
+  | "SUBSCRIPTION_EXPIRED"
+  /** A processor-reported change to a live subscription that is none of the above. */
+  | "SUBSCRIPTION_UPDATED";
 
 export interface MeteredUsage {
   dimension: UsageDimension;
@@ -209,7 +211,11 @@ export type BillingErrorCode =
   | "RETIRED_PLAN"
   | "INVALID_TRANSITION"
   | "PAYMENT_PROVIDER_REQUIRED"
-  | "NOT_SUPPORTED";
+  | "NOT_SUPPORTED"
+  /** The payment processor could not be reached or answered unintelligibly. */
+  | "PROVIDER_UNAVAILABLE"
+  /** The payment processor refused the request. */
+  | "PROVIDER_REJECTED";
 
 export class BillingError extends Error {
   constructor(readonly code: BillingErrorCode, message: string) {

@@ -31,6 +31,8 @@ function subscriptionRow(patch: Partial<SubscriptionRow> = {}): SubscriptionRow 
     trial_end: null,
     provider: "manual",
     provider_ref: null,
+    provider_customer_ref: null,
+    provider_observed_at: null,
     created_at: "2026-09-01T00:00:00.000Z",
     updated_at: "2026-09-01T00:00:00.000Z",
     ...patch
@@ -48,6 +50,25 @@ function fakeRepo(overrides: Partial<BillingRepo> = {}): BillingRepo {
     },
     async applyTransition() {
       return { subscription: null, applied: true };
+    },
+    async applyProviderSync(_userId, decide) {
+      return { decision: decide(null).decision, applied: false, subscription: null };
+    },
+    async findSubscriberByProviderRef() {
+      return null;
+    },
+    async recordCheckout() {},
+    async findCheckoutByRef() {
+      return null;
+    },
+    async findCheckoutByToken() {
+      return null;
+    },
+    async hasProviderEvent() {
+      return false;
+    },
+    async recordProviderEvent() {
+      return true;
     },
     async listEvents() {
       return [];

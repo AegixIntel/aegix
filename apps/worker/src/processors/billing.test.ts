@@ -18,6 +18,8 @@ function row(patch: Partial<SubscriptionRow> = {}): SubscriptionRow {
     trial_end: null,
     provider: "manual",
     provider_ref: null,
+    provider_customer_ref: null,
+    provider_observed_at: null,
     created_at: "2026-08-13T12:00:00.000Z",
     updated_at: "2026-08-13T12:00:00.000Z",
     ...patch

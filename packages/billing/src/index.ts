@@ -19,7 +19,27 @@ export {
   type UsageSummary
 } from "./metering.js";
 export { computeInvoice } from "./invoice.js";
-export { createManualProvider, type CheckoutRequest, type CheckoutSession, type PaymentProvider } from "./provider.js";
+export {
+  createManualProvider,
+  type CheckoutClientConfig,
+  type CheckoutRequest,
+  type CheckoutSession,
+  type PaymentProvider,
+  type PortalRequest,
+  type PortalSession,
+  type ProviderWebhookEvent,
+  type ProviderWebhooks,
+  type WebhookVerification
+} from "./provider.js";
+export {
+  reconcileProviderSubscription,
+  type NormalizedSubscriptionStatus,
+  type ProviderBinding,
+  type ProviderSubscriptionSnapshot,
+  type ProviderSyncDecision,
+  type ProviderSyncIgnoredReason,
+  type ReconcileInput
+} from "./provider-sync.js";
 export {
   applyBillingAction,
   profilePlanLabel,

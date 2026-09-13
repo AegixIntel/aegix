@@ -58,8 +58,8 @@ async function main(): Promise<void> {
     const [fixture] = await sql<Array<{ id: string }>>`select id from profiles where id = ${fixtureId}`;
     assert.equal(fixture?.id, fixtureId, "existing fixture data survives idempotent migrations");
     const [count] = await sql<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.ok(Number(count?.count) >= 10, "all migrations are recorded");
-    assert.equal(Number(count?.count), 10, "exactly ten migrations are recorded");
+    assert.ok(Number(count?.count) >= 11, "all migrations are recorded");
+    assert.equal(Number(count?.count), 11, "exactly eleven migrations are recorded");
   } finally {
     await sql.end();
   }
@@ -109,8 +109,13 @@ async function main(): Promise<void> {
     const [profile] = await upgraded<Array<{ plan: string }>>`select plan from profiles where id = ${d7User}`;
     assert.equal(profile?.plan, "free", "an existing profile stays on the free plan");
     const [count] = await upgraded<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.equal(Number(count?.count), 10, "D7 upgrade records migrations 0009-0010 exactly once");
-    console.log("10 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
+    const [providerColumns] = await upgraded<Array<{ count: string }>>`
+      select count(*)::text as count from information_schema.columns
+      where table_name = 'subscriptions' and column_name in ('provider_customer_ref', 'provider_observed_at')
+    `;
+    assert.equal(Number(providerColumns?.count), 2, "migration 0011 adds the processor binding columns");
+    assert.equal(Number(count?.count), 11, "D7 upgrade records migrations 0009-0011 exactly once");
+    console.log("11 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
   } finally {
     await upgraded.end();
   }

@@ -82,6 +82,17 @@ services:
       # The application performs the conditional fail-fast check: this may be
       # empty only when ENABLE_WEBHOOK_DELIVERY=false.
       WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:-}
+      # D11 payment processor. `manual` needs nothing else; `paddle` refuses
+      # to start without its keys. Values come from the host environment or
+      # secret store only, never from the repository.
+      BILLING_PROVIDER: ${BILLING_PROVIDER:-manual}
+      BILLING_ENVIRONMENT: ${BILLING_ENVIRONMENT:-sandbox}
+      BILLING_SECRET_KEY: ${BILLING_SECRET_KEY:-}
+      BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-}
+      BILLING_CLIENT_TOKEN: ${BILLING_CLIENT_TOKEN:-}
+      BILLING_PRICE_PRO: ${BILLING_PRICE_PRO:-}
+      BILLING_PRICE_TEAM: ${BILLING_PRICE_TEAM:-}
+      BILLING_CHECKOUT_URL: ${BILLING_CHECKOUT_URL:-}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
