@@ -350,6 +350,23 @@ async function main(): Promise<void> {
     ok("FLOW3: x-ray topSignals present", Array.isArray(xrayBody?.topSignals) && (xrayBody.topSignals as unknown[]).length > 0, `${(xrayBody?.topSignals as unknown[])?.length}`);
     ok("FLOW3: x-ray attackPaths present", Array.isArray(xrayBody?.attackPaths) && (xrayBody.attackPaths as unknown[]).length > 0, `${(xrayBody?.attackPaths as unknown[])?.length}`);
     ok("FLOW3: x-ray engineVersions present", xrayBody?.engineVersions?.scoring === "score-v1.0.0", JSON.stringify(xrayBody?.engineVersions));
+    // /latest must expose an analysis that is still running: the report page
+    // polls it after /x-ray 404s, and a READY-only lookup left a first-time
+    // analysis stuck on "No analysis yet".
+    const pendingAddress = base58.encode(Uint8Array.from({ length: 32 }, (_, i) => i + 1));
+    const pendingWallet = await createWalletRepo(sql).findOrCreate("solana", pendingAddress);
+    const pendingJob = await createAnalysisJobRepo(sql).create({ walletId: pendingWallet.id, requestedBy: null, analysisType: "full", priority: "free" });
+    const pendingLatest = await app.inject({ method: "GET", url: `/v1/wallets/${pendingAddress}/latest` });
+    ok("FLOW3: /latest reports an analysis that is still running", pendingLatest.statusCode === 200 && pendingLatest.json()?.latestAnalysisId === pendingJob.id && pendingLatest.json()?.status === "CREATED", `${pendingLatest.statusCode} ${JSON.stringify(pendingLatest.json())}`);
+    const readyLatest = await app.inject({ method: "GET", url: `/v1/wallets/${WALLET_A}/latest` });
+    ok("FLOW3: /latest still reports a READY analysis", readyLatest.statusCode === 200 && readyLatest.json()?.status === "READY", `${readyLatest.statusCode} ${JSON.stringify(readyLatest.json())}`);
+
+    // The developer portal reads usage with the wallet session.
+    const sessionUsage = await app.inject({ method: "GET", url: "/v1/me/developer/usage", headers: { authorization: `Bearer ${loginA.token}` } });
+    ok("FLOW3: developer usage is readable with a wallet session", sessionUsage.statusCode === 200 && typeof sessionUsage.json()?.limit === "number" && Array.isArray(sessionUsage.json()?.breakdown), `${sessionUsage.statusCode} ${JSON.stringify(sessionUsage.json())}`);
+    const anonymousUsage = await app.inject({ method: "GET", url: "/v1/me/developer/usage" });
+    ok("FLOW3: developer usage without a session is 401", anonymousUsage.statusCode === 401, `${anonymousUsage.statusCode}`);
+
     const context = await app.inject({ method: "GET", url: `/v1/wallets/${WALLET_A}/context`, headers: { authorization: `Bearer ${loginA.token}` } });
     const contextBody = context.json();
     ok("D8: authenticated Context reuses persisted analysis", context.statusCode === 200 && contextBody.analysisId === xrayBody.analysis.id);

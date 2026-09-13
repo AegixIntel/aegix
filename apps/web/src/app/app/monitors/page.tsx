@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { listMonitors, createMonitor, deleteMonitor, type Monitor } from "@/lib/api";
+import { listMonitors, createMonitor, deleteMonitor, saveAnalysis, type Monitor } from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 
 function shortAddress(address: string): string {
@@ -55,7 +55,11 @@ export default function MonitorsPage() {
     setBusy(true);
     setError(null);
     try {
-      await createMonitor(address.trim(), schedule);
+      const wallet = address.trim();
+      // The API only monitors wallets on the user's saved list and otherwise
+      // answers WALLET_NOT_SAVED. Saving is an idempotent upsert.
+      await saveAnalysis(wallet);
+      await createMonitor(wallet, schedule);
       setAddress("");
       void load();
     } catch (err) {
