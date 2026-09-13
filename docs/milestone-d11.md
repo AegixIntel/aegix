@@ -228,23 +228,89 @@ so those checks refuse nothing today; a plan that excludes one would answer
 
 ---
 
-## 6. Payment provider seam
+## 6. Payment providers
 
-`architecture.md` PR-12 keeps payment infrastructure out of this baseline.
-D11 therefore ships everything that is useful whether or not money is being
-collected — the catalog, entitlements, the ledger, metering, invoices —
-behind an interface a processor can implement later without touching routes,
-repositories or the state machine.
+D11 ships everything that is useful whether or not money is being collected —
+the catalog, entitlements, the ledger, metering, invoices — behind a
+`PaymentProvider` interface (`packages/billing/src/provider.ts`). Two
+providers implement it; `BILLING_PROVIDER` picks one.
 
-The shipped provider is `manual`: `supportsSelfServe === false`. The rule the
-API enforces is:
+The rule the API enforces with either:
 
-> Starting or changing a paid subscription requires a payment provider.
-> Ending one never does.
+> A paid subscription starts only where it is paid for.
+> Ending one never requires a processor.
 
-So `POST /v1/billing/subscription/change` answers `501
-PAYMENT_PROVIDER_REQUIRED`, while cancel and resume always work. Creating a
-paid subscription nobody paid for would put a falsehood in the ledger.
+### 6.1 `manual` (default)
+
+`supportsSelfServe === false`. `POST /v1/billing/subscription/change` and
+`POST /v1/billing/checkout` answer `501 PAYMENT_PROVIDER_REQUIRED`, while
+cancel and resume always work. Creating a paid subscription nobody paid for
+would put a falsehood in the ledger. `manual` stays valid next to a processor:
+operator grants, recovery, local development and tests use it.
+
+### 6.2 `paddle`
+
+Paddle Billing is the merchant of record: it hosts checkout, collects payment,
+handles sales tax and pays out. It was chosen because it accepts software
+sellers operating from Indonesia, its acceptable-use policy restricts crypto
+exchanges, trading and custody — none of which AEGIX does — rather than
+analytics software, and it provides recurring subscriptions, a customer
+portal, HMAC-signed webhooks and a separate sandbox.
+`apps/api/src/billing-paddle.ts` is the only module that speaks Paddle.
+
+```text
+browser ── POST /v1/billing/checkout {plan} ──▶ API
+API ── POST /transactions {server-mapped price, custom_data.token} ──▶ Paddle
+browser ◀── checkout URL (this site's /app/billing/checkout?_ptxn=…)
+/app/billing/checkout loads Paddle.js (public client token) → Paddle form
+Paddle ── signed subscription.* webhook ──▶ POST /v1/billing/webhooks/paddle
+API: verify signature → dedupe event id → bind to checkout → reconcile → ledger
+```
+
+- **The browser names a plan and nothing else.** The server maps plan → Paddle
+  price (`BILLING_PRICE_PRO`, `BILLING_PRICE_TEAM`); any other body field is
+  dropped. Amount, currency and entitlements are never client input.
+- **Returning from checkout proves nothing.** The success page only polls; the
+  plan changes when Paddle's signed webhook (or Paddle's own API response to a
+  cancel/resume) says so.
+- **Binding.** A Paddle subscription belongs to the identity whose checkout
+  created it — found by Paddle's transaction id, or by the 256-bit token the
+  API put in the transaction's `custom_data` (stored hashed in
+  `billing_checkouts`). A user id the payload merely claims binds nothing.
+- **Webhook authentication.** Raw body only; `Paddle-Signature` HMAC-SHA256
+  over `ts:body`, constant-time compare, rotation-safe (several `h1`), and a
+  timestamp tolerance (`BILLING_WEBHOOK_TOLERANCE_SECONDS`). Body size is
+  capped (`BILLING_WEBHOOK_MAX_BYTES`), the envelope and subscription are
+  schema-validated, and unsigned or invalid requests are refused before
+  anything is parsed.
+- **Replay and idempotency.** `billing_provider_events (provider, event_id)`
+  records each event once; the ledger entry is keyed `paddle:<event_id>`. A
+  redelivered or replayed event changes nothing.
+- **Order.** `subscriptions.provider_observed_at` holds the newest Paddle
+  observation applied. An older snapshot is `STALE` and ignored, so a late
+  "active" can never revert a newer "past due". All billing writes for one
+  identity are serialized with a transaction-scoped advisory lock.
+- **Normalization.** Paddle statuses map to D11 states in one function
+  (`active`→ACTIVE, `active`+scheduled cancel→CANCELED, `trialing`→TRIALING,
+  `past_due`→PAST_DUE, `canceled`/`paused`→EXPIRED, anything else→INCOMPLETE,
+  which grants nothing). `reconcileProviderSubscription` in `@aegix/billing`
+  turns the snapshot into the same `SubscriptionState` and ledger event
+  vocabulary as the manual state machine, so entitlement resolution is shared
+  and unchanged. A PAST_DUE grace window is anchored to the first failure.
+- **Customer portal.** `POST /v1/billing/portal` looks the Paddle customer up
+  by the session identity and returns a short-lived Paddle portal link.
+- **Cancel / resume** on a Paddle subscription call Paddle
+  (`effective_from: next_billing_period`, or removing the scheduled change)
+  and record Paddle's answer. The lifecycle sweep never renews or expires a
+  processor-managed subscription; Paddle does.
+- **Secrets.** `BILLING_SECRET_KEY` and `BILLING_WEBHOOK_SECRET` come from the
+  environment only, are never logged or returned, and the API refuses to
+  start with a live key in sandbox or the reverse. `BILLING_CLIENT_TOKEN` is
+  public by design and served at runtime, not baked into the web bundle.
+
+Operators can still grant or override plans with `pnpm billing:grant`; a
+manual write replaces the processor binding on that row, and does not change
+anything at Paddle.
 
 Paid plans are granted by an operator:
 
@@ -403,7 +469,16 @@ database — the product runs exactly as it did before D11.
 
 ```text
 ENABLE_BILLING=true            kill switch; false = pre-D11 behaviour
-BILLING_PROVIDER=manual        the only implementation in this baseline
+BILLING_PROVIDER=manual        manual (operator grants) | paddle
+BILLING_ENVIRONMENT=sandbox    paddle: sandbox | production
+BILLING_SECRET_KEY=            paddle: server API key (secret)
+BILLING_WEBHOOK_SECRET=        paddle: webhook destination secret (secret)
+BILLING_CLIENT_TOKEN=          paddle: client-side token (public, test_/live_)
+BILLING_PRICE_PRO=             paddle: price id for Pro
+BILLING_PRICE_TEAM=            paddle: price id for Team (optional)
+BILLING_CHECKOUT_URL=          paddle: https://<web>/app/billing/checkout
+BILLING_WEBHOOK_TOLERANCE_SECONDS=300
+BILLING_WEBHOOK_MAX_BYTES=262144
 BILLING_CURRENCY=USD
 BILLING_TRIAL_DAYS=0           trials are off; a trial cannot convert
                                without a way to charge for what follows
