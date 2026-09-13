@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SubscriptionRow } from "@aegix/database";
-import { decideLifecycleAction } from "./billing.js";
+import { decideLifecycleAction, decideMonitorEntitlement } from "./billing.js";
 
 const now = new Date("2026-09-13T12:00:00.000Z");
 
@@ -90,4 +90,41 @@ test("the event key derives from the boundary, so a replayed sweep converges", (
   const first = decideLifecycleAction(subject, now);
   const later = decideLifecycleAction(subject, new Date("2026-09-13T12:05:00.000Z"));
   assert.equal(first?.boundary, later?.boundary, "the key does not drift with the sweep's clock");
+});
+
+const monitor = (id: string, status: string, day: number) => ({
+  id,
+  status,
+  created_at: `2026-09-${String(day).padStart(2, "0")}T00:00:00.000Z`
+});
+
+test("monitor entitlement: the newest running monitors over the limit pause first", () => {
+  const decision = decideMonitorEntitlement(
+    [monitor("1", "ACTIVE", 1), monitor("2", "DEGRADED", 2), monitor("3", "ACTIVE", 3)],
+    1
+  );
+  assert.deepEqual(decision, { pause: ["2", "3"], resume: [] });
+});
+
+test("monitor entitlement: headroom resumes the oldest entitlement-paused monitors first", () => {
+  const decision = decideMonitorEntitlement(
+    [monitor("1", "ACTIVE", 1), monitor("4", "ENTITLEMENT_PAUSED", 4), monitor("2", "ENTITLEMENT_PAUSED", 2), monitor("3", "ENTITLEMENT_PAUSED", 3)],
+    3
+  );
+  assert.deepEqual(decision, { pause: [], resume: ["2", "3"] });
+});
+
+test("monitor entitlement: a monitor its owner paused is never paused or resumed by the plan", () => {
+  assert.deepEqual(decideMonitorEntitlement([monitor("1", "PAUSED", 1), monitor("2", "ACTIVE", 2)], 0), { pause: ["2"], resume: [] });
+  assert.deepEqual(decideMonitorEntitlement([monitor("1", "PAUSED", 1), monitor("2", "ENTITLEMENT_PAUSED", 2)], 5), { pause: [], resume: ["2"] });
+});
+
+test("monitor entitlement: an identity at its limit is left alone", () => {
+  assert.deepEqual(decideMonitorEntitlement([monitor("1", "ACTIVE", 1), monitor("2", "ENTITLEMENT_PAUSED", 2)], 1), { pause: [], resume: [] });
+});
+
+test("monitor entitlement: the decision does not depend on input order", () => {
+  const monitors = [monitor("1", "ACTIVE", 1), monitor("2", "ACTIVE", 2), monitor("3", "ACTIVE", 3), monitor("4", "ACTIVE", 4)];
+  const reversed = [...monitors].reverse();
+  assert.deepEqual(decideMonitorEntitlement(monitors, 2), decideMonitorEntitlement(reversed, 2));
 });
