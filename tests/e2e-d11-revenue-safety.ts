@@ -185,12 +185,12 @@ async function main(): Promise<void> {
 
     // ---- A replayed settlement must not extend a second period ----
     const [before] = await sql<Array<{ current_period_end: string }>>`
-      select current_period_end from subscriptions where user_id = ${paid.userId}
+      select current_period_end::text as current_period_end from subscriptions where user_id = ${paid.userId}
     `;
     const replay = await runCli(["--invoice", invoice.id, "--mark-paid"], env);
     assert.match(replay, /already settled/);
     const [after] = await sql<Array<{ current_period_end: string }>>`
-      select current_period_end from subscriptions where user_id = ${paid.userId}
+      select current_period_end::text as current_period_end from subscriptions where user_id = ${paid.userId}
     `;
     assert.equal(after?.current_period_end, before?.current_period_end, "a duplicate mark-paid does not extend again");
 
@@ -226,7 +226,8 @@ async function main(): Promise<void> {
     assert.equal(processorSweep.renewed, 1, "a processor-managed subscription still auto-renews");
     assert.equal(processorSweep.expired, 0);
     const [processorRow] = await sql<Array<{ status: string; provider: string; current_period_end: string }>>`
-      select status, provider, current_period_end from subscriptions where user_id = ${processor.userId}
+      select status, provider, current_period_end::text as current_period_end
+      from subscriptions where user_id = ${processor.userId}
     `;
     assert.equal(processorRow?.status, "ACTIVE");
     assert.equal(processorRow?.provider, "stripe", "the sweep must not relabel a processor-managed row");
