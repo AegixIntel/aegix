@@ -36,18 +36,22 @@ invoice arithmetic              deterministic, integer cents
 lifecycle sweep                 renewal, expiry, grace, invoice generation
 HTTP surface                    /v1/billing/*
 operator grant                  pnpm billing:grant
+upgrade requests                /app/billing → operator (V1 provisioning, §6)
 plan & usage UI                 /app/billing
 ```
 
-Deliberately not built:
+Post-launch (intentional V1 scope, not blockers):
 
 ```text
-payment processor integration   architecture.md PR-12: the beta operates
-                                without payment infrastructure. The seam is
-                                `PaymentProvider`; the only implementation is
-                                `manual`.
-self-serve upgrade              refused with PAYMENT_PROVIDER_REQUIRED while
-                                no provider exists — see §6.
+self-service payment processor  hosted checkout, customer billing portal,
+                                payment-provider webhooks and an automated
+                                payment lifecycle. The seam is
+                                `PaymentProvider`; V1 ships `manual` only.
+                                A Paddle implementation is kept for this work
+                                on the deferred PR #5.
+self-serve upgrade              the API refuses it with
+                                PAYMENT_PROVIDER_REQUIRED; the UI offers
+                                "Request upgrade" instead — see §6.
 overage billing                 the arithmetic exists and is tested; the v1
                                 catalog declares no overage rates because
                                 every dimension is a hard cap.
@@ -244,15 +248,40 @@ API enforces is:
 
 So `POST /v1/billing/subscription/change` answers `501
 PAYMENT_PROVIDER_REQUIRED`, while cancel and resume always work. Creating a
-paid subscription nobody paid for would put a falsehood in the ledger.
+paid subscription nobody paid for would put a falsehood in the ledger. The
+Billing UI never calls it.
 
-Paid plans are granted by an operator:
+### V1 subscription provisioning: manual
+
+AEGIX V1 provisions paid plans manually. `BILLING_PROVIDER=manual` is the
+production setting and needs no payment-processor credentials.
+
+```text
+wallet login → /app/billing (Free)
+  → "Request upgrade" on Pro or Team (optional contact: email/Telegram)
+  → POST /v1/billing/upgrade-request       records intent only
+  → AEGIX team arranges and verifies payment
+  → pnpm billing:grant -- --user <uuid> --plan pro
+  → entitlements update; the request is marked FULFILLED
+```
+
+A request never creates or changes a subscription and writes nothing to the
+ledger (`billing_upgrade_requests`, migration 0011; one open request per
+identity, asking again re-targets it). The UI states that the plan is
+activated only after payment is confirmed. The operator grant stays the only
+way a paid plan starts.
+
+Operator commands:
 
 ```bash
+pnpm billing:grant -- --requests
 pnpm billing:grant -- --user <uuid> --plan pro
 pnpm billing:grant -- --user <uuid> --action CANCEL
 pnpm billing:grant -- --user <uuid> --show
 ```
+
+Self-service checkout, a customer billing portal, payment-provider webhooks
+and an automated payment lifecycle are post-launch scope.
 
 The grant is not a database poke. It goes through the same state machine and
 writes the same `billing_events` entry (tagged `grantedBy: operator`) as any
