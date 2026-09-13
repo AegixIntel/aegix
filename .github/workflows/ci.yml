@@ -29,7 +29,7 @@ jobs:
       - run: pnpm lint
       - name: Reject common committed credential formats
         run: |
-          if git grep -qE '(sk_live_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'; then
+          if git grep -qE '(sk_live_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|pdl_(live|sdbx)_apikey_[A-Za-z0-9_]{16,}|pdl_ntfset_[A-Za-z0-9_]{16,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'; then
             echo "Potential committed credential pattern detected; match intentionally withheld"
             exit 1
           fi
@@ -285,6 +285,8 @@ jobs:
       - run: pnpm --filter @aegix/database migrate
       - name: Run D11 E2E
         run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-d11 2>&1 | tee artifacts/e2e-d11.log
+      - name: Run D11 payment processor E2E
+        run: set -o pipefail && pnpm test:e2e-d11-provider 2>&1 | tee -a artifacts/e2e-d11.log
       - name: Upload D11 logs on failure
         if: failure()
         uses: actions/upload-artifact@v6
