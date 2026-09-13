@@ -245,6 +245,57 @@ jobs:
         uses: actions/upload-artifact@v6
         with: { name: e2e-monitor-logs, path: artifacts/e2e-monitor.log, retention-days: 7 }
 
+  e2e-d11:
+    name: E2E D11 billing revenue safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aegix_test_d11
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d aegix_test_d11"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/aegix_test_d11
+      REDIS_URL: redis://localhost:6379
+      AEGIX_ALLOW_TEST_DB_RESET: "true"
+      EMAIL_ENABLED: "false"
+      ENABLE_EMAIL_NOTIFICATIONS: "false"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+        with: { version: 9.15.9 }
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "./packages/**" build
+      - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
+      - run: pnpm --filter @aegix/database migrate
+      - name: Run D11 billing E2E
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          {
+            pnpm test:e2e-d11
+            pnpm test:e2e-d11-revenue-safety
+          } 2>&1 | tee artifacts/e2e-d11.log
+      - name: Upload D11 logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with: { name: e2e-d11-logs, path: artifacts/e2e-d11.log, retention-days: 7 }
+
   docker-images:
     name: Production Docker images
     runs-on: ubuntu-latest
