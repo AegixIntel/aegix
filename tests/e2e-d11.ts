@@ -90,6 +90,8 @@ function operatorStore(repo: ReturnType<typeof createBillingRepo>): BillingStore
 
 async function cleanup(sql: Sql, userIds: string[]): Promise<void> {
   for (const id of userIds) {
+    await sql`delete from privacy_monitors where user_id = ${id}`;
+    await sql`delete from saved_analyses where user_id = ${id}`;
     await sql`delete from invoices where user_id = ${id}`;
     await sql`delete from billing_events where user_id = ${id}`;
     await sql`delete from subscriptions where user_id = ${id}`;
@@ -100,7 +102,13 @@ async function cleanup(sql: Sql, userIds: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   const safe = requireSafeTestDatabaseReset();
-  const config = loadConfig({ ...process.env, MARKETS_DAILY_QUOTA: String(MARKETS_FREE_QUOTA), BILLING_GRACE_DAYS: "7" });
+  // One free monitor (five on pro) so a lapsed plan's monitor pause is visible.
+  const config = loadConfig({
+    ...process.env,
+    MARKETS_DAILY_QUOTA: String(MARKETS_FREE_QUOTA),
+    BILLING_GRACE_DAYS: "7",
+    MAX_ACTIVE_MONITORS_PER_USER: "1"
+  });
   const sql = createDb(safe.databaseUrl);
   const repo = createBillingRepo(sql);
   const catalog = buildPlanCatalog(
@@ -232,6 +240,26 @@ async function main(): Promise<void> {
       ["CANCELLATION_REVOKED", "CANCELLATION_SCHEDULED", "SUBSCRIPTION_CREATED"]
     );
 
+    // ---- Billing state is per identity: another user sees, changes and spends only their own ----
+    const other = await authenticate(app);
+    created.push(other.userId);
+    const otherSub = await app.inject({ url: "/v1/billing/subscription", headers: other.headers });
+    assert.equal(otherSub.json().plan.code, "free", "another identity does not inherit a paid plan");
+    assert.equal(otherSub.json().status, "NONE");
+    assert.deepEqual((await app.inject({ url: "/v1/billing/events", headers: other.headers })).json().events, [], "no foreign ledger entries");
+    const otherCancel = await app.inject({ method: "POST", url: "/v1/billing/subscription/cancel", headers: other.headers, payload: {} });
+    assert.ok(otherCancel.statusCode >= 400, `cancelling without a subscription is refused (${otherCancel.statusCode})`);
+    assert.equal(
+      (await app.inject({ url: "/v1/billing/subscription", headers: paid.headers })).json().status,
+      "ACTIVE",
+      "another identity cannot touch this subscription"
+    );
+    for (let i = 0; i < MARKETS_FREE_QUOTA; i++) {
+      assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: other.headers })).statusCode, 200, `other markets call ${i + 1}`);
+    }
+    assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: other.headers })).statusCode, 429, "quota is not shared with a paid identity");
+    assert.equal((await app.inject({ url: "/v1/billing/subscription" })).statusCode, 401, "billing state requires a session");
+
     // ---- The lifecycle sweep renews an elapsed period and invoices it ----
     const closedStart = new Date(Date.now() - 40 * 86_400_000).toISOString();
     const closedEnd = new Date(Date.now() - 10 * 86_400_000).toISOString();
@@ -258,6 +286,13 @@ async function main(): Promise<void> {
     assert.equal(invoices[0]?.total_cents, 4900);
     assert.equal(invoices[0]?.status, "OPEN", "nothing can be settled without a payment provider");
     assert.equal(invoices[0]?.period_start, closedStart);
+    const invoiceId = invoices[0]?.id;
+    assert.equal((await app.inject({ url: `/v1/billing/invoices/${invoiceId}`, headers: paid.headers })).statusCode, 200);
+    assert.equal(
+      (await app.inject({ url: `/v1/billing/invoices/${invoiceId}`, headers: other.headers })).statusCode,
+      404,
+      "another identity cannot read this invoice"
+    );
 
     // ---- A closed grace window degrades to free without losing the row ----
     await sql`
@@ -286,7 +321,77 @@ async function main(): Promise<void> {
       await degradedApp.close();
     }
 
-    console.log("D11 entitlement enforcement, ledger, lifecycle sweep and invoicing: PASS");
+    // ---- A lapsed plan pauses the monitors it no longer covers, and never deletes them ----
+    const watcher = await authenticate(app);
+    created.push(watcher.userId);
+    const watcherGrant = await applyBillingAction(operatorStore(repo), catalog, {
+      userId: watcher.userId,
+      action: "SUBSCRIBE",
+      planCode: "pro",
+      now: new Date(),
+      graceDays: config.BILLING_GRACE_DAYS
+    });
+    assert.equal(watcherGrant.applied, true);
+
+    const monitorIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const address = base58.encode(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
+      assert.equal((await app.inject({ method: "POST", url: "/v1/me/saved", headers: watcher.headers, payload: { address } })).statusCode, 201);
+      const createdMonitor = await app.inject({ method: "POST", url: "/v1/me/monitors", headers: watcher.headers, payload: { address } });
+      assert.equal(createdMonitor.statusCode, 201, `pro covers monitor ${i + 1}: ${createdMonitor.body}`);
+      monitorIds.push(String(createdMonitor.json().monitor.id));
+      // Distinct creation instants keep the oldest-first order unambiguous.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    // The owner pauses the newest one: the plan must never resume it.
+    const ownerPause = await app.inject({ method: "PATCH", url: `/v1/me/monitors/${monitorIds[3]}`, headers: watcher.headers, payload: { status: "PAUSED" } });
+    assert.equal(ownerPause.statusCode, 200);
+
+    const monitorStatuses = async () =>
+      (await sql<Array<{ status: string }>>`
+        select status from privacy_monitors where user_id = ${watcher.userId} order by created_at asc, id asc
+      `).map((row) => row.status);
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"]);
+
+    // The plan lapses (the state the sweep and resolver both treat as free).
+    await sql`update subscriptions set status = 'EXPIRED' where user_id = ${watcher.userId}`;
+    const lapsedSweep = await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.ok(lapsedSweep.monitorsPaused >= 2, `the sweep paused the uncovered monitors (${lapsedSweep.monitorsPaused})`);
+    assert.deepEqual(
+      await monitorStatuses(),
+      ["ACTIVE", "ENTITLEMENT_PAUSED", "ENTITLEMENT_PAUSED", "PAUSED"],
+      "the oldest monitor keeps running; the newest uncovered ones pause; the owner's pause is untouched"
+    );
+    const [kept] = await sql<Array<{ monitors: string; saved: string }>>`
+      select
+        (select count(*)::text from privacy_monitors where user_id = ${watcher.userId}) as monitors,
+        (select count(*)::text from saved_analyses where user_id = ${watcher.userId}) as saved
+    `;
+    assert.equal(kept?.monitors, "4", "no monitor is deleted when the plan lapses");
+    assert.equal(kept?.saved, "4", "no saved analysis is deleted when the plan lapses");
+
+    // Resuming by hand is held to the free limit, like creating one.
+    const lapsedApp = await buildServer({ config, marketProvider });
+    try {
+      const resumeByHand = await lapsedApp.inject({ method: "PATCH", url: `/v1/me/monitors/${monitorIds[1]}`, headers: watcher.headers, payload: { status: "ACTIVE" } });
+      assert.equal(resumeByHand.statusCode, 429);
+      assert.equal(resumeByHand.json().code, "MONITOR_LIMIT_REACHED");
+      const lapsedList = await lapsedApp.inject({ url: "/v1/me/monitors", headers: watcher.headers });
+      assert.equal(lapsedList.statusCode, 200);
+      assert.equal(lapsedList.json().monitors.length, 4, "paused monitors stay visible to their owner");
+    } finally {
+      await lapsedApp.close();
+    }
+
+    // The plan returns: the sweep resumes the monitors it paused, and only those.
+    await sql`update subscriptions set status = 'ACTIVE' where user_id = ${watcher.userId}`;
+    const restoredSweep = await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.ok(restoredSweep.monitorsResumed >= 2, `the sweep resumed the covered monitors (${restoredSweep.monitorsResumed})`);
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"]);
+    await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"], "a repeated sweep changes nothing");
+
+    console.log("D11 entitlement enforcement, cross-user isolation, ledger, lifecycle sweep, invoicing and monitor entitlement: PASS");
   } finally {
     await app.close();
     await cleanup(sql, created);
