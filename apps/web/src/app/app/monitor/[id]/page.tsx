@@ -67,9 +67,16 @@ export default function MonitorDetailPage() {
     notifyDataQualityDegraded?: boolean;
     cooldownHours?: number;
   } }) {
-    const result = await updateMonitor(monitorId, p);
-    setMonitor(result.monitor);
-    setRules(result.rules);
+    setError(null);
+    try {
+      const result = await updateMonitor(monitorId, p);
+      setMonitor(result.monitor);
+      setRules(result.rules);
+    } catch (err) {
+      // A resume can be refused at the plan's monitor limit
+      // (MONITOR_LIMIT_REACHED); show why instead of failing silently.
+      setError(err instanceof Error ? err.message : "Failed to update monitor");
+    }
   }
 
   async function disable() {
