@@ -145,7 +145,14 @@ export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
   // Request logging is handled by the redacting AEGIX logger below. Fastify's
   // default logger includes the raw query string and can leak API keys/URLs.
-  const app = Fastify({ logger: false, bodyLimit: config.API_BODY_LIMIT_BYTES });
+  // trustProxy as a hop count resolves req.ip from the rightmost untrusted
+  // X-Forwarded-For entry, so a client cannot spoof its IP by sending the
+  // header itself. Without it, req.ip behind nginx is the proxy for everyone.
+  const app = Fastify({
+    logger: false,
+    bodyLimit: config.API_BODY_LIMIT_BYTES,
+    trustProxy: config.TRUST_PROXY_HOPS > 0 ? config.TRUST_PROXY_HOPS : false
+  });
   const logger = createLogger(config, { service: "api" });
 
   // D6-J §65: production error responses never expose stack traces, SQL,
