@@ -1,12 +1,14 @@
 /**
  * Operator plan grant (D11).
  *
- * This baseline ships no payment provider (architecture.md PR-12), so paid
- * plans are granted by an operator. The grant is not a database poke: it
- * goes through the same state machine and writes the same `billing_events`
- * entry as any other transition, so the ledger stays a complete history of
- * how every subscription reached its current state.
+ * AEGIX V1 provisions paid plans manually: an identity requests an upgrade in
+ * the Billing UI, the operator arranges payment, then grants the plan here.
+ * Self-service payment processing is post-launch scope. The grant is not a
+ * database poke: it goes through the same state machine and writes the same
+ * `billing_events` entry as any other transition, so the ledger stays a
+ * complete history of how every subscription reached its current state.
  *
+ *   pnpm billing:grant -- --requests
  *   pnpm billing:grant -- --user <uuid> --plan pro
  *   pnpm billing:grant -- --user <uuid> --action CANCEL
  *   pnpm billing:grant -- --user <uuid> --show
@@ -45,17 +47,19 @@ function usage(message: string): never {
   console.error(`${message}
 
 Usage:
-  --user <uuid>          required, the profile id to act on
+  --requests             list open upgrade requests, change nothing
+  --user <uuid>          required otherwise, the profile id to act on
   --plan <code>          plan for SUBSCRIBE / CHANGE_PLAN (free is not a subscription)
   --action <ACTION>      one of ${GRANTABLE.join(", ")}; defaults to SUBSCRIBE/CHANGE_PLAN
-  --show                 print the current subscription and recent ledger, change nothing`);
+  --show                 print the current subscription, open request and recent ledger, change nothing`);
   process.exit(1);
 }
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const userId = arg("user");
-  if (!userId) usage("--user is required");
+  const listRequests = process.argv.includes("--requests");
+  const userArg = arg("user");
+  if (!listRequests && !userArg) usage("--user is required");
 
   const sql = createDb(config.DATABASE_URL);
   const repo = createBillingRepo(sql);
@@ -74,10 +78,22 @@ async function main(): Promise<void> {
   );
 
   try {
+    if (listRequests) {
+      const open = await repo.listOpenUpgradeRequests(200);
+      console.log(`open upgrade requests (${open.length}):`);
+      for (const request of open) {
+        console.log(`  ${request.updated_at}  user ${request.user_id}  plan ${request.plan_code}  contact ${request.contact ?? "-"}`);
+      }
+      return;
+    }
+
+    const userId = userArg as string;
     const current = await repo.getSubscription(userId);
 
     if (process.argv.includes("--show")) {
       console.log("subscription:", current ?? "(none — free plan)");
+      const request = await repo.getOpenUpgradeRequest(userId);
+      console.log("open upgrade request:", request ? `${request.plan_code} since ${request.updated_at}` : "(none)");
       const events = await repo.listEvents(userId, 10);
       console.log(`ledger (${events.length} most recent):`);
       for (const event of events) {
@@ -157,6 +173,10 @@ async function main(): Promise<void> {
     console.log(`${result.event.type}: ${result.event.fromPlan} → ${result.event.toPlan} (${result.subscription.status})`);
     console.log(`period ${result.subscription.currentPeriodStart} .. ${result.subscription.currentPeriodEnd}`);
     if (!result.applied) console.log("no change: this exact transition was already in the ledger");
+    // A granted plan answers the identity's open request.
+    if (result.applied && (action === "SUBSCRIBE" || action === "CHANGE_PLAN")) {
+      if ((await repo.fulfillUpgradeRequest(userId)) > 0) console.log("upgrade request fulfilled");
+    }
   } finally {
     await sql.end();
   }

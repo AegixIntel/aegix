@@ -1034,6 +1034,8 @@ export interface BillingSubscription {
   gracePeriodEnd: string | null;
   trialEnd: string | null;
   selfServe: boolean;
+  /** The identity's open request for a paid plan, awaiting manual activation. */
+  upgradeRequest: { plan: PlanCode; status: "OPEN"; requestedAt: string } | null;
   engineVersion: string;
 }
 
@@ -1102,4 +1104,13 @@ export function cancelSubscription(immediate = false): Promise<{ status: string;
 
 export function resumeSubscription(): Promise<{ status: string; cancelAtPeriodEnd: boolean }> {
   return billingRequest("/v1/billing/subscription/resume", { method: "POST" });
+}
+
+/** Asks the AEGIX team for a paid plan. Grants nothing until an operator activates it. */
+export function requestUpgrade(plan: PlanCode, contact: string): Promise<{ request: { plan: PlanCode; status: "OPEN"; requestedAt: string } }> {
+  const trimmed = contact.trim();
+  return billingRequest("/v1/billing/upgrade-request", {
+    method: "POST",
+    body: JSON.stringify(trimmed ? { plan, contact: trimmed } : { plan })
+  });
 }

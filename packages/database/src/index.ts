@@ -162,5 +162,7 @@ export {
   type SubscriptionRow,
   type SubscriptionStatusValue,
   type SubscriptionWrite,
+  type UpgradeRequestRow,
+  type UpgradeRequestStatus,
   type UsageTotal
 } from "./repositories/billing.js";
