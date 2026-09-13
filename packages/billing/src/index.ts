@@ -19,6 +19,7 @@ export {
   type UsageSummary
 } from "./metering.js";
 export { computeInvoice } from "./invoice.js";
+export { paidRenewalAction } from "./settlement.js";
 export { createManualProvider, type CheckoutRequest, type CheckoutSession, type PaymentProvider } from "./provider.js";
 export {
   applyBillingAction,

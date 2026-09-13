@@ -31,6 +31,7 @@
     "test:e2e-d9": "node --import tsx tests/e2e-d9.ts",
     "test:e2e-d10": "node --import tsx tests/e2e-d10.ts",
     "test:e2e-d11": "node --import tsx tests/e2e-d11.ts",
+    "test:e2e-d11-revenue-safety": "node --import tsx tests/e2e-d11-revenue-safety.ts",
     "test:migrations": "node --import tsx tests/migration-test.ts",
     "test:web-routing": "node --import tsx tests/web-routing-smoke.ts",
     "test:web-restored": "node --import tsx tests/web-restored-smoke.ts",

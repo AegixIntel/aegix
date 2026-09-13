@@ -227,18 +227,23 @@ So `POST /v1/billing/subscription/change` answers `501
 PAYMENT_PROVIDER_REQUIRED`, while cancel and resume always work. Creating a
 paid subscription nobody paid for would put a falsehood in the ledger.
 
-Paid plans are granted by an operator:
+Paid plans are granted by an operator, and — because the `manual` provider has
+no processor to collect the next period — renewed only when the operator
+confirms the invoice payment:
 
 ```bash
 pnpm billing:grant -- --user <uuid> --plan pro
 pnpm billing:grant -- --user <uuid> --action CANCEL
 pnpm billing:grant -- --user <uuid> --show
+pnpm billing:grant -- --invoice <id> --mark-paid
 ```
 
-The grant is not a database poke. It goes through the same state machine and
-writes the same `billing_events` entry (tagged `grantedBy: operator`) as any
-other transition, so the ledger stays a complete history of how every
-subscription reached its current state.
+The grant and the settlement are not database pokes. Both go through the same
+state machine and write the same `billing_events` entry (tagged `grantedBy:
+operator`, and `invoiceId` for a settlement) as any other transition, so the
+ledger stays a complete history of how every subscription reached its current
+state. `--mark-paid` is idempotent: the invoice id is the ledger's event key,
+so a replayed command settles once and extends exactly one period.
 
 ---
 
@@ -279,15 +284,19 @@ persists both in one transaction.
 
 ---
 
-## 8. Schema (migration 0010)
+## 8. Schema (migrations 0010, 0011)
 
 ```text
-plans            catalog snapshot; seeded by the migration, upserted by the
-                 API on first billing request
-subscriptions    one row per identity (unique user_id); current state only
-billing_events   append-only ledger, unique on event_key
-invoices         one per identity per period (unique user_id, period_start)
-usage_records    unchanged from 0001; gains (user_id, usage_type, created_at)
+plans               catalog snapshot; seeded by the migration, upserted by the
+                    API on first billing request
+subscriptions       one row per identity (unique user_id); current state only
+billing_events      append-only ledger, unique on event_key
+invoices            one per identity per period (unique user_id, period_start);
+                    OPEN → PAID via markInvoicePaid, paid_at records settlement
+usage_records       unchanged from 0001; gains (user_id, usage_type, created_at)
+privacy_monitors    gains status_reason (0011), so a plan-limit pause
+                    (ENTITLEMENT_PAUSED) is distinguishable from a pause the
+                    user chose and can be reversed without touching either
 ```
 
 `billing_events.event_key` is the idempotency anchor, the same pattern
@@ -333,8 +342,17 @@ disagreement between two runs is a bug rather than a judgement call. Amounts
 are integer cents throughout; no float touches a chargeable amount.
 
 Under the v1 catalog an invoice is exactly one subscription line. Invoices
-with a balance are raised `OPEN` and stay `OPEN` — nothing can be settled
-without a payment provider.
+with a balance are raised `OPEN`. With the `manual` provider an invoice is
+settled by an operator confirming payment (`--mark-paid`), which records
+`paid_at` and extends the subscription exactly one billing period through the
+same state machine; a replayed settlement is absorbed by the ledger's event
+key. Invoices are raised for a closed period whether it renewed or ended
+unpaid, so a lapsed period is still collectible.
+
+A plan limit is not a data-retention policy: when an identity drops to free,
+its monitors beyond the free level are **paused** (`status_reason =
+ENTITLEMENT_PAUSED`) and restored when a paid period returns — never deleted.
+A monitor the user paused themselves is left untouched.
 
 ---
 
@@ -343,6 +361,19 @@ without a payment provider.
 `runBillingLifecycle` runs on a 5-minute interval in the worker, guarded by
 `ENABLE_BILLING`. Subscriptions age on wall-clock boundaries, not on
 requests.
+
+Time is not payment. A **manually provisioned** subscription whose period
+elapses ends unpaid (`EXPIRE`, reason `PERIOD_ELAPSED_UNPAID`) — the sweep
+never advances a manual period on wall-clock alone — and the closed period is
+invoiced `OPEN` so an operator can collect it. A **processor-managed** row
+(`provider <> 'manual'`) still renews on the provider's schedule; removing the
+manual path leaves that untouched. A scheduled cancellation ends through
+`RENEW` for every provider.
+
+After an applied transition the sweep reconciles the identity's monitors with
+its resolved entitlement: uncovered monitors are paused, and monitors paused
+by an earlier lapse are restored. This is idempotent, so running it on every
+transition is safe.
 
 It is safe to run concurrently on several replicas: every transition carries
 a deterministic event key derived from the boundary being crossed
@@ -401,15 +432,23 @@ cost (§82) stays a one-knob operation.
 ## 13. Tests
 
 ```text
-packages/billing        66 unit tests — catalog, entitlements, lifecycle,
-                        metering, rollup, invoice, apply
+packages/billing        76 unit tests — catalog, entitlements, lifecycle,
+                        metering, rollup, invoice, apply, settlement
 apps/api                12 tests — baseline equivalence, caching, degraded
                         resolution, store adapter, route surface
 tests/e2e-d11.ts        entitlement enforcement against a live 429, operator
-                        grant, ledger ordering, cancel/resume, lifecycle
-                        sweep, invoice generation, grace degradation
+                        grant, ledger ordering, cancel/resume, manual period
+                        ending unpaid (no renewal) with its invoice, grace
+                        degradation
+tests/e2e-d11-revenue-  the revenue-safety flow through the real CLI:
+safety.ts               grant → unpaid period expires → free → uncovered
+                        monitors paused (data retained) → --mark-paid → PAID,
+                        one period extension, entitlements and monitors
+                        restored → duplicate mark-paid is a no-op → invalid
+                        invoices refused → processor-managed row still renews
 tests/migration-test.ts 0010 seeds 3 plans, creates no subscription for an
-                        existing user, leaves profiles.plan on free
+                        existing user, leaves profiles.plan on free; 0011 adds
+                        the monitor entitlement-pause reason
 tests/web-restored-smoke.ts  /app/billing renders in the production build
 ```
 
