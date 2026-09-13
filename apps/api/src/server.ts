@@ -43,10 +43,11 @@ import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
 import { createOpenAICompatibleProvider } from "@aegix/ai";
-import { createManualProvider, type FeatureKey } from "@aegix/billing";
+import type { FeatureKey } from "@aegix/billing";
 import { createBillingRepo } from "@aegix/database";
 import { createEntitlementService } from "./entitlements.js";
 import { registerBilling } from "./billing.js";
+import { paymentProviderFromConfig } from "./billing-paddle.js";
 import { registerAskAegix } from "./ask-aegix.js";
 import { claimDailyUsage } from "./metered-quota.js";
 import { createCoinPaprikaProvider, createMarketService, type MarketDataProvider } from "@aegix/markets";
@@ -69,6 +70,8 @@ export interface ApiDeps {
   config: AppConfig;
   provider?: BlockchainProvider;
   marketProvider?: MarketDataProvider;
+  /** Outbound HTTP for the payment processor; tests substitute a fake processor. */
+  billingFetch?: typeof fetch;
 }
 
 const ENGINE_SCOPE = "full";
@@ -215,7 +218,7 @@ export async function buildServer(deps: ApiDeps) {
     if (await entitlements.canUseFeature(userId, feature)) return null;
     return reply.code(403).send({ code: "FEATURE_NOT_IN_PLAN", message: "Your plan does not include this feature", requestId: randomUUID() });
   };
-  const paymentProvider = createManualProvider();
+  const paymentProvider = paymentProviderFromConfig(config, deps.billingFetch);
   const developerAuth = createDeveloperAuth({
     sql,
     config,

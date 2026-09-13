@@ -1034,6 +1034,8 @@ export interface BillingSubscription {
   gracePeriodEnd: string | null;
   trialEnd: string | null;
   selfServe: boolean;
+  /** `manual`, a payment processor name, or null when there is no subscription. */
+  managedBy: string | null;
   engineVersion: string;
 }
 
@@ -1102,4 +1104,18 @@ export function cancelSubscription(immediate = false): Promise<{ status: string;
 
 export function resumeSubscription(): Promise<{ status: string; cancelAtPeriodEnd: boolean }> {
   return billingRequest("/v1/billing/subscription/resume", { method: "POST" });
+}
+
+/** Starts a hosted checkout. The plan is the only thing the browser chooses. */
+export function startCheckout(plan: PlanCode): Promise<{ provider: string; url: string; reference: string }> {
+  return billingRequest("/v1/billing/checkout", { method: "POST", body: JSON.stringify({ plan }) });
+}
+
+/** Browser-safe settings for the payment processor's checkout script. */
+export function getCheckoutClient(): Promise<{ provider: string; environment: "sandbox" | "production"; token: string }> {
+  return billingRequest("/v1/billing/checkout/client");
+}
+
+export function openBillingPortal(): Promise<{ url: string }> {
+  return billingRequest("/v1/billing/portal", { method: "POST", body: "{}" });
 }

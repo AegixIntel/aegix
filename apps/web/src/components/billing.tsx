@@ -7,11 +7,14 @@ import {
   getBillingPlans,
   getBillingSubscription,
   getBillingUsage,
+  openBillingPortal,
   resumeSubscription,
+  startCheckout,
   type BillingInvoice,
   type BillingPlansResponse,
   type BillingSubscription,
-  type BillingUsage
+  type BillingUsage,
+  type PlanCode
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth-guard";
 
@@ -79,6 +82,45 @@ export default function Billing() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Coming back from checkout proves nothing by itself: the plan changes only
+  // when the payment processor confirms payment to the API. Until then this
+  // page keeps asking.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("checkout") !== "complete") return;
+    setNotice("Payment submitted. Your plan changes as soon as the payment processor confirms it — this page checks automatically.");
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      try {
+        const sub = await getBillingSubscription();
+        if (sub.status !== "NONE" && sub.status !== "EXPIRED") {
+          window.clearInterval(timer);
+          setNotice("Payment confirmed. Your plan is active.");
+          void load();
+          return;
+        }
+      } catch {
+        // A transient failure just waits for the next attempt.
+      }
+      if (attempts >= 20) window.clearInterval(timer);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  /** Leaves for a processor-hosted page (checkout or portal). */
+  async function redirect(target: () => Promise<{ url: string }>) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { url } = await target();
+      window.location.assign(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The payment page is unavailable");
+      setBusy(false);
+    }
+  }
 
   async function act(action: () => Promise<unknown>, message: string) {
     setBusy(true);
@@ -174,12 +216,26 @@ export default function Billing() {
                 Cancel at period end
               </button>
             ) : null}
+            {subscription.managedBy && subscription.managedBy !== "manual" ? (
+              <button
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-200"
+                disabled={busy}
+                onClick={() => void requireAuth(() => redirect(openBillingPortal))}
+              >
+                Manage billing
+              </button>
+            ) : null}
           </div>
 
           {plans && !plans.selfServe ? (
             <p className="mt-4 text-xs text-slate-500">
               Paid plans are not self-serve on this deployment: there is no payment provider configured yet, so
               upgrades are arranged with the AEGIX team. Cancelling never requires one.
+            </p>
+          ) : null}
+          {plans?.selfServe ? (
+            <p className="mt-4 text-xs text-slate-500">
+              Payments, invoices and sales tax are handled by our payment processor. AEGIX never sees your card details.
             </p>
           ) : null}
         </section>
@@ -208,6 +264,17 @@ export default function Billing() {
                 </ul>
                 {plan.code === enforced?.code ? (
                   <p className="mt-3 text-xs uppercase tracking-wide text-accent">Current</p>
+                ) : null}
+                {plans.selfServe &&
+                plan.priceCents > 0 &&
+                (!subscription || subscription.status === "NONE" || subscription.status === "EXPIRED") ? (
+                  <button
+                    className="btn-primary mt-4 w-full px-4 py-2 text-sm"
+                    disabled={busy}
+                    onClick={() => void requireAuth(() => redirect(() => startCheckout(plan.code as PlanCode)))}
+                  >
+                    Upgrade to {plan.name}
+                  </button>
                 ) : null}
               </div>
             ))}
