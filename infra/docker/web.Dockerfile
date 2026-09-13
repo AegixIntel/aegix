@@ -39,6 +39,7 @@ ENV API_INTERNAL_URL=$API_INTERNAL_URL
 COPY tsconfig.base.json ./
 COPY packages/types packages/types
 COPY packages/config packages/config
+COPY packages/markets packages/markets
 COPY apps/web apps/web
 RUN pnpm --filter @aegix/web... build
 
