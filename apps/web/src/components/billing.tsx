@@ -7,11 +7,13 @@ import {
   getBillingPlans,
   getBillingSubscription,
   getBillingUsage,
+  requestUpgrade,
   resumeSubscription,
   type BillingInvoice,
   type BillingPlansResponse,
   type BillingSubscription,
-  type BillingUsage
+  type BillingUsage,
+  type PlanCode
 } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth-guard";
 
@@ -56,6 +58,8 @@ export default function Billing() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [requesting, setRequesting] = useState<PlanCode | null>(null);
+  const [contact, setContact] = useState("");
   const { requireAuth } = useRequireAuth();
 
   const load = useCallback(async () => {
@@ -97,6 +101,13 @@ export default function Billing() {
 
   const currency = plans?.currency ?? "USD";
   const enforced = subscription?.plan;
+  const liveTier =
+    subscription && subscription.status !== "NONE" && subscription.status !== "EXPIRED"
+      ? subscription.subscribedPlan?.tier ?? 0
+      : 0;
+  const requestedPlan = subscription?.upgradeRequest
+    ? plans?.plans.find((p) => p.code === subscription.upgradeRequest?.plan)
+    : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -176,10 +187,19 @@ export default function Billing() {
             ) : null}
           </div>
 
+          {subscription.upgradeRequest ? (
+            <p className="mt-4 text-sm text-slate-300">
+              Upgrade to {requestedPlan?.name ?? subscription.upgradeRequest.plan} requested on{" "}
+              {new Date(subscription.upgradeRequest.requestedAt).toLocaleDateString()}. It is pending manual activation by
+              the AEGIX team; your current limits apply until then.
+            </p>
+          ) : null}
+
           {plans && !plans.selfServe ? (
             <p className="mt-4 text-xs text-slate-500">
-              Paid plans are not self-serve on this deployment: there is no payment provider configured yet, so
-              upgrades are arranged with the AEGIX team. Cancelling never requires one.
+              Paid plans are provisioned manually for now. Request an upgrade on the plan you want and the AEGIX team
+              will get in touch to arrange payment; the plan is activated once payment is confirmed. Cancelling never
+              needs a request.
             </p>
           ) : null}
         </section>
@@ -208,6 +228,60 @@ export default function Billing() {
                 </ul>
                 {plan.code === enforced?.code ? (
                   <p className="mt-3 text-xs uppercase tracking-wide text-accent">Current</p>
+                ) : null}
+                {!plans.selfServe && plan.priceCents > 0 && plan.tier > liveTier ? (
+                  subscription?.upgradeRequest?.plan === plan.code ? (
+                    <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">Upgrade requested</p>
+                  ) : requesting === plan.code ? (
+                    <form
+                      className="mt-4 space-y-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void requireAuth(async () => {
+                          await act(
+                            () => requestUpgrade(plan.code, contact),
+                            `Upgrade request sent for ${plan.name}. Your plan stays as it is until the AEGIX team confirms payment and activates it.`
+                          );
+                          setRequesting(null);
+                        });
+                      }}
+                    >
+                      <label htmlFor={`contact-${plan.code}`} className="block text-xs text-muted-foreground">
+                        How should we reach you? Email or Telegram (optional)
+                      </label>
+                      <input
+                        id={`contact-${plan.code}`}
+                        className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm text-marble"
+                        maxLength={200}
+                        value={contact}
+                        onChange={(event) => setContact(event.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <button type="submit" className="btn-primary flex-1 px-3 py-2 text-sm" disabled={busy}>
+                          Send request
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300"
+                          onClick={() => setRequesting(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      className="btn-primary mt-4 w-full px-4 py-2 text-sm"
+                      disabled={busy}
+                      onClick={() =>
+                        void requireAuth(async () => {
+                          setRequesting(plan.code as PlanCode);
+                        })
+                      }
+                    >
+                      Request upgrade
+                    </button>
+                  )
                 ) : null}
               </div>
             ))}

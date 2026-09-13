@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
 import { createDb, createBillingRepo, type Sql } from "@aegix/database";
@@ -90,6 +91,7 @@ function operatorStore(repo: ReturnType<typeof createBillingRepo>): BillingStore
 
 async function cleanup(sql: Sql, userIds: string[]): Promise<void> {
   for (const id of userIds) {
+    await sql`delete from billing_upgrade_requests where user_id = ${id}`;
     await sql`delete from privacy_monitors where user_id = ${id}`;
     await sql`delete from saved_analyses where user_id = ${id}`;
     await sql`delete from invoices where user_id = ${id}`;
@@ -177,7 +179,7 @@ async function main(): Promise<void> {
     }
     assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode, 429);
 
-    // ---- An upgrade is refused: no payment provider in this baseline ----
+    // ---- Self-serve upgrade is refused: V1 has no payment processor ----
     const upgrade = await app.inject({
       method: "POST",
       url: "/v1/billing/subscription/change",
@@ -186,6 +188,64 @@ async function main(): Promise<void> {
     });
     assert.equal(upgrade.statusCode, 501);
     assert.equal(upgrade.json().code, "PAYMENT_PROVIDER_REQUIRED");
+
+    // ---- V1 manual provisioning: a request records intent and grants nothing ----
+    assert.equal((await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", payload: { plan: "pro" } })).statusCode, 401);
+    assert.equal(
+      (await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "free" } })).statusCode,
+      400,
+      "the free plan is not something to request"
+    );
+    const requested = await app.inject({
+      method: "POST",
+      url: "/v1/billing/upgrade-request",
+      headers: free.headers,
+      payload: { plan: "pro", contact: "  @aegix-e2e  " }
+    });
+    assert.equal(requested.statusCode, 201, requested.body);
+    assert.equal(requested.json().request.plan, "pro");
+    const retargeted = await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "team" } });
+    assert.equal(retargeted.statusCode, 201);
+    const [openRequests] = await sql<Array<{ count: string; plan: string | null; contact: string | null }>>`
+      select count(*)::text as count, max(plan_code) as plan, max(contact) as contact
+      from billing_upgrade_requests where user_id = ${free.userId} and status = 'OPEN'
+    `;
+    assert.equal(openRequests?.count, "1", "one open request per identity");
+    assert.equal(openRequests?.plan, "team", "asking again re-targets the open request");
+    assert.equal(openRequests?.contact, "@aegix-e2e", "a later request without a contact keeps the earlier one");
+    const pending = await app.inject({ url: "/v1/billing/subscription", headers: free.headers });
+    assert.equal(pending.json().plan.code, "free", "requesting an upgrade grants nothing");
+    assert.equal(pending.json().status, "NONE");
+    assert.equal(pending.json().upgradeRequest.plan, "team");
+    assert.deepEqual((await app.inject({ url: "/v1/billing/events", headers: free.headers })).json().events, [], "a request writes no ledger entry");
+    assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode, 429, "free limits still apply while pending");
+
+    // ---- The operator grants it with the supported CLI; the request closes ----
+    const cli = execFileSync(process.execPath, ["--import", "tsx", "scripts/grant-plan.ts", "--user", free.userId, "--plan", "team"], {
+      env: { ...process.env, DATABASE_URL: safe.databaseUrl },
+      encoding: "utf8"
+    });
+    assert.match(cli, /SUBSCRIPTION_CREATED: free → team \(ACTIVE\)/);
+    assert.match(cli, /upgrade request fulfilled/);
+    // A fresh server: this identity's plan is cached on the first one, and an
+    // out-of-band grant is otherwise visible only after the 30s cache TTL.
+    const grantedApp = await buildServer({ config, marketProvider });
+    try {
+      const teamSub = await grantedApp.inject({ url: "/v1/billing/subscription", headers: free.headers });
+      assert.equal(teamSub.json().plan.code, "team");
+      assert.equal(teamSub.json().status, "ACTIVE");
+      assert.equal(teamSub.json().upgradeRequest, null, "a granted plan closes the request");
+      assert.equal(teamSub.json().entitlements["markets.daily"], MARKETS_FREE_QUOTA * 40);
+      assert.equal(
+        (await grantedApp.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode,
+        200,
+        "the granted plan lifts the quota the request could not"
+      );
+      const onPlan = await grantedApp.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "pro" } });
+      assert.equal(onPlan.statusCode, 409, "a plan already covered is not requested");
+    } finally {
+      await grantedApp.close();
+    }
 
     // ---- An operator grant raises the same enforcement point ----
     // Granted before the first request so the entitlement cache is cold; a

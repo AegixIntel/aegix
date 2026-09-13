@@ -185,9 +185,14 @@ export function registerBilling(deps: BillingDeps): void {
   app.get("/v1/billing/subscription", { config: rate }, async (req, reply) => {
     const user = await admit(req, reply);
     if (!user) return;
-    const [resolved, row] = await Promise.all([entitlements.resolve(user.id), repo.getSubscription(user.id)]);
+    const [resolved, row, request] = await Promise.all([
+      entitlements.resolve(user.id),
+      repo.getSubscription(user.id),
+      repo.getOpenUpgradeRequest(user.id)
+    ]);
     return {
       plan: planView(resolved.planCode),
+      upgradeRequest: request ? { plan: request.plan_code, status: request.status, requestedAt: request.updated_at } : null,
       subscribedPlan: planView(resolved.subscribedPlanCode),
       status: resolved.status,
       degraded: resolved.degraded,
@@ -280,6 +285,44 @@ export function registerBilling(deps: BillingDeps): void {
     } catch (error) {
       return failed(error, reply, requestId);
     }
+  });
+
+  // V1 manual provisioning: the identity asks for a paid plan, an operator
+  // arranges payment and grants it (`pnpm billing:grant`). The request is
+  // intent only — it never creates or changes a subscription.
+  app.post<{ Body: { plan: string; contact?: string } }>("/v1/billing/upgrade-request", {
+    config: { rateLimit: { max: 6, timeWindow: "1 minute" } },
+    schema: {
+      body: {
+        type: "object",
+        additionalProperties: false,
+        required: ["plan"],
+        properties: {
+          plan: { type: "string", minLength: 2, maxLength: 32 },
+          contact: { type: "string", maxLength: 200 }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    const user = await admit(req, reply);
+    if (!user) return;
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? randomUUID();
+    const plan = isPlanCode(req.body.plan) ? findPlan(entitlements.catalog, req.body.plan) : undefined;
+    if (!plan || plan.priceCents <= 0 || plan.status !== "ACTIVE") {
+      return reply.code(400).send({ code: "UNKNOWN_PLAN", message: "That plan cannot be requested", requestId });
+    }
+    const current = await repo.getSubscription(user.id);
+    const currentTier = current && current.status !== "EXPIRED" ? findPlan(entitlements.catalog, current.plan_code as PlanCode)?.tier ?? 0 : 0;
+    if (plan.tier <= currentTier) {
+      return reply.code(409).send({ code: "ALREADY_ON_PLAN", message: "Your current plan already includes this plan", requestId });
+    }
+    const contact = req.body.contact?.trim() || null;
+    const request = await repo.requestUpgrade(user.id, plan.code, contact);
+    // The contact detail stays out of the log.
+    logger.info("billing upgrade requested", { requestId, plan: plan.code });
+    return reply.code(201).send({
+      request: { plan: request.plan_code, status: request.status, requestedAt: request.updated_at }
+    });
   });
 
   app.post<{ Body: { immediate?: boolean } }>("/v1/billing/subscription/cancel", {
