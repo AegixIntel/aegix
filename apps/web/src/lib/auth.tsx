@@ -103,12 +103,19 @@ async function verifySignature(input: {
   return body.data;
 }
 
-async function fetchMe(token: string): Promise<AuthUser | null> {
-  const res = await fetch(`${API_BASE_URL}/v1/auth/me`, { headers: { authorization: `Bearer ${token}` } });
-  if (res.status === 401) return null;
-  if (!res.ok) return null;
-  const body = (await res.json()) as { data: AuthUser };
-  return body.data;
+/** `null` means the session is invalid (401). `undefined` means the API could
+ *  not answer — a rate limit, a 5xx or the network — which says nothing about
+ *  the session and must not sign the user out. */
+async function fetchMe(token: string): Promise<AuthUser | null | undefined> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/v1/auth/me`, { headers: { authorization: `Bearer ${token}` } });
+    if (res.status === 401) return null;
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { data: AuthUser };
+    return body.data;
+  } catch {
+    return undefined;
+  }
 }
 
 export function useAegixAuth(): AuthState {
@@ -127,10 +134,16 @@ export function useAegixAuth(): AuthState {
         if (!cancelled) setReady(true);
         return;
       }
-      const me = await fetchMe(token);
+      let me = await fetchMe(token);
+      if (me === undefined) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        me = await fetchMe(token);
+      }
       if (!cancelled) {
-        if (!me) clearSessionToken();
-        setUser(me);
+        // Only an invalid session clears the stored token; a transient failure
+        // keeps it so the next page load restores the session.
+        if (me === null) clearSessionToken();
+        setUser(me ?? null);
         setReady(true);
       }
     })();

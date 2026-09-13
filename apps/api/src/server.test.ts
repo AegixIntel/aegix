@@ -3,13 +3,48 @@ import { test } from "node:test";
 import { buildServer } from "./server.js";
 import { loadConfig } from "@aegix/config";
 
-function testConfig() {
+function testConfig(overrides: Record<string, string> = {}) {
   return loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: "postgres://postgres:postgres@localhost:5432/aegix_test",
-    REDIS_URL: "redis://localhost:6379"
+    REDIS_URL: "redis://localhost:6379",
+    ...overrides
   });
 }
+
+// ---- client IP behind a reverse proxy ----
+// Rate limits, per-IP admission and the anonymous quota all key on req.ip.
+
+function remaining(res: { headers: Record<string, unknown> }): string {
+  return String(res.headers["x-ratelimit-remaining"]);
+}
+
+test("behind a trusted proxy hop, each client gets its own rate-limit bucket", async () => {
+  const app = await buildServer({ config: testConfig({ TRUST_PROXY_HOPS: "1" }) });
+  const a = await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "203.0.113.1" } });
+  const b = await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "203.0.113.2" } });
+  assert.equal(remaining(a), "119");
+  assert.equal(remaining(b), "119");
+  await app.close();
+});
+
+test("a client cannot spoof its IP by sending X-Forwarded-For through the proxy", async () => {
+  const app = await buildServer({ config: testConfig({ TRUST_PROXY_HOPS: "1" }) });
+  await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "203.0.113.1" } });
+  // nginx appends the real client after whatever the client sent.
+  const spoofed = await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "198.51.100.9, 203.0.113.1" } });
+  assert.equal(remaining(spoofed), "118");
+  await app.close();
+});
+
+test("without trusted hops, X-Forwarded-For is ignored and the socket address keys limits", async () => {
+  const app = await buildServer({ config: testConfig() });
+  const a = await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "203.0.113.1" } });
+  const b = await app.inject({ method: "GET", url: "/health/live", headers: { "x-forwarded-for": "203.0.113.2" } });
+  assert.equal(remaining(a), "119");
+  assert.equal(remaining(b), "118");
+  await app.close();
+});
 
 test("health endpoints respond", async () => {
   const app = await buildServer({ config: testConfig() });

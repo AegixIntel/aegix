@@ -260,6 +260,12 @@ const envSchema = z.object({
    *  payloads (labels/notes are far smaller). */
   API_BODY_LIMIT_BYTES: z.coerce.number().int().positive().default(65536),
 
+  /** Reverse-proxy hops in front of the API whose X-Forwarded-For entries are
+   *  trusted for the client IP (global rate limit, per-IP admission, anonymous
+   *  quota). 0 uses the socket address. Behind the production nginx proxy this
+   *  must be 1, or every visitor shares the proxy's IP and one set of limits. */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+
   CORS_ORIGIN: z.string().default("http://localhost:3000")
 });
 
