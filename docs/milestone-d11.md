@@ -207,6 +207,25 @@ webhook endpoints per user were previously unbounded, and are now capped at
 already over the cap keeps every endpoint it has; only creating another is
 refused, with `WEBHOOK_LIMIT_REACHED`.
 
+Monitors are held to their limit continuously, because a running monitor
+keeps consuming checks. The lifecycle sweep (§10) compares each identity's
+running monitors (`ACTIVE`, `DEGRADED`) with `monitors.active` under its
+enforced plan. When the plan no longer covers them, the newest move to
+`ENTITLEMENT_PAUSED`; the scheduler only checks `ACTIVE` monitors, so they
+stop consuming checks. When the plan covers them again, the oldest paused
+ones return to `ACTIVE`. Nothing is deleted, and a monitor its owner paused
+(`PAUSED`) is never touched. Resuming a monitor by hand
+(`PATCH /v1/me/monitors/:id`) is checked against the limit exactly like
+creating one, with `MONITOR_LIMIT_REACHED`.
+
+Surfaces without a quota — wallet context, saved analyses, saved
+comparisons — ask the same layer whether the plan includes them:
+`canUseFeature()`, backed by the feature registry in
+`packages/billing/src/features.ts`, which maps every product feature to the
+entitlement that bounds it, or to none. Every v1 plan includes every feature,
+so those checks refuse nothing today; a plan that excludes one would answer
+`403 FEATURE_NOT_IN_PLAN`.
+
 ---
 
 ## 6. Payment provider seam
