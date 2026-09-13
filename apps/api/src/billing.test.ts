@@ -70,6 +70,12 @@ function fakeRepo(overrides: Partial<BillingRepo> = {}): BillingRepo {
     async getInvoice() {
       return null;
     },
+    async getInvoiceById() {
+      return null;
+    },
+    async markInvoicePaid() {
+      return false;
+    },
     ...overrides
   };
 }
@@ -243,7 +249,9 @@ test("the store adapter records the transition and reports idempotency", async (
       detail: {}
     },
     eventKey: "u1:SUBSCRIPTION_CREATED:2026-09-01T00:00:00.000Z",
-    profilePlan: "pro"
+    profilePlan: "pro",
+    provider: "manual",
+    providerRef: null
   });
   assert.equal(result, false, "a replayed event reports not-applied");
   assert.equal((applied[0] as { event: { fromStatus: string | null } }).event.fromStatus, null, "NONE is stored as null");

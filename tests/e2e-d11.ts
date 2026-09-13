@@ -232,7 +232,7 @@ async function main(): Promise<void> {
       ["CANCELLATION_REVOKED", "CANCELLATION_SCHEDULED", "SUBSCRIPTION_CREATED"]
     );
 
-    // ---- The lifecycle sweep renews an elapsed period and invoices it ----
+    // ---- A manual elapsed period ends unpaid; it never renews on time alone ----
     const closedStart = new Date(Date.now() - 40 * 86_400_000).toISOString();
     const closedEnd = new Date(Date.now() - 10 * 86_400_000).toISOString();
     await sql`
@@ -243,8 +243,14 @@ async function main(): Promise<void> {
     `;
 
     const swept = await runBillingLifecycle({ config, sql, logger: silentLogger() });
-    assert.equal(swept.renewed, 1, "the elapsed period is renewed");
-    assert.equal(swept.invoiced, 1, "the closed period is invoiced");
+    assert.equal(swept.expired, 1, "an unpaid manual period ends the subscription");
+    assert.equal(swept.renewed, 0, "time passing is not payment: nothing renews");
+    assert.equal(swept.invoiced, 1, "the closed period is still invoiced, so it can be settled");
+
+    const [afterSweep] = await sql<Array<{ status: string }>>`
+      select status from subscriptions where user_id = ${paid.userId}
+    `;
+    assert.equal(afterSweep?.status, "EXPIRED");
 
     // Running again changes nothing: the row is no longer due, and the
     // deterministic event key would absorb it even if it were.
@@ -256,7 +262,7 @@ async function main(): Promise<void> {
     assert.equal(invoices.length, 1, "one invoice per period, not one per sweep");
     assert.equal(invoices[0]?.plan_code, "pro");
     assert.equal(invoices[0]?.total_cents, 4900);
-    assert.equal(invoices[0]?.status, "OPEN", "nothing can be settled without a payment provider");
+    assert.equal(invoices[0]?.status, "OPEN", "the invoice waits for an operator to confirm payment");
     assert.equal(invoices[0]?.period_start, closedStart);
 
     // ---- A closed grace window degrades to free without losing the row ----
