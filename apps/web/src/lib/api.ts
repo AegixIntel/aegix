@@ -252,7 +252,8 @@ export interface Monitor {
   wallet_address: string;
   saved_analysis_id: string | null;
   label: string | null;
-  status: "ACTIVE" | "PAUSED" | "DEGRADED" | "ERROR" | "DISABLED";
+  /** ENTITLEMENT_PAUSED: paused by the plan's monitor limit (D11), never by the owner. */
+  status: "ACTIVE" | "PAUSED" | "ENTITLEMENT_PAUSED" | "DEGRADED" | "ERROR" | "DISABLED";
   schedule_type: "DAILY" | "EVERY_12_HOURS" | "EVERY_6_HOURS" | "EVERY_MINUTE";
   last_checked_at: string | null;
   next_check_at: string | null;
