@@ -746,7 +746,10 @@ export async function buildServer(deps: ApiDeps) {
     if (!wallet) {
       return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "Wallet not found", requestId: randomUUID() });
     }
-    const latest = await jobRepo.latestForWallet(wallet.id);
+    // Newest job of any status: the report page polls this after /x-ray 404s
+    // to find an analysis that is still running. A READY-only lookup left a
+    // first-time analysis stuck on "No analysis yet".
+    const latest = await jobRepo.latestJobForWallet(wallet.id);
     return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null });
   });
 
@@ -1543,6 +1546,20 @@ export async function buildServer(deps: ApiDeps) {
       return developerSuccess(reply, summary, requestId);
     }
   );
+
+  // The developer portal reads the same summary with the wallet session.
+  // `/v1/developer/usage` stays API-key only (usage:read scope) for
+  // integrations; a session token there is rejected as a malformed key, which
+  // left the portal's usage page reporting 0/0.
+  app.get("/v1/me/developer/usage", async (req, reply) => {
+    const gate = developerGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+    const summary = await developerUsageRepo.summaryForUser(user.id, await developerAuth.quotaLimitFor(user.id));
+    return reply.send(summary);
+  });
 
   // ---- D6-E: developer intelligence API (thin orchestration, D6-E §43) ----
   registerDeveloperIntelligence({
