@@ -97,10 +97,10 @@ export default function MonitorDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => void patch({ status: monitor?.status === "PAUSED" ? "ACTIVE" : "PAUSED" })}
+            onClick={() => void patch({ status: monitor?.status === "PAUSED" || monitor?.status === "ENTITLEMENT_PAUSED" ? "ACTIVE" : "PAUSED" })}
             className="btn-secondary px-4 py-2 text-xs"
           >
-            {monitor?.status === "PAUSED" ? "Resume" : "Pause"}
+            {monitor?.status === "PAUSED" || monitor?.status === "ENTITLEMENT_PAUSED" ? "Resume" : "Pause"}
           </button>
           <button
             onClick={() => void disable()}

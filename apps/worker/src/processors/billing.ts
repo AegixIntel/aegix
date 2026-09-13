@@ -20,8 +20,10 @@ import {
   applyBillingAction,
   buildPlanCatalog,
   computeInvoice,
+  DEFAULT_PLAN_CODE,
   findPlan,
   isPlanCode,
+  resolveEntitlements,
   rollUpUsage,
   summarizeUsage,
   USAGE_DIMENSIONS,
@@ -33,6 +35,9 @@ import {
 
 /** How many due subscriptions one sweep will process. */
 const SWEEP_BATCH = 200;
+
+/** How many identities one sweep will hold to their monitor entitlement. */
+const ENTITLEMENT_SWEEP_BATCH = 500;
 
 export interface BillingLifecycleContext {
   config: AppConfig;
@@ -47,6 +52,8 @@ export interface BillingLifecycleResult {
   invoiced: number;
   skipped: number;
   failed: number;
+  monitorsPaused: number;
+  monitorsResumed: number;
 }
 
 /** The billing catalog as the worker sees it: same config, same numbers. */
@@ -106,6 +113,33 @@ export function decideLifecycleAction(
   return null;
 }
 
+export interface EntitlementScopedMonitor {
+  id: string;
+  status: string;
+  created_at: string | Date;
+}
+
+/**
+ * Which monitors the monitor entitlement pauses or resumes for one identity.
+ * The oldest monitors keep running: the newest over the limit pause first,
+ * and the oldest held by an entitlement pause resume first. A monitor its
+ * owner paused (PAUSED) is never touched. Pure, so every replica decides the
+ * same thing.
+ */
+export function decideMonitorEntitlement(
+  monitors: readonly EntitlementScopedMonitor[],
+  limit: number
+): { pause: string[]; resume: string[] } {
+  const ordered = [...monitors].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime() || a.id.localeCompare(b.id)
+  );
+  const running = ordered.filter((m) => m.status === "ACTIVE" || m.status === "DEGRADED");
+  const held = ordered.filter((m) => m.status === "ENTITLEMENT_PAUSED");
+  const allowed = Math.max(0, limit);
+  if (running.length > allowed) return { pause: running.slice(allowed).map((m) => m.id), resume: [] };
+  return { pause: [], resume: held.slice(0, allowed - running.length).map((m) => m.id) };
+}
+
 function createStore(repo: ReturnType<typeof createBillingRepo>): BillingStore {
   return {
     async load(userId) {
@@ -157,7 +191,16 @@ export async function runBillingLifecycle(
   now: Date = new Date()
 ): Promise<BillingLifecycleResult> {
   const { config, sql, logger } = ctx;
-  const result: BillingLifecycleResult = { scanned: 0, renewed: 0, expired: 0, invoiced: 0, skipped: 0, failed: 0 };
+  const result: BillingLifecycleResult = {
+    scanned: 0,
+    renewed: 0,
+    expired: 0,
+    invoiced: 0,
+    skipped: 0,
+    failed: 0,
+    monitorsPaused: 0,
+    monitorsResumed: 0
+  };
   if (!config.ENABLE_BILLING) return result;
 
   const repo = createBillingRepo(sql);
@@ -221,6 +264,34 @@ export async function runBillingLifecycle(
       logger.error("billing lifecycle transition failed", {
         subscriptionId: row.id,
         action: decision.action,
+        error: error instanceof Error ? error.message : "unknown"
+      });
+    }
+  }
+
+  // ---- Monitor entitlement (§5) ----
+  // A running monitor keeps consuming checks, so unlike keys and webhook
+  // endpoints it is held to the plan continuously: when the enforced plan no
+  // longer covers an identity's running monitors, the newest pause
+  // (ENTITLEMENT_PAUSED); when it covers them again, they resume. Nothing is
+  // deleted. This runs whether or not a subscription row was due — a closed
+  // grace window degrades entitlements before its row changes (§4).
+  const freeMonitors =
+    findPlan(catalog, DEFAULT_PLAN_CODE)?.entitlements["monitors.active"] ?? config.MAX_ACTIVE_MONITORS_PER_USER;
+  const candidates = await monitorRepo.listEntitlementCandidates(freeMonitors, ENTITLEMENT_SWEEP_BATCH);
+  for (const userId of candidates) {
+    try {
+      const allowed = resolveEntitlements(catalog, await store.load(userId), now).entitlements["monitors.active"];
+      const decision = decideMonitorEntitlement(await monitorRepo.listEntitlementScoped(userId), allowed);
+      const paused = await monitorRepo.pauseForEntitlement(userId, decision.pause);
+      const resumed = await monitorRepo.resumeFromEntitlement(userId, decision.resume);
+      result.monitorsPaused += paused;
+      result.monitorsResumed += resumed;
+      if (paused > 0 || resumed > 0) logger.info("monitor entitlement applied", { allowed, paused, resumed });
+    } catch (error) {
+      // Same isolation as the transitions above: the next sweep retries.
+      result.failed += 1;
+      logger.error("monitor entitlement enforcement failed", {
         error: error instanceof Error ? error.message : "unknown"
       });
     }

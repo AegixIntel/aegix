@@ -29,3 +29,12 @@ export {
   type BillingStoreSaveInput
 } from "./apply.js";
 export { rollUpUsage, type RollupInput, type UsageRecordTotal } from "./rollup.js";
+export {
+  canUseFeature,
+  FEATURE_KEYS,
+  FEATURE_REGISTRY,
+  featureQuotaKey,
+  isFeatureKey,
+  type FeatureDefinition,
+  type FeatureKey
+} from "./features.js";
