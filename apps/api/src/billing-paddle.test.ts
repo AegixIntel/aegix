@@ -247,6 +247,152 @@ test("cancel and resume return the processor's normalized state", async () => {
   assert.deepEqual(calls[1]!.body, { scheduled_change: null });
 });
 
+// ---- Conformance with Paddle's own published artifacts ----
+// Vectors from PaddleHQ/paddle-node-sdk src/__tests__/notifications/webhooks-validator.node.test.ts
+// (secret "VALID_SECRET", ts 1698796800) and payload shapes from its
+// src/__tests__/mocks/notifications/*.mock.ts, trimmed to the fields AEGIX reads.
+
+test("Paddle's official signature vectors verify, and its negative vectors are refused", () => {
+  const ts = 1_698_796_800;
+  const check = (body: string, value: string, secret = "VALID_SECRET") =>
+    verifyPaddleSignature({ rawBody: body, header: value, secret, nowSeconds: ts, toleranceSeconds: 300 });
+  const h1 = "a300428748dce5c70e4da19bffd60769591ea969c99dea3105d0ec9612cf43f9";
+  assert.deepEqual(check('{"data": ["1", "2"]}', `ts=${ts};h1=${h1}`), { valid: true });
+  const multi = "28981e941fae76e53db32f3d2a83cb69db41476595e84e1970a1b5d98f62b261";
+  assert.deepEqual(check('{"data": "value"}', `ts=${ts};h1=${multi};h1=${multi};h2=RANDOM_HASH`), { valid: true }, "unknown schemes are ignored");
+  assert.equal(check('{"data": ["1", "2"]}', `ts=${ts};h1=${h1}`, "INVALID_VALID_SECRET").valid, false);
+  assert.equal(check('{ "data": [ "1", "2" ]}', `ts=${ts};h1=${h1}`).valid, false, "whitespace changes the signed bytes");
+  assert.equal(check('{"data": ["1", "2"]}', `ts=9876;h1=${h1}`).valid, false);
+  for (const header of ["invalid_header", "h1=invalid_header", "ts=1234;h2=invalid_header", "ts=1234;h1=invalid_signature"]) {
+    assert.equal(check('{"data": ["1", "2"]}', header).valid, false, header);
+  }
+});
+
+const OFFICIAL_PRICE = "pri_01gsz8x8sawmvhz1pv30nge1ke";
+const OFFICIAL_ADDON_PRICE = "pri_01h1vjfevh5etwq3rb416a23h2";
+const officialItem = (priceId: string) => ({
+  price: { id: priceId, tax_mode: "account_setting", product_id: "pro_01gsz4t5hdjse780zja8vvr7jg", unit_price: { amount: "3240", currency_code: "USD" }, billing_cycle: { interval: "month", frequency: 1 } },
+  product: { id: "pro_01gsz4t5hdjse780zja8vvr7jg", name: "ChatApp Pro", status: "active" },
+  status: "active",
+  quantity: 10,
+  recurring: true
+});
+const officialBase = {
+  id: "sub_01h7ht5z5wdg9pz18jx1fagp8k",
+  paused_at: null,
+  address_id: "add_01h7hswbfjqez51ezfhk7s6400",
+  created_at: "2023-08-11T08:07:36.892822Z",
+  started_at: "2023-08-11T08:07:35.449123Z",
+  business_id: "biz_01h7ht30avfmwa4kvkfeg4ef8e",
+  discount: null,
+  custom_data: null,
+  customer_id: "ctm_01h7hswb86rtps5ggbq7ybydcw",
+  billing_cycle: { interval: "month", frequency: 1 },
+  currency_code: "USD",
+  billing_details: null,
+  collection_mode: "automatic",
+  first_billed_at: "2023-08-11T08:07:35.449123Z"
+};
+const officialEvent = (eventId: string, type: string, occurredAt: string, data: unknown) =>
+  JSON.stringify({ event_id: eventId, event_type: type, occurred_at: occurredAt, notification_id: "ntf_01h7ht60n4grsa2a5ddd54h1j0", data });
+const officialPrices = { pro: OFFICIAL_PRICE };
+
+test("Paddle's official subscription.created payload normalizes to ACTIVE", () => {
+  const parsed = parsePaddleEvent(
+    officialEvent("evt_01h7ht60jy5hpdv5x8tfsaxje4", "subscription.created", "2023-08-11T08:07:38.334150Z", {
+      ...officialBase,
+      items: [officialItem(OFFICIAL_PRICE)],
+      status: "active",
+      updated_at: "2023-08-11T08:07:36.892822Z",
+      canceled_at: null,
+      next_billed_at: "2023-09-11T08:07:35.449123Z",
+      transaction_id: "txn_01h7hst69d7tar4rm6vyeb0j36",
+      scheduled_change: null,
+      current_billing_period: { ends_at: "2023-09-11T08:07:35.449123Z", starts_at: "2023-08-11T08:07:35.449123Z" }
+    }),
+    officialPrices
+  );
+  assert.equal(parsed.kind, "subscription");
+  if (parsed.kind !== "subscription") return;
+  assert.equal(parsed.snapshot.status, "ACTIVE");
+  assert.equal(parsed.snapshot.customerRef, "ctm_01h7hswb86rtps5ggbq7ybydcw");
+  assert.equal(parsed.snapshot.periodStart, "2023-08-11T08:07:35.449Z");
+  assert.equal(parsed.snapshot.periodEnd, "2023-09-11T08:07:35.449Z");
+  assert.equal(parsed.snapshot.observedAt, "2023-08-11T08:07:38.334Z");
+  assert.equal(parsed.checkoutRef, "txn_01h7hst69d7tar4rm6vyeb0j36");
+});
+
+test("Paddle's official multi-item subscription is not silently mapped to a single plan", () => {
+  const parsed = parsePaddleEvent(
+    officialEvent("evt_01h7ht60jy5hpdv5x8tfsaxje4", "subscription.created", "2023-08-11T08:07:38.334150Z", {
+      ...officialBase,
+      items: [officialItem(OFFICIAL_PRICE), officialItem(OFFICIAL_ADDON_PRICE)],
+      status: "active",
+      updated_at: "2023-08-11T08:07:36.892822Z",
+      canceled_at: null,
+      scheduled_change: null,
+      current_billing_period: { ends_at: "2023-09-11T08:07:35.449123Z", starts_at: "2023-08-11T08:07:35.449123Z" }
+    }),
+    officialPrices
+  );
+  assert.equal(parsed.kind, "unmapped");
+});
+
+test("Paddle's official subscription.past_due payload normalizes to PAST_DUE", () => {
+  const parsed = parsePaddleEvent(
+    officialEvent("evt_01h7jagte1wnq80w5bw5gbmrwk", "subscription.past_due", "2023-08-11T12:53:09.697239Z", {
+      ...officialBase,
+      items: [officialItem(OFFICIAL_PRICE)],
+      status: "past_due",
+      updated_at: "2023-10-11T08:08:04.930567Z",
+      canceled_at: null,
+      scheduled_change: null,
+      current_billing_period: { ends_at: "2023-11-11T08:07:35.449123Z", starts_at: "2023-10-11T08:07:35.449123Z" }
+    }),
+    officialPrices
+  );
+  assert.equal(parsed.kind, "subscription");
+  if (parsed.kind === "subscription") assert.equal(parsed.snapshot.status, "PAST_DUE");
+});
+
+test("Paddle's official subscription.canceled payload (null billing period, nanosecond timestamps) normalizes to EXPIRED", () => {
+  const parsed = parsePaddleEvent(
+    officialEvent("evt_01h7jk37p1ezj1k5b4kt83t35j", "subscription.canceled", "2023-08-11T15:23:01.697145Z", {
+      ...officialBase,
+      items: [{ ...officialItem(OFFICIAL_PRICE), updated_at: "2024-01-11T08:34:01.799627882Z", next_billed_at: null }],
+      status: "canceled",
+      updated_at: "2024-01-11T08:34:01.798065409Z",
+      canceled_at: "2024-01-11T08:34:01.787929969Z",
+      next_billed_at: null,
+      scheduled_change: null,
+      current_billing_period: null
+    }),
+    officialPrices
+  );
+  assert.equal(parsed.kind, "subscription");
+  if (parsed.kind !== "subscription") return;
+  assert.equal(parsed.snapshot.status, "EXPIRED");
+  assert.equal(parsed.snapshot.periodEnd, "2024-01-11T08:34:01.787Z");
+  assert.equal(parsed.checkoutRef, null, "only subscription.created carries transaction_id");
+});
+
+test("Paddle's documented scheduled cancellation shape normalizes to CANCELED", () => {
+  const parsed = parsePaddleEvent(
+    officialEvent("evt_01h7ht60jy5hpdv5x8tfsaxje5", "subscription.updated", "2023-08-12T08:07:38.334150Z", {
+      ...officialBase,
+      items: [officialItem(OFFICIAL_PRICE)],
+      status: "active",
+      updated_at: "2023-08-12T08:07:36.892822Z",
+      canceled_at: null,
+      scheduled_change: { action: "cancel", effective_at: "2023-09-11T08:07:35.449123Z", resume_at: null },
+      current_billing_period: { ends_at: "2023-09-11T08:07:35.449123Z", starts_at: "2023-08-11T08:07:35.449123Z" }
+    }),
+    officialPrices
+  );
+  assert.equal(parsed.kind, "subscription");
+  if (parsed.kind === "subscription") assert.equal(parsed.snapshot.status, "CANCELED");
+});
+
 function paddleEnv(overrides: Record<string, string> = {}) {
   return {
     NODE_ENV: "test",
