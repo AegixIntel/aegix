@@ -83,7 +83,8 @@ docker compose -f docker-compose.production.yml build migrate api worker web
 ```
 
 The Dockerfiles accept no secret build arguments. Web build arguments are
-limited to `/api` and the private build-time API address.
+limited to `/api`, the private build-time API address and the public site
+origin.
 
 ## 6. Migrate and start
 
@@ -93,6 +94,21 @@ For bundled dependencies:
 docker compose -f docker-compose.production.yml up -d postgres redis
 docker compose -f docker-compose.production.yml run --rm migrate
 docker compose -f docker-compose.production.yml up -d api worker web proxy
+```
+
+For a single host that terminates TLS itself, layer the HTTPS edge
+(`docker-compose.edge.yml`, Caddy with automatic Let's Encrypt certificates,
+`www` redirected to the apex). It narrows the proxy port to loopback and trusts
+two proxy hops for client IPs. The domain and `www` must resolve to the host and
+ports 80/443 must be reachable. `PUBLIC_WEB_ORIGIN` is also baked into the web
+build for canonical URLs and the sitemap, so rebuild `web` when it changes.
+
+```bash
+C="docker compose -p aegix -f docker-compose.production.yml -f docker-compose.edge.yml --env-file <protected env file>"
+$C build migrate api worker web
+$C up -d postgres redis
+$C run --rm migrate
+$C up -d api worker web proxy edge
 ```
 
 For managed PostgreSQL/Redis, use the platform-specific Compose override or

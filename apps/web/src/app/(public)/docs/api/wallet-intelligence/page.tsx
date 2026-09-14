@@ -9,7 +9,7 @@ export default function ApiWalletDocPage() {
       <DocHeading eyebrow="Developer API" title="Wallet Intelligence" lead="Request an analysis for a wallet, then poll for the result." />
 
       <DocSection title="POST /v1/developer/intelligence/wallet">
-        <DocCode>{`curl -X POST https://aegix.app/v1/developer/intelligence/wallet \\
+        <DocCode>{`curl -X POST https://aegixintelligence.com/api/v1/developer/intelligence/wallet \\
   -H "Authorization: Bearer aegix_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"wallet":"<SOLANA_ADDRESS>"}'`}</DocCode>
@@ -17,7 +17,7 @@ export default function ApiWalletDocPage() {
       </DocSection>
 
       <DocSection title="GET /v1/developer/intelligence/analysis/:id">
-        <DocCode>{`curl https://aegix.app/v1/developer/intelligence/analysis/<id> \\
+        <DocCode>{`curl https://aegixintelligence.com/api/v1/developer/intelligence/analysis/<id> \\
   -H "Authorization: Bearer aegix_live_..."`}</DocCode>
         <p className="mt-3">Poll until the status is <code className="font-mono">READY</code>; the response carries the full wallet X-Ray payload (score, dimensions, signals, evidence, attack paths, engine versions).</p>
       </DocSection>

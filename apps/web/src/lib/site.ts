@@ -1,5 +1,5 @@
 /** Public site constants shared across the product and marketing surfaces. */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegix.app";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegixintelligence.com";
 
 export const NAV_BRAND = "AEGIX";
 
