@@ -21,7 +21,7 @@ export default function AuthDocPage() {
         <DocCode>{`AEGIX wants you to sign in with your Solana wallet.
 
 Wallet: <YOUR_PUBLIC_KEY>
-Domain: aegix.app
+Domain: aegixintelligence.com
 Nonce: <random>
 Issued: <ISO timestamp>
 Version: 1`}</DocCode>

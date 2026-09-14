@@ -120,6 +120,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: /api
         API_INTERNAL_URL: http://api:3001
+        # Canonical URLs, sitemap and Open Graph metadata are rendered at build time.
+        NEXT_PUBLIC_SITE_URL: ${PUBLIC_WEB_ORIGIN:?required}
     environment:
       NODE_ENV: production
     depends_on:

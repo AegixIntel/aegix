@@ -24,7 +24,7 @@ export default function QuickStartPage() {
 
       <DocSection title="Try the API">
         <p>Developers can also request intelligence programmatically with a scoped API key.</p>
-        <DocCode>{`curl -X POST https://aegix.app/v1/developer/intelligence/wallet \\
+        <DocCode>{`curl -X POST https://aegixintelligence.com/api/v1/developer/intelligence/wallet \\
   -H "Authorization: Bearer aegix_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"wallet":"<SOLANA_ADDRESS>"}'`}</DocCode>

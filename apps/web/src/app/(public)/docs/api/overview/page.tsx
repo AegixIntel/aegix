@@ -10,7 +10,7 @@ export default function ApiOverviewDocPage() {
       <DocHeading eyebrow="Developer API" title="Overview" lead="Integrate AEGIX intelligence into your own tooling." />
 
       <DocSection title="Base URL">
-        <DocCode>{`https://aegix.app/v1/developer`}</DocCode>
+        <DocCode>{`https://aegixintelligence.com/api/v1/developer`}</DocCode>
       </DocSection>
 
       <DocSection title="Authentication">
@@ -33,7 +33,7 @@ export default function ApiOverviewDocPage() {
       </DocSection>
 
       <DocSection title="Example request">
-        <DocCode>{`curl -X POST https://aegix.app/v1/developer/intelligence/compare \\
+        <DocCode>{`curl -X POST https://aegixintelligence.com/api/v1/developer/intelligence/compare \\
   -H "Authorization: Bearer aegix_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"walletA":"<ADDR_A>","walletB":"<ADDR_B>"}'`}</DocCode>
