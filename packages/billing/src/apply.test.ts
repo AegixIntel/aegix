@@ -111,6 +111,24 @@ test("user-initiated actions get a distinct key per call", async () => {
   assert.equal(cancel.applied, true);
 });
 
+test("the provider a caller acts on is carried into the write, defaulting to manual", async () => {
+  const manual = fakeStore(null);
+  await applyBillingAction(manual.store, catalog, { userId: "u1", action: "SUBSCRIBE", planCode: "pro", now });
+  assert.equal(manual.saved[0]?.provider, "manual");
+
+  const processor = fakeStore(null);
+  await applyBillingAction(processor.store, catalog, {
+    userId: "u2",
+    action: "SUBSCRIBE",
+    planCode: "pro",
+    now,
+    provider: "stripe",
+    providerRef: "sub_123"
+  });
+  assert.equal(processor.saved[0]?.provider, "stripe");
+  assert.equal(processor.saved[0]?.providerRef, "sub_123");
+});
+
 test("profilePlanLabel reports free once a subscription has ended", () => {
   const ended: SubscriptionState = {
     planCode: "pro",

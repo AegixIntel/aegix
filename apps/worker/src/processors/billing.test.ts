@@ -24,8 +24,21 @@ function row(patch: Partial<SubscriptionRow> = {}): SubscriptionRow {
   };
 }
 
-test("an elapsed period renews, keyed on the boundary it crossed", () => {
+test("a manually provisioned elapsed period ends unpaid, keyed on the boundary it crossed", () => {
+  // Time passing is not payment: without an operator-confirmed invoice the
+  // next period must not be granted.
   const decision = decideLifecycleAction(row(), now);
+  assert.deepEqual(decision, {
+    action: "EXPIRE",
+    boundary: "2026-09-13T12:00:00.000Z",
+    reason: "PERIOD_ELAPSED_UNPAID"
+  });
+});
+
+test("a processor-managed elapsed period still renews automatically", () => {
+  // Removing manual auto-renewal must not touch what a payment processor
+  // already collected for.
+  const decision = decideLifecycleAction(row({ provider: "stripe", provider_ref: "sub_123" }), now);
   assert.deepEqual(decision, {
     action: "RENEW",
     boundary: "2026-09-13T12:00:00.000Z",

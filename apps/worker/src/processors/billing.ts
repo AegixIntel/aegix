@@ -15,7 +15,12 @@
 
 import type { AppConfig } from "@aegix/config";
 import type { AegixLogger } from "@aegix/logging";
-import { createBillingRepo, createMonitorRepo, type Sql, type SubscriptionRow } from "@aegix/database";
+import {
+  createBillingRepo,
+  createMonitorRepo,
+  type Sql,
+  type SubscriptionRow
+} from "@aegix/database";
 import {
   applyBillingAction,
   buildPlanCatalog,
@@ -105,8 +110,23 @@ export function decideLifecycleAction(
   }
 
   if (Date.parse(row.current_period_end) <= at) {
-    // RENEW handles both outcomes: it advances the period, or ends the
-    // subscription when cancellation was already scheduled.
+    // A scheduled cancellation ends here whatever the provider: RENEW covers
+    // both outcomes (advance the period, or end the subscription when
+    // cancellation was already scheduled), so this is not an unpaid period.
+    if (row.cancel_at_period_end || row.status === "CANCELED") {
+      return { action: "RENEW", boundary: row.current_period_end, reason: "PERIOD_ELAPSED" };
+    }
+    // A manually provisioned subscription has no processor to collect the
+    // next period, so time passing must never renew it: that would hand out
+    // a paid period nobody paid for. It ends unpaid, and only an operator
+    // confirming payment on the period's invoice (scripts/grant-plan.ts,
+    // `--mark-paid`) starts the next one.
+    if (row.provider === "manual") {
+      return { action: "EXPIRE", boundary: row.current_period_end, reason: "PERIOD_ELAPSED_UNPAID" };
+    }
+    // A processor-managed subscription renews on the provider's schedule;
+    // this sweep only advances the row to match what the processor already
+    // did. Removing manual auto-renewal must not touch this path.
     return { action: "RENEW", boundary: row.current_period_end, reason: "PERIOD_ELAPSED" };
   }
 
@@ -166,8 +186,8 @@ function createStore(repo: ReturnType<typeof createBillingRepo>): BillingStore {
           cancelAtPeriodEnd: input.subscription.cancelAtPeriodEnd,
           gracePeriodEnd: input.subscription.gracePeriodEnd,
           trialEnd: input.subscription.trialEnd,
-          provider: "manual",
-          providerRef: null
+          provider: input.provider,
+          providerRef: input.providerRef
         },
         event: {
           eventType: input.event.type,
@@ -225,7 +245,11 @@ export async function runBillingLifecycle(
         graceDays: config.BILLING_GRACE_DAYS,
         // Deterministic: the boundary being crossed identifies the
         // transition, so concurrent replicas and retries converge.
-        eventKey: `${row.user_id}:${decision.reason}:${decision.boundary}`
+        eventKey: `${row.user_id}:${decision.reason}:${decision.boundary}`,
+        // Preserve the row's provider: a manual expiry must not relabel a
+        // processor-managed subscription.
+        provider: row.provider,
+        providerRef: row.provider_ref
       });
 
       if (!applied.applied) {
@@ -236,8 +260,13 @@ export async function runBillingLifecycle(
       else result.renewed += 1;
 
       // The period that just closed is the one being invoiced. It is the
-      // period the row held before the transition, not the new one.
-      if (decision.action === "RENEW" && isPlanCode(row.plan_code)) {
+      // period the row held before the transition, not the new one. Both
+      // endings bill it: a renewal settles the period it renews from, and an
+      // unpaid manual expiry still owes for the period it just used — that
+      // invoice is what an operator marks paid to start the next one.
+      const closedPeriodBilled =
+        decision.reason === "PERIOD_ELAPSED" || decision.reason === "PERIOD_ELAPSED_UNPAID";
+      if (closedPeriodBilled && isPlanCode(row.plan_code)) {
         const issued = await issueInvoiceForPeriod({
           repo,
           catalog,

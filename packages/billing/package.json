@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/catalog.test.ts src/entitlements.test.ts src/lifecycle.test.ts src/metering.test.ts src/invoice.test.ts src/apply.test.ts src/rollup.test.ts src/features.test.ts"
+    "test": "node --import tsx --test src/catalog.test.ts src/entitlements.test.ts src/lifecycle.test.ts src/metering.test.ts src/invoice.test.ts src/apply.test.ts src/rollup.test.ts src/features.test.ts src/settlement.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

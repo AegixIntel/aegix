@@ -284,7 +284,13 @@ jobs:
       - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - run: pnpm --filter @aegix/database migrate
       - name: Run D11 E2E
-        run: mkdir -p artifacts && set -o pipefail && pnpm test:e2e-d11 2>&1 | tee artifacts/e2e-d11.log
+        run: |
+          mkdir -p artifacts
+          set -o pipefail
+          {
+            pnpm test:e2e-d11
+            pnpm test:e2e-d11-revenue-safety
+          } 2>&1 | tee artifacts/e2e-d11.log
       - name: Upload D11 logs on failure
         if: failure()
         uses: actions/upload-artifact@v6

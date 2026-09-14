@@ -186,6 +186,18 @@ export interface BillingRepo {
   upsertInvoice(input: InvoiceWrite): Promise<InvoiceRow>;
   listInvoices(userId: string, limit: number): Promise<InvoiceRow[]>;
   getInvoice(userId: string, id: string): Promise<InvoiceRow | null>;
+  /**
+   * Operator settlement path: an operator holds the invoice id, not a user
+   * context, so this lookup is deliberately unscoped. It is never on a client
+   * request path — billing routes use getInvoice, which is user-scoped.
+   */
+  getInvoiceById(id: string): Promise<InvoiceRow | null>;
+  /**
+   * Marks an OPEN invoice PAID exactly once. Returns false when the invoice
+   * was already settled (or is not OPEN), so a replayed `--mark-paid` cannot
+   * move money or extend a period twice.
+   */
+  markInvoicePaid(id: string, paidAt: string): Promise<boolean>;
 }
 
 /**
@@ -458,6 +470,29 @@ export function createBillingRepo(sql: Sql): BillingRepo {
         limit 1
       `;
       return row ? normalizeInvoice(row) : null;
+    },
+
+    async getInvoiceById(id) {
+      const [row] = await sql<InvoiceRow[]>`
+        select id::text, user_id::text, subscription_id::text, plan_code, currency,
+               period_start, period_end, status, lines, subtotal_cents, total_cents,
+               engine_version, issued_at, paid_at
+        from invoices
+        where id = ${id}
+        limit 1
+      `;
+      return row ? normalizeInvoice(row) : null;
+    },
+
+    async markInvoicePaid(id, paidAt) {
+      // Conditional on OPEN: the transition is claimed by the database, so
+      // two concurrent operators cannot both settle the same invoice.
+      const result = await sql`
+        update invoices
+        set status = 'PAID', paid_at = ${paidAt}::timestamptz, updated_at = now()
+        where id = ${id} and status = 'OPEN'
+      `;
+      return result.count > 0;
     },
 
     async requestUpgrade(userId, planCode, contact) {

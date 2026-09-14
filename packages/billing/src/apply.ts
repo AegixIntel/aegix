@@ -26,6 +26,13 @@ export interface BillingStoreSaveInput {
   eventKey: string;
   /** Denormalized plan label for legacy readers of profiles.plan. */
   profilePlan: string;
+  /**
+   * Which payment provider owns this subscription. Persistence stores this
+   * so a transition decided for the manual path cannot relabel a
+   * processor-managed row as manual.
+   */
+  provider: string;
+  providerRef: string | null;
 }
 
 export interface BillingStore {
@@ -49,6 +56,13 @@ export interface ApplyBillingActionInput {
    * rejects a repeated action, with a clearer error than silence.
    */
   eventKey?: string;
+  /**
+   * The provider that owns the subscription being transitioned. Defaults to
+   * `manual`. A caller acting on an existing row passes the row's provider so
+   * the write preserves it instead of relabelling the subscription.
+   */
+  provider?: string;
+  providerRef?: string | null;
 }
 
 export interface ApplyBillingActionResult {
@@ -91,7 +105,9 @@ export async function applyBillingAction(
     subscription: result.subscription,
     event: result.event,
     eventKey,
-    profilePlan: profilePlanLabel(result.subscription)
+    profilePlan: profilePlanLabel(result.subscription),
+    provider: input.provider ?? "manual",
+    providerRef: input.providerRef ?? null
   });
 
   return { subscription: result.subscription, event: result.event, applied };

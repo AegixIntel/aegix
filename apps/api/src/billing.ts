@@ -64,8 +64,8 @@ export function createBillingStore(repo: BillingRepo): BillingStore {
           cancelAtPeriodEnd: input.subscription.cancelAtPeriodEnd,
           gracePeriodEnd: input.subscription.gracePeriodEnd,
           trialEnd: input.subscription.trialEnd,
-          provider: "manual",
-          providerRef: null
+          provider: input.provider,
+          providerRef: input.providerRef
         },
         event: {
           eventType: input.event.type,

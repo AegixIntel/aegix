@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     const [preserved] = await upgraded<Array<{ body: string }>>`
       select body from notifications where id = ${d7NotificationId} and user_id = ${d7User}
     `;
-    assert.equal(preserved?.body, "preserve me", "D7 notification data survives migrations 0009-0010");
+    assert.equal(preserved?.body, "preserve me", "D7 notification data survives migrations 0009-0011");
     const [index] = await upgraded<Array<{ exists: boolean }>>`
       select to_regclass('public.idx_notifications_in_app_keyset') is not null as exists
     `;
