@@ -1,12 +1,18 @@
-/** Brand mark for AEGIX: a triangular "A" glyph + wordmark. */
+/**
+ * The official AEGIX mark, traced from the brand master
+ * (front/assets/aegix logo.png, 1254×1254) in its own pixel coordinates:
+ * the split "A" glyph matches the master's filled area at IoU 0.997. It is
+ * drawn in `currentColor`, so it follows the surrounding text colour instead
+ * of carrying the master's white background.
+ */
+export const AEGIX_MARK_VIEWBOX = "250 212 760 760";
+export const AEGIX_MARK_PATH =
+  "M630.5 287 L871 692 H736.5 L630.5 514.5 L475 774 H607 L534 898 H264 Z M684 768 H919 L996 898 H761 Z";
+
 export function AegixMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} fill="none" aria-hidden="true">
-      <path
-        d="M24 6 L42 40 H35.5 L29 28.5 H19 L12.5 40 H6 Z"
-        fill="currentColor"
-      />
-      <path d="M21.5 23.5 H26.5 L24 18.8 Z" fill="#05070d" />
+    <svg viewBox={AEGIX_MARK_VIEWBOX} className={className} aria-hidden="true">
+      <path d={AEGIX_MARK_PATH} fill="currentColor" />
     </svg>
   );
 }
