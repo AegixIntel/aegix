@@ -3,6 +3,18 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegix.app";
 
 export const NAV_BRAND = "AEGIX";
 
+/** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
+export const LEGAL_ENTITY = "AEGIX Developer";
+export const LEGAL_EFFECTIVE_DATE = "14 September 2026";
+/** Public contact for legal, privacy and billing questions; shown on the legal pages once set. */
+export const LEGAL_CONTACT_EMAIL: string | null = null;
+
+export const legalLinks = [
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Refund Policy", href: "/refund" }
+];
+
 export type NavLinkItem = { label: string; href: string; status?: string };
 export type NavGroup = { label: string; items: NavLinkItem[]; href?: string };
 
