@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   cancelSubscription,
@@ -199,7 +200,15 @@ export default function Billing() {
             <p className="mt-4 text-xs text-slate-500">
               Paid plans are provisioned manually for now. Request an upgrade on the plan you want and the AEGIX team
               will get in touch to arrange payment; the plan is activated once payment is confirmed. Cancelling never
-              needs a request.
+              needs a request. Paid plans are covered by the{" "}
+              <Link href="/terms" className="underline underline-offset-4 hover:text-slate-300">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/refund" className="underline underline-offset-4 hover:text-slate-300">
+                Refund Policy
+              </Link>
+              .
             </p>
           ) : null}
         </section>
