@@ -25,6 +25,10 @@ COPY packages/normalizer/package.json packages/normalizer/package.json
 COPY packages/queue/package.json packages/queue/package.json
 COPY packages/scoring/package.json packages/scoring/package.json
 COPY packages/webhook-delivery/package.json packages/webhook-delivery/package.json
+COPY packages/ai/package.json packages/ai/package.json
+COPY packages/billing/package.json packages/billing/package.json
+COPY packages/context/package.json packages/context/package.json
+COPY packages/markets/package.json packages/markets/package.json
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS build
@@ -35,6 +39,7 @@ ENV API_INTERNAL_URL=$API_INTERNAL_URL
 COPY tsconfig.base.json ./
 COPY packages/types packages/types
 COPY packages/config packages/config
+COPY packages/markets packages/markets
 COPY apps/web apps/web
 RUN pnpm --filter @aegix/web... build
 

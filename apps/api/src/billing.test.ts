@@ -76,6 +76,18 @@ function fakeRepo(overrides: Partial<BillingRepo> = {}): BillingRepo {
     async markInvoicePaid() {
       return false;
     },
+    async requestUpgrade() {
+      throw new Error("not used");
+    },
+    async getOpenUpgradeRequest() {
+      return null;
+    },
+    async listOpenUpgradeRequests() {
+      return [];
+    },
+    async fulfillUpgradeRequest() {
+      return 0;
+    },
     ...overrides
   };
 }
@@ -315,6 +327,24 @@ test("an upgrade is refused while no payment provider is configured", async () =
   try {
     // Unauthenticated first: the refusal must not leak ahead of auth.
     const anonymous = await app.inject({ method: "POST", url: "/v1/billing/subscription/change", payload: { plan: "pro" } });
+    assert.equal(anonymous.statusCode, 401);
+  } finally {
+    await app.close();
+  }
+});
+
+test("V1 manual provisioning boots with no payment-processor settings at all", async () => {
+  // No BILLING_* or processor credential in the environment.
+  const config = testConfig();
+  assert.equal(config.BILLING_PROVIDER, "manual");
+  const app = await buildServer({ config });
+  try {
+    const plans = await app.inject({ url: "/v1/billing/plans" });
+    assert.equal(plans.statusCode, 200);
+    assert.equal(plans.json().provider, "manual");
+    assert.equal(plans.json().selfServe, false, "no checkout is offered");
+    // Asking for a paid plan needs an identity, like every billing write.
+    const anonymous = await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", payload: { plan: "pro" } });
     assert.equal(anonymous.statusCode, 401);
   } finally {
     await app.close();

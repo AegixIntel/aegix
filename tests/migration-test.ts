@@ -109,13 +109,11 @@ async function main(): Promise<void> {
     const [profile] = await upgraded<Array<{ plan: string }>>`select plan from profiles where id = ${d7User}`;
     assert.equal(profile?.plan, "free", "an existing profile stays on the free plan");
     const [count] = await upgraded<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.equal(Number(count?.count), 11, "D7 upgrade records migrations 0009-0011 exactly once");
-    // 0011 adds the monitor entitlement-pause reason without disturbing the
-    // monitors the D7 fixture never had; the column exists and defaults null.
-    const [reasonColumn] = await upgraded<Array<{ exists: boolean }>>`
-      select to_regclass('public.idx_monitors_entitlement_paused') is not null as exists
+    const [requests] = await upgraded<Array<{ exists: boolean }>>`
+      select to_regclass('public.billing_upgrade_requests') is not null as exists
     `;
-    assert.equal(reasonColumn?.exists, true, "migration 0011 adds the entitlement-pause index");
+    assert.equal(requests?.exists, true, "migration 0011 creates the upgrade request table");
+    assert.equal(Number(count?.count), 11, "D7 upgrade records migrations 0009-0011 exactly once");
     console.log("11 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
   } finally {
     await upgraded.end();

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { listMonitors, createMonitor, deleteMonitor, type Monitor } from "@/lib/api";
+import { listMonitors, createMonitor, deleteMonitor, saveAnalysis, type Monitor } from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 
 function shortAddress(address: string): string {
@@ -14,6 +14,7 @@ function statusBadge(status: string): string {
   switch (status) {
     case "ACTIVE": return "bg-emerald-500/10 text-emerald-400";
     case "PAUSED": return "bg-amber-500/10 text-amber-400";
+    case "ENTITLEMENT_PAUSED": return "bg-violet-500/10 text-violet-300";
     case "DEGRADED": return "bg-orange-500/10 text-orange-400";
     case "ERROR": return "bg-red-500/10 text-red-400";
     case "DISABLED": return "bg-slate-600/10 text-slate-400";
@@ -55,7 +56,11 @@ export default function MonitorsPage() {
     setBusy(true);
     setError(null);
     try {
-      await createMonitor(address.trim(), schedule);
+      const wallet = address.trim();
+      // The API only monitors wallets on the user's saved list and otherwise
+      // answers WALLET_NOT_SAVED. Saving is an idempotent upsert.
+      await saveAnalysis(wallet);
+      await createMonitor(wallet, schedule);
       setAddress("");
       void load();
     } catch (err) {
@@ -161,12 +166,17 @@ export default function MonitorsPage() {
                     {m.label ? `${m.label} · ` : ""}
                     {shortAddress(m.wallet_address)}
                   </Link>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(m.status)}`}>{m.status}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(m.status)}`}>{m.status === "ENTITLEMENT_PAUSED" ? "Plan paused" : m.status}</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {m.score != null && (<span>Exposure <span className="font-semibold text-marble/90">{m.score}</span></span>)}
                   {m.next_check_at && <span>Next {new Date(m.next_check_at).toLocaleString()}</span>}
                 </div>
+                {m.status === "ENTITLEMENT_PAUSED" && (
+                  <p className="text-xs text-violet-300/90">
+                    Paused because your plan&apos;s monitor limit no longer covers it. Nothing was deleted; it resumes when your plan has room.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Link href={`/app/monitor/${m.id}`} className="btn-secondary px-3 py-1.5 text-xs">Open</Link>
                   <button onClick={() => void remove(m.id)} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10">

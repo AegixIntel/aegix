@@ -146,7 +146,29 @@ export interface InvoiceWrite {
   engineVersion: string;
 }
 
+export type UpgradeRequestStatus = "OPEN" | "FULFILLED";
+
+export interface UpgradeRequestRow {
+  id: string;
+  user_id: string;
+  plan_code: string;
+  status: UpgradeRequestStatus;
+  contact: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
 export interface BillingRepo {
+  /**
+   * Records the identity's request for a paid plan, or re-targets its open
+   * one. Intent only: no subscription or ledger entry is touched.
+   */
+  requestUpgrade(userId: string, planCode: string, contact: string | null): Promise<UpgradeRequestRow>;
+  getOpenUpgradeRequest(userId: string): Promise<UpgradeRequestRow | null>;
+  listOpenUpgradeRequests(limit: number): Promise<UpgradeRequestRow[]>;
+  /** Closes the identity's open request once an operator has granted a plan. */
+  fulfillUpgradeRequest(userId: string): Promise<number>;
   /** Idempotent upsert of the in-process plan catalog snapshot. */
   syncPlans(plans: readonly PlanSnapshot[]): Promise<void>;
   listPlans(): Promise<PlanRow[]>;
@@ -471,6 +493,60 @@ export function createBillingRepo(sql: Sql): BillingRepo {
         where id = ${id} and status = 'OPEN'
       `;
       return result.count > 0;
+    },
+
+    async requestUpgrade(userId, planCode, contact) {
+      const [row] = await sql<UpgradeRequestRow[]>`
+        insert into billing_upgrade_requests (user_id, plan_code, contact)
+        values (${userId}, ${planCode}, ${contact})
+        on conflict (user_id) where status = 'OPEN' do update set
+          plan_code = excluded.plan_code,
+          contact = coalesce(excluded.contact, billing_upgrade_requests.contact),
+          updated_at = now()
+        returning id::text, user_id::text, plan_code, status, contact, created_at, updated_at, resolved_at
+      `;
+      if (!row) throw new Error("upgrade request upsert returned no row");
+      return normalizeUpgradeRequest(row);
+    },
+
+    async getOpenUpgradeRequest(userId) {
+      const [row] = await sql<UpgradeRequestRow[]>`
+        select id::text, user_id::text, plan_code, status, contact, created_at, updated_at, resolved_at
+        from billing_upgrade_requests
+        where user_id = ${userId} and status = 'OPEN'
+        limit 1
+      `;
+      return row ? normalizeUpgradeRequest(row) : null;
+    },
+
+    async listOpenUpgradeRequests(limit) {
+      const rows = await sql<UpgradeRequestRow[]>`
+        select id::text, user_id::text, plan_code, status, contact, created_at, updated_at, resolved_at
+        from billing_upgrade_requests
+        where status = 'OPEN'
+        order by created_at asc, id asc
+        limit ${limit}
+      `;
+      return rows.map(normalizeUpgradeRequest);
+    },
+
+    async fulfillUpgradeRequest(userId) {
+      const rows = await sql`
+        update billing_upgrade_requests
+        set status = 'FULFILLED', resolved_at = now(), updated_at = now()
+        where user_id = ${userId} and status = 'OPEN'
+        returning id
+      `;
+      return rows.length;
     }
+  };
+}
+
+function normalizeUpgradeRequest(row: UpgradeRequestRow): UpgradeRequestRow {
+  return {
+    ...row,
+    created_at: toIso(row.created_at),
+    updated_at: toIso(row.updated_at),
+    resolved_at: toIsoOrNull(row.resolved_at)
   };
 }

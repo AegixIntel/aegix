@@ -17,10 +17,12 @@ import type { AppConfig } from "@aegix/config";
 import type { BillingRepo, SubscriptionRow } from "@aegix/database";
 import {
   buildPlanCatalog,
+  canUseFeature as planIncludesFeature,
   catalogViolations,
   resolveEntitlements,
   type EntitlementBaseline,
   type EntitlementKey,
+  type FeatureKey,
   type PlanDefinition,
   type ResolvedEntitlements,
   type SubscriptionState
@@ -72,6 +74,11 @@ export interface EntitlementService {
   resolve(userId: string | null): Promise<ResolvedEntitlements>;
   /** One limit, the common case at an enforcement point. */
   limit(userId: string | null, key: EntitlementKey): Promise<number>;
+  /**
+   * Whether the identity's enforced plan includes a feature. How much of it
+   * may be used is the separate `limit()` question.
+   */
+  canUseFeature(userId: string | null, feature: FeatureKey): Promise<boolean>;
   /** Drops the cached resolution after a transition on this replica. */
   invalidate(userId: string): void;
   /** Idempotently persists the in-process catalog snapshot. */
@@ -154,6 +161,11 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
     resolve,
     async limit(userId, key) {
       return (await resolve(userId)).entitlements[key];
+    },
+    async canUseFeature(userId, feature) {
+      // The enforced plan, not the subscribed one: a lapsed paid plan is
+      // asked about as the free plan it has degraded to.
+      return planIncludesFeature((await resolve(userId)).planCode, feature);
     },
     invalidate(userId) {
       cache.delete(userId);

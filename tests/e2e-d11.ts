@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
 import { createDb, createBillingRepo, type Sql } from "@aegix/database";
@@ -90,6 +91,9 @@ function operatorStore(repo: ReturnType<typeof createBillingRepo>): BillingStore
 
 async function cleanup(sql: Sql, userIds: string[]): Promise<void> {
   for (const id of userIds) {
+    await sql`delete from billing_upgrade_requests where user_id = ${id}`;
+    await sql`delete from privacy_monitors where user_id = ${id}`;
+    await sql`delete from saved_analyses where user_id = ${id}`;
     await sql`delete from invoices where user_id = ${id}`;
     await sql`delete from billing_events where user_id = ${id}`;
     await sql`delete from subscriptions where user_id = ${id}`;
@@ -100,7 +104,13 @@ async function cleanup(sql: Sql, userIds: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   const safe = requireSafeTestDatabaseReset();
-  const config = loadConfig({ ...process.env, MARKETS_DAILY_QUOTA: String(MARKETS_FREE_QUOTA), BILLING_GRACE_DAYS: "7" });
+  // One free monitor (five on pro) so a lapsed plan's monitor pause is visible.
+  const config = loadConfig({
+    ...process.env,
+    MARKETS_DAILY_QUOTA: String(MARKETS_FREE_QUOTA),
+    BILLING_GRACE_DAYS: "7",
+    MAX_ACTIVE_MONITORS_PER_USER: "1"
+  });
   const sql = createDb(safe.databaseUrl);
   const repo = createBillingRepo(sql);
   const catalog = buildPlanCatalog(
@@ -169,7 +179,7 @@ async function main(): Promise<void> {
     }
     assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode, 429);
 
-    // ---- An upgrade is refused: no payment provider in this baseline ----
+    // ---- Self-serve upgrade is refused: V1 has no payment processor ----
     const upgrade = await app.inject({
       method: "POST",
       url: "/v1/billing/subscription/change",
@@ -178,6 +188,64 @@ async function main(): Promise<void> {
     });
     assert.equal(upgrade.statusCode, 501);
     assert.equal(upgrade.json().code, "PAYMENT_PROVIDER_REQUIRED");
+
+    // ---- V1 manual provisioning: a request records intent and grants nothing ----
+    assert.equal((await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", payload: { plan: "pro" } })).statusCode, 401);
+    assert.equal(
+      (await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "free" } })).statusCode,
+      400,
+      "the free plan is not something to request"
+    );
+    const requested = await app.inject({
+      method: "POST",
+      url: "/v1/billing/upgrade-request",
+      headers: free.headers,
+      payload: { plan: "pro", contact: "  @aegix-e2e  " }
+    });
+    assert.equal(requested.statusCode, 201, requested.body);
+    assert.equal(requested.json().request.plan, "pro");
+    const retargeted = await app.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "team" } });
+    assert.equal(retargeted.statusCode, 201);
+    const [openRequests] = await sql<Array<{ count: string; plan: string | null; contact: string | null }>>`
+      select count(*)::text as count, max(plan_code) as plan, max(contact) as contact
+      from billing_upgrade_requests where user_id = ${free.userId} and status = 'OPEN'
+    `;
+    assert.equal(openRequests?.count, "1", "one open request per identity");
+    assert.equal(openRequests?.plan, "team", "asking again re-targets the open request");
+    assert.equal(openRequests?.contact, "@aegix-e2e", "a later request without a contact keeps the earlier one");
+    const pending = await app.inject({ url: "/v1/billing/subscription", headers: free.headers });
+    assert.equal(pending.json().plan.code, "free", "requesting an upgrade grants nothing");
+    assert.equal(pending.json().status, "NONE");
+    assert.equal(pending.json().upgradeRequest.plan, "team");
+    assert.deepEqual((await app.inject({ url: "/v1/billing/events", headers: free.headers })).json().events, [], "a request writes no ledger entry");
+    assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode, 429, "free limits still apply while pending");
+
+    // ---- The operator grants it with the supported CLI; the request closes ----
+    const cli = execFileSync(process.execPath, ["--import", "tsx", "scripts/grant-plan.ts", "--user", free.userId, "--plan", "team"], {
+      env: { ...process.env, DATABASE_URL: safe.databaseUrl },
+      encoding: "utf8"
+    });
+    assert.match(cli, /SUBSCRIPTION_CREATED: free → team \(ACTIVE\)/);
+    assert.match(cli, /upgrade request fulfilled/);
+    // A fresh server: this identity's plan is cached on the first one, and an
+    // out-of-band grant is otherwise visible only after the 30s cache TTL.
+    const grantedApp = await buildServer({ config, marketProvider });
+    try {
+      const teamSub = await grantedApp.inject({ url: "/v1/billing/subscription", headers: free.headers });
+      assert.equal(teamSub.json().plan.code, "team");
+      assert.equal(teamSub.json().status, "ACTIVE");
+      assert.equal(teamSub.json().upgradeRequest, null, "a granted plan closes the request");
+      assert.equal(teamSub.json().entitlements["markets.daily"], MARKETS_FREE_QUOTA * 40);
+      assert.equal(
+        (await grantedApp.inject({ url: "/v1/markets/SOL", headers: free.headers })).statusCode,
+        200,
+        "the granted plan lifts the quota the request could not"
+      );
+      const onPlan = await grantedApp.inject({ method: "POST", url: "/v1/billing/upgrade-request", headers: free.headers, payload: { plan: "pro" } });
+      assert.equal(onPlan.statusCode, 409, "a plan already covered is not requested");
+    } finally {
+      await grantedApp.close();
+    }
 
     // ---- An operator grant raises the same enforcement point ----
     // Granted before the first request so the entitlement cache is cold; a
@@ -232,6 +300,26 @@ async function main(): Promise<void> {
       ["CANCELLATION_REVOKED", "CANCELLATION_SCHEDULED", "SUBSCRIPTION_CREATED"]
     );
 
+    // ---- Billing state is per identity: another user sees, changes and spends only their own ----
+    const other = await authenticate(app);
+    created.push(other.userId);
+    const otherSub = await app.inject({ url: "/v1/billing/subscription", headers: other.headers });
+    assert.equal(otherSub.json().plan.code, "free", "another identity does not inherit a paid plan");
+    assert.equal(otherSub.json().status, "NONE");
+    assert.deepEqual((await app.inject({ url: "/v1/billing/events", headers: other.headers })).json().events, [], "no foreign ledger entries");
+    const otherCancel = await app.inject({ method: "POST", url: "/v1/billing/subscription/cancel", headers: other.headers, payload: {} });
+    assert.ok(otherCancel.statusCode >= 400, `cancelling without a subscription is refused (${otherCancel.statusCode})`);
+    assert.equal(
+      (await app.inject({ url: "/v1/billing/subscription", headers: paid.headers })).json().status,
+      "ACTIVE",
+      "another identity cannot touch this subscription"
+    );
+    for (let i = 0; i < MARKETS_FREE_QUOTA; i++) {
+      assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: other.headers })).statusCode, 200, `other markets call ${i + 1}`);
+    }
+    assert.equal((await app.inject({ url: "/v1/markets/SOL", headers: other.headers })).statusCode, 429, "quota is not shared with a paid identity");
+    assert.equal((await app.inject({ url: "/v1/billing/subscription" })).statusCode, 401, "billing state requires a session");
+
     // ---- A manual elapsed period ends unpaid; it never renews on time alone ----
     const closedStart = new Date(Date.now() - 40 * 86_400_000).toISOString();
     const closedEnd = new Date(Date.now() - 10 * 86_400_000).toISOString();
@@ -264,6 +352,13 @@ async function main(): Promise<void> {
     assert.equal(invoices[0]?.total_cents, 4900);
     assert.equal(invoices[0]?.status, "OPEN", "the invoice waits for an operator to confirm payment");
     assert.equal(invoices[0]?.period_start, closedStart);
+    const invoiceId = invoices[0]?.id;
+    assert.equal((await app.inject({ url: `/v1/billing/invoices/${invoiceId}`, headers: paid.headers })).statusCode, 200);
+    assert.equal(
+      (await app.inject({ url: `/v1/billing/invoices/${invoiceId}`, headers: other.headers })).statusCode,
+      404,
+      "another identity cannot read this invoice"
+    );
 
     // ---- A closed grace window degrades to free without losing the row ----
     await sql`
@@ -292,7 +387,77 @@ async function main(): Promise<void> {
       await degradedApp.close();
     }
 
-    console.log("D11 entitlement enforcement, ledger, lifecycle sweep and invoicing: PASS");
+    // ---- A lapsed plan pauses the monitors it no longer covers, and never deletes them ----
+    const watcher = await authenticate(app);
+    created.push(watcher.userId);
+    const watcherGrant = await applyBillingAction(operatorStore(repo), catalog, {
+      userId: watcher.userId,
+      action: "SUBSCRIBE",
+      planCode: "pro",
+      now: new Date(),
+      graceDays: config.BILLING_GRACE_DAYS
+    });
+    assert.equal(watcherGrant.applied, true);
+
+    const monitorIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const address = base58.encode(ed25519.getPublicKey(ed25519.utils.randomPrivateKey()));
+      assert.equal((await app.inject({ method: "POST", url: "/v1/me/saved", headers: watcher.headers, payload: { address } })).statusCode, 201);
+      const createdMonitor = await app.inject({ method: "POST", url: "/v1/me/monitors", headers: watcher.headers, payload: { address } });
+      assert.equal(createdMonitor.statusCode, 201, `pro covers monitor ${i + 1}: ${createdMonitor.body}`);
+      monitorIds.push(String(createdMonitor.json().monitor.id));
+      // Distinct creation instants keep the oldest-first order unambiguous.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    // The owner pauses the newest one: the plan must never resume it.
+    const ownerPause = await app.inject({ method: "PATCH", url: `/v1/me/monitors/${monitorIds[3]}`, headers: watcher.headers, payload: { status: "PAUSED" } });
+    assert.equal(ownerPause.statusCode, 200);
+
+    const monitorStatuses = async () =>
+      (await sql<Array<{ status: string }>>`
+        select status from privacy_monitors where user_id = ${watcher.userId} order by created_at asc, id asc
+      `).map((row) => row.status);
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"]);
+
+    // The plan lapses (the state the sweep and resolver both treat as free).
+    await sql`update subscriptions set status = 'EXPIRED' where user_id = ${watcher.userId}`;
+    const lapsedSweep = await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.ok(lapsedSweep.monitorsPaused >= 2, `the sweep paused the uncovered monitors (${lapsedSweep.monitorsPaused})`);
+    assert.deepEqual(
+      await monitorStatuses(),
+      ["ACTIVE", "ENTITLEMENT_PAUSED", "ENTITLEMENT_PAUSED", "PAUSED"],
+      "the oldest monitor keeps running; the newest uncovered ones pause; the owner's pause is untouched"
+    );
+    const [kept] = await sql<Array<{ monitors: string; saved: string }>>`
+      select
+        (select count(*)::text from privacy_monitors where user_id = ${watcher.userId}) as monitors,
+        (select count(*)::text from saved_analyses where user_id = ${watcher.userId}) as saved
+    `;
+    assert.equal(kept?.monitors, "4", "no monitor is deleted when the plan lapses");
+    assert.equal(kept?.saved, "4", "no saved analysis is deleted when the plan lapses");
+
+    // Resuming by hand is held to the free limit, like creating one.
+    const lapsedApp = await buildServer({ config, marketProvider });
+    try {
+      const resumeByHand = await lapsedApp.inject({ method: "PATCH", url: `/v1/me/monitors/${monitorIds[1]}`, headers: watcher.headers, payload: { status: "ACTIVE" } });
+      assert.equal(resumeByHand.statusCode, 429);
+      assert.equal(resumeByHand.json().code, "MONITOR_LIMIT_REACHED");
+      const lapsedList = await lapsedApp.inject({ url: "/v1/me/monitors", headers: watcher.headers });
+      assert.equal(lapsedList.statusCode, 200);
+      assert.equal(lapsedList.json().monitors.length, 4, "paused monitors stay visible to their owner");
+    } finally {
+      await lapsedApp.close();
+    }
+
+    // The plan returns: the sweep resumes the monitors it paused, and only those.
+    await sql`update subscriptions set status = 'ACTIVE' where user_id = ${watcher.userId}`;
+    const restoredSweep = await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.ok(restoredSweep.monitorsResumed >= 2, `the sweep resumed the covered monitors (${restoredSweep.monitorsResumed})`);
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"]);
+    await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    assert.deepEqual(await monitorStatuses(), ["ACTIVE", "ACTIVE", "ACTIVE", "PAUSED"], "a repeated sweep changes nothing");
+
+    console.log("D11 entitlement enforcement, cross-user isolation, ledger, lifecycle sweep, invoicing and monitor entitlement: PASS");
   } finally {
     await app.close();
     await cleanup(sql, created);

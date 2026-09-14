@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
-import { createDb, createBillingRepo, createMonitorRepo, type Sql } from "@aegix/database";
+import { createDb, createBillingRepo, type Sql } from "@aegix/database";
 import { loadConfig } from "@aegix/config";
 import type { AegixLogger } from "@aegix/logging";
 import { buildServer } from "../apps/api/src/server.js";
@@ -80,12 +80,22 @@ async function subscriptionView(config: ReturnType<typeof loadConfig>, headers: 
   }
 }
 
+/** Monitor counts by status, straight from storage (no repository shortcut). */
+async function monitorStatusCounts(sql: Sql, userId: string): Promise<Record<string, number>> {
+  const rows = await sql<Array<{ status: string; count: string }>>`
+    select status, count(*)::text as count
+    from privacy_monitors
+    where user_id = ${userId}
+    group by status
+  `;
+  return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
+}
+
 async function main(): Promise<void> {
   const safe = requireSafeTestDatabaseReset();
   const config = loadConfig({ ...process.env, ...OVERRIDES });
   const sql = createDb(safe.databaseUrl);
   const repo = createBillingRepo(sql);
-  const monitorRepo = createMonitorRepo(sql);
   const env = cliEnv(safe.databaseUrl);
   const createdUsers: string[] = [];
   const createdWallets: string[] = [];
@@ -149,10 +159,10 @@ async function main(): Promise<void> {
     assert.equal(expired.entitlements["markets.daily"], MARKETS_FREE_QUOTA, "free quota is enforced again");
     assert.equal(expired.entitlements["monitors.active"], FREE_MONITOR_LEVEL);
 
-    // Monitors beyond the free level are paused, never deleted.
-    const activeMonitors = await monitorRepo.countActiveForUser(paid.userId);
-    assert.equal(activeMonitors, FREE_MONITOR_LEVEL, "only the free level stays active");
-    assert.equal(await monitorRepo.countEntitlementPaused(paid.userId), 2, "the uncovered monitors are marked ENTITLEMENT_PAUSED");
+    // Monitors beyond the free level are held by the plan, never deleted.
+    const expiryStatuses = await monitorStatusCounts(sql, paid.userId);
+    assert.equal(expiryStatuses.ACTIVE ?? 0, FREE_MONITOR_LEVEL, "only the free level keeps running");
+    assert.equal(expiryStatuses.ENTITLEMENT_PAUSED ?? 0, 2, "the uncovered monitors are held by the plan");
     const [{ count: retained }] = await sql<Array<{ count: string }>>`
       select count(*)::text as count from privacy_monitors where user_id = ${paid.userId}
     `;
@@ -180,8 +190,11 @@ async function main(): Promise<void> {
     assert.equal(renewed.status, "ACTIVE");
     assert.equal(renewed.entitlements["markets.daily"], MARKETS_FREE_QUOTA * 10, "paid quotas are retained");
     assert.equal(renewed.entitlements["monitors.active"], 5);
-    assert.deepEqual(await monitorRepo.countEntitlementPaused(paid.userId), 0, "entitlement-paused monitors are restored");
-    assert.equal(await monitorRepo.countActiveForUser(paid.userId), monitors.length);
+    // The entitlement sweep resumes what the lapse held, and nothing else.
+    await runBillingLifecycle({ config, sql, logger: silentLogger() });
+    const restoredStatuses = await monitorStatusCounts(sql, paid.userId);
+    assert.equal(restoredStatuses.ENTITLEMENT_PAUSED ?? 0, 0, "plan-held monitors are restored");
+    assert.equal(restoredStatuses.ACTIVE ?? 0, monitors.length);
 
     // ---- A replayed settlement must not extend a second period ----
     const [before] = await sql<Array<{ current_period_end: string }>>`

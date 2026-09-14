@@ -12,9 +12,15 @@ remains isolated behind both flags. Webhook delivery remains supported when
 enabled and configured.
 
 No D8 or roadmap capability is part of this gate. Market/narrative
-intelligence, anomaly/signal engines, AI Copilot, reputation, billing,
-multi-chain, a webhook consumer SDK, `$AEX`, and a global indexer remain future
-work.
+intelligence, anomaly/signal engines, AI Copilot, reputation, multi-chain, a
+webhook consumer SDK, `$AEX`, and a global indexer remain future work.
+
+Billing (D11 V1) is complete with manual subscription provisioning:
+`BILLING_PROVIDER=manual`, users request an upgrade in the Billing UI and an
+operator grants it with `pnpm billing:grant`; no payment-processor credentials
+are required. Self-service checkout, a customer billing portal,
+payment-provider webhooks and an automated payment lifecycle are post-launch
+scope (`docs/milestone-d11.md` §6).
 
 ## Verification status
 

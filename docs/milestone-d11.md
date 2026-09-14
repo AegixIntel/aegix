@@ -36,18 +36,22 @@ invoice arithmetic              deterministic, integer cents
 lifecycle sweep                 renewal, expiry, grace, invoice generation
 HTTP surface                    /v1/billing/*
 operator grant                  pnpm billing:grant
+upgrade requests                /app/billing → operator (V1 provisioning, §6)
 plan & usage UI                 /app/billing
 ```
 
-Deliberately not built:
+Post-launch (intentional V1 scope, not blockers):
 
 ```text
-payment processor integration   architecture.md PR-12: the beta operates
-                                without payment infrastructure. The seam is
-                                `PaymentProvider`; the only implementation is
-                                `manual`.
-self-serve upgrade              refused with PAYMENT_PROVIDER_REQUIRED while
-                                no provider exists — see §6.
+self-service payment processor  hosted checkout, customer billing portal,
+                                payment-provider webhooks and an automated
+                                payment lifecycle. The seam is
+                                `PaymentProvider`; V1 ships `manual` only.
+                                A Paddle implementation is kept for this work
+                                on the deferred PR #5.
+self-serve upgrade              the API refuses it with
+                                PAYMENT_PROVIDER_REQUIRED; the UI offers
+                                "Request upgrade" instead — see §6.
 overage billing                 the arithmetic exists and is tested; the v1
                                 catalog declares no overage rates because
                                 every dimension is a hard cap.
@@ -207,6 +211,25 @@ webhook endpoints per user were previously unbounded, and are now capped at
 already over the cap keeps every endpoint it has; only creating another is
 refused, with `WEBHOOK_LIMIT_REACHED`.
 
+Monitors are held to their limit continuously, because a running monitor
+keeps consuming checks. The lifecycle sweep (§10) compares each identity's
+running monitors (`ACTIVE`, `DEGRADED`) with `monitors.active` under its
+enforced plan. When the plan no longer covers them, the newest move to
+`ENTITLEMENT_PAUSED`; the scheduler only checks `ACTIVE` monitors, so they
+stop consuming checks. When the plan covers them again, the oldest paused
+ones return to `ACTIVE`. Nothing is deleted, and a monitor its owner paused
+(`PAUSED`) is never touched. Resuming a monitor by hand
+(`PATCH /v1/me/monitors/:id`) is checked against the limit exactly like
+creating one, with `MONITOR_LIMIT_REACHED`.
+
+Surfaces without a quota — wallet context, saved analyses, saved
+comparisons — ask the same layer whether the plan includes them:
+`canUseFeature()`, backed by the feature registry in
+`packages/billing/src/features.ts`, which maps every product feature to the
+entitlement that bounds it, or to none. Every v1 plan includes every feature,
+so those checks refuse nothing today; a plan that excludes one would answer
+`403 FEATURE_NOT_IN_PLAN`.
+
 ---
 
 ## 6. Payment provider seam
@@ -225,18 +248,43 @@ API enforces is:
 
 So `POST /v1/billing/subscription/change` answers `501
 PAYMENT_PROVIDER_REQUIRED`, while cancel and resume always work. Creating a
-paid subscription nobody paid for would put a falsehood in the ledger.
+paid subscription nobody paid for would put a falsehood in the ledger. The
+Billing UI never calls it.
 
-Paid plans are granted by an operator, and — because the `manual` provider has
-no processor to collect the next period — renewed only when the operator
-confirms the invoice payment:
+### V1 subscription provisioning: manual
+
+AEGIX V1 provisions paid plans manually. `BILLING_PROVIDER=manual` is the
+production setting and needs no payment-processor credentials.
+
+```text
+wallet login → /app/billing (Free)
+  → "Request upgrade" on Pro or Team (optional contact: email/Telegram)
+  → POST /v1/billing/upgrade-request       records intent only
+  → AEGIX team arranges and verifies payment
+  → pnpm billing:grant -- --user <uuid> --plan pro
+  → entitlements update; the request is marked FULFILLED
+```
+
+A request never creates or changes a subscription and writes nothing to the
+ledger (`billing_upgrade_requests`, migration 0011; one open request per
+identity, asking again re-targets it). The UI states that the plan is
+activated only after payment is confirmed. The operator grant stays the only
+way a paid plan starts.
+
+A manual subscription does not renew on time alone: when its period ends
+unpaid it expires, its closed period is invoiced `OPEN`, and only an operator
+confirming payment (`--mark-paid`) starts the next period. Operator commands:
 
 ```bash
+pnpm billing:grant -- --requests
 pnpm billing:grant -- --user <uuid> --plan pro
 pnpm billing:grant -- --user <uuid> --action CANCEL
 pnpm billing:grant -- --user <uuid> --show
 pnpm billing:grant -- --invoice <id> --mark-paid
 ```
+
+Self-service checkout, a customer billing portal, payment-provider webhooks
+and an automated payment lifecycle are post-launch scope.
 
 The grant and the settlement are not database pokes. Both go through the same
 state machine and write the same `billing_events` entry (tagged `grantedBy:
@@ -294,9 +342,10 @@ billing_events      append-only ledger, unique on event_key
 invoices            one per identity per period (unique user_id, period_start);
                     OPEN → PAID via markInvoicePaid, paid_at records settlement
 usage_records       unchanged from 0001; gains (user_id, usage_type, created_at)
-privacy_monitors    gains status_reason (0011), so a plan-limit pause
-                    (ENTITLEMENT_PAUSED) is distinguishable from a pause the
-                    user chose and can be reversed without touching either
+billing_upgrade_    intent-only upgrade requests (0011); writes no subscription
+requests            and no ledger entry
+privacy_monitors    no schema change: a plan-limit pause is the status value
+                    ENTITLEMENT_PAUSED (D11), distinct from the owner's PAUSED
 ```
 
 `billing_events.event_key` is the idempotency anchor, the same pattern
@@ -350,9 +399,9 @@ key. Invoices are raised for a closed period whether it renewed or ended
 unpaid, so a lapsed period is still collectible.
 
 A plan limit is not a data-retention policy: when an identity drops to free,
-its monitors beyond the free level are **paused** (`status_reason =
-ENTITLEMENT_PAUSED`) and restored when a paid period returns — never deleted.
-A monitor the user paused themselves is left untouched.
+its monitors beyond the free level move to the status
+`ENTITLEMENT_PAUSED` and return to `ACTIVE` when a paid period does — never
+deleted. A monitor the owner paused themselves (`PAUSED`) is left untouched.
 
 ---
 
@@ -370,10 +419,12 @@ invoiced `OPEN` so an operator can collect it. A **processor-managed** row
 manual path leaves that untouched. A scheduled cancellation ends through
 `RENEW` for every provider.
 
-After an applied transition the sweep reconciles the identity's monitors with
-its resolved entitlement: uncovered monitors are paused, and monitors paused
-by an earlier lapse are restored. This is idempotent, so running it on every
-transition is safe.
+The sweep then holds every identity to its monitor entitlement: an identity
+with more running monitors than its enforced plan covers has the newest moved
+to `ENTITLEMENT_PAUSED`, and held monitors resume when the plan covers them
+again. This runs whether or not a subscription row was due, so a grace window
+that has already degraded entitlements is enforced before its row changes.
+Nothing is deleted.
 
 It is safe to run concurrently on several replicas: every transition carries
 a deterministic event key derived from the boundary being crossed
@@ -396,6 +447,7 @@ GET    /v1/billing/usage                   metered usage vs entitlements
 GET    /v1/billing/invoices                recent invoices
 GET    /v1/billing/invoices/:id            one invoice
 GET    /v1/billing/events                  the identity's own ledger
+POST   /v1/billing/upgrade-request         records intent; no subscription
 POST   /v1/billing/subscription/change     501 while no provider exists
 POST   /v1/billing/subscription/cancel     schedules, or `{immediate: true}`
 POST   /v1/billing/subscription/resume     revokes a scheduled cancellation

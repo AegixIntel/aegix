@@ -60,18 +60,17 @@ export interface MonitorRepo {
   touchCheck(monitorId: string, analysisId: string): Promise<void>;
   countActiveForUser(userId: string): Promise<number>;
   /**
-   * Pauses the monitors beyond `allowed` (oldest kept) and marks them
-   * ENTITLEMENT_PAUSED. Never deletes. Returns how many were paused.
+   * D11: identities whose monitors may need an entitlement pause or resume —
+   * more running monitors than the free plan allows, or any held by an
+   * entitlement pause.
    */
-  pauseUncoveredForEntitlement(userId: string, allowed: number): Promise<number>;
-  /**
-   * Restores ENTITLEMENT_PAUSED monitors up to `allowed` active. Only billing
-   * pauses are touched; a monitor the user paused stays paused. Returns how
-   * many were restored.
-   */
-  restoreEntitlementPaused(userId: string, allowed: number): Promise<number>;
-  /** How many monitors billing has paused for this user. */
-  countEntitlementPaused(userId: string): Promise<number>;
+  listEntitlementCandidates(freeLimit: number, limit: number): Promise<string[]>;
+  /** D11: a user's monitors that count against, or are held by, the monitor entitlement. */
+  listEntitlementScoped(userId: string): Promise<Array<{ id: string; status: string; created_at: string }>>;
+  /** D11: moves running (ACTIVE/DEGRADED) monitors to ENTITLEMENT_PAUSED; returns rows changed. */
+  pauseForEntitlement(userId: string, monitorIds: readonly string[]): Promise<number>;
+  /** D11: moves ENTITLEMENT_PAUSED monitors back to ACTIVE; returns rows changed. */
+  resumeFromEntitlement(userId: string, monitorIds: readonly string[]): Promise<number>;
 }
 
 /** Privacy monitor repository, see docs/milestone-d4.md (D4-A). */
@@ -243,49 +242,48 @@ export function createMonitorRepo(sql: Sql): MonitorRepo {
       return row ? Number(row.count) : 0;
     },
 
-    async pauseUncoveredForEntitlement(userId, allowed) {
-      const keep = Math.max(0, Math.trunc(allowed));
+    async listEntitlementCandidates(freeLimit, limit) {
+      const rows = await sql<Array<{ user_id: string }>>`
+        select user_id::text as user_id
+        from privacy_monitors
+        group by user_id
+        having count(*) filter (where status in ('ACTIVE', 'DEGRADED')) > ${freeLimit}
+            or count(*) filter (where status = 'ENTITLEMENT_PAUSED') > 0
+        order by user_id
+        limit ${limit}
+      `;
+      return rows.map((row) => row.user_id);
+    },
+
+    async listEntitlementScoped(userId) {
+      return sql<Array<{ id: string; status: string; created_at: string }>>`
+        select id::text as id, status, created_at
+        from privacy_monitors
+        where user_id = ${userId} and status in ('ACTIVE', 'DEGRADED', 'ENTITLEMENT_PAUSED')
+        order by created_at asc, id asc
+      `;
+    },
+
+    async pauseForEntitlement(userId, monitorIds) {
+      if (monitorIds.length === 0) return 0;
+      // The status guard keeps this from overriding a change made since the
+      // decision was read, e.g. the owner deleting or pausing the monitor.
       const result = await sql`
         update privacy_monitors
-        set status = 'PAUSED', status_reason = 'ENTITLEMENT_PAUSED', updated_at = now()
-        where id in (
-          select id from privacy_monitors
-          where user_id = ${userId} and status in ('ACTIVE', 'DEGRADED')
-          order by created_at asc, id asc
-          offset ${keep}
-        )
+        set status = 'ENTITLEMENT_PAUSED', updated_at = now()
+        where user_id = ${userId} and id in ${sql(monitorIds as string[])} and status in ('ACTIVE', 'DEGRADED')
       `;
       return result.count;
     },
 
-    async restoreEntitlementPaused(userId, allowed) {
-      const limit = Math.max(0, Math.trunc(allowed));
+    async resumeFromEntitlement(userId, monitorIds) {
+      if (monitorIds.length === 0) return 0;
       const result = await sql`
         update privacy_monitors
-        set status = 'ACTIVE', status_reason = null, updated_at = now()
-        where id in (
-          select id from privacy_monitors
-          where user_id = ${userId}
-            and status = 'PAUSED'
-            and status_reason = 'ENTITLEMENT_PAUSED'
-          order by created_at asc, id asc
-          limit greatest(0, ${limit} - (
-            select count(*) from privacy_monitors
-            where user_id = ${userId} and status in ('ACTIVE', 'DEGRADED')
-          ))
-        )
+        set status = 'ACTIVE', updated_at = now()
+        where user_id = ${userId} and id in ${sql(monitorIds as string[])} and status = 'ENTITLEMENT_PAUSED'
       `;
       return result.count;
-    },
-
-    async countEntitlementPaused(userId) {
-      const [row] = await sql<Array<{ count: string }>>`
-        select count(*)::text as count from privacy_monitors
-        where user_id = ${userId}
-          and status = 'PAUSED'
-          and status_reason = 'ENTITLEMENT_PAUSED'
-      `;
-      return row ? Number(row.count) : 0;
     }
   };
 }

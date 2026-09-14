@@ -50,6 +50,8 @@ export interface AnalysisJobRepo {
   markCompleted(id: string, freshness: { chainDataUntil: string; freshUntil: string }, dataQuality: JsonValue): Promise<void>;
   markFailed(id: string, code: string, message: string): Promise<void>;
   latestForWallet(walletId: string): Promise<AnalysisJobRow | null>;
+  /** Newest job of any status, so a client can find an analysis still running. */
+  latestJobForWallet(walletId: string): Promise<AnalysisJobRow | null>;
   /** READY analyses for a wallet, newest first — exposure timeline (D4-G §58). */
   listReadyForWallet(walletId: string, limit: number): Promise<AnalysisJobRow[]>;
 }
@@ -130,6 +132,16 @@ export function createAnalysisJobRepo(sql: Sql): AnalysisJobRepo {
       const [row] = await sql<AnalysisJobRow[]>`
         select * from analysis_jobs
         where wallet_id = ${walletId} and status = 'READY'
+        order by created_at desc
+        limit 1
+      `;
+      return row ?? null;
+    },
+
+    async latestJobForWallet(walletId) {
+      const [row] = await sql<AnalysisJobRow[]>`
+        select * from analysis_jobs
+        where wallet_id = ${walletId}
         order by created_at desc
         limit 1
       `;

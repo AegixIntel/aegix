@@ -43,7 +43,7 @@ import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
 import { createOpenAICompatibleProvider } from "@aegix/ai";
-import { createManualProvider } from "@aegix/billing";
+import { createManualProvider, type FeatureKey } from "@aegix/billing";
 import { createBillingRepo } from "@aegix/database";
 import { createEntitlementService } from "./entitlements.js";
 import { registerBilling } from "./billing.js";
@@ -145,7 +145,17 @@ export async function buildServer(deps: ApiDeps) {
   const { config } = deps;
   // Request logging is handled by the redacting AEGIX logger below. Fastify's
   // default logger includes the raw query string and can leak API keys/URLs.
-  const app = Fastify({ logger: false, bodyLimit: config.API_BODY_LIMIT_BYTES });
+  // Trusting a fixed number of hops resolves req.ip from the rightmost
+  // untrusted X-Forwarded-For entry, so a client cannot spoof its IP by
+  // sending the header itself. Without it, req.ip behind nginx is the proxy
+  // for everyone. (Fastify accepts a numeric hop count at runtime, but its
+  // typings only admit this equivalent predicate.)
+  const trustedHops = config.TRUST_PROXY_HOPS;
+  const app = Fastify({
+    logger: false,
+    bodyLimit: config.API_BODY_LIMIT_BYTES,
+    trustProxy: trustedHops > 0 ? (_address: string, hop: number) => hop < trustedHops : false
+  });
   const logger = createLogger(config, { service: "api" });
 
   // D6-J §65: production error responses never expose stack traces, SQL,
@@ -198,6 +208,13 @@ export async function buildServer(deps: ApiDeps) {
   // is built from the same config values these enforcement points used
   // before, so an identity without a subscription sees no change.
   const entitlements = createEntitlementService({ config, repo: billingRepo, logger });
+  // D11: surfaces without a quota still ask the entitlement layer whether the
+  // identity's plan includes them, so plan logic never lives in route code.
+  // Every v1 plan includes every feature, so this refuses nothing today.
+  const featureGate = async (reply: FastifyReply, userId: string, feature: FeatureKey) => {
+    if (await entitlements.canUseFeature(userId, feature)) return null;
+    return reply.code(403).send({ code: "FEATURE_NOT_IN_PLAN", message: "Your plan does not include this feature", requestId: randomUUID() });
+  };
   const paymentProvider = createManualProvider();
   const developerAuth = createDeveloperAuth({
     sql,
@@ -746,7 +763,10 @@ export async function buildServer(deps: ApiDeps) {
     if (!wallet) {
       return reply.code(404).send({ code: "CHAIN_DATA_UNAVAILABLE", message: "Wallet not found", requestId: randomUUID() });
     }
-    const latest = await jobRepo.latestForWallet(wallet.id);
+    // Newest job of any status: the report page polls this after /x-ray 404s
+    // to find an analysis that is still running. A READY-only lookup left a
+    // first-time analysis stuck on "No analysis yet".
+    const latest = await jobRepo.latestJobForWallet(wallet.id);
     return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null });
   });
 
@@ -866,6 +886,8 @@ export async function buildServer(deps: ApiDeps) {
       // public chain analysis, not a statement about the session.
       const user = await requireUser(req, reply);
       if (!user || user.isAnonymous) return;
+      const planGate = await featureGate(reply, user.id, "WALLET_CONTEXT");
+      if (planGate) return planGate;
 
       const profile = await loadWalletContextProfile(address);
       if (!profile) {
@@ -1031,6 +1053,8 @@ export async function buildServer(deps: ApiDeps) {
     }
     const user = await requireUser(req, reply);
     if (!user || user.isAnonymous) return;
+    const planGate = await featureGate(reply, user.id, "SAVED_ANALYSES");
+    if (planGate) return planGate;
     await auth.ensureProfile(user, sql);
     const saved = await savedRepo.listForUser(user.id);
     return reply.send({ saved });
@@ -1053,6 +1077,8 @@ export async function buildServer(deps: ApiDeps) {
       }
       const user = await requireUser(req, reply);
       if (!user || user.isAnonymous) return;
+      const planGate = await featureGate(reply, user.id, "SAVED_ANALYSES");
+      if (planGate) return planGate;
       await auth.ensureProfile(user, sql);
 
       const { address, label } = req.body;
@@ -1119,6 +1145,8 @@ export async function buildServer(deps: ApiDeps) {
       if (gate) return gate;
       const user = await requireUser(req, reply);
       if (!user || user.isAnonymous) return;
+      const planGate = await featureGate(reply, user.id, "SAVED_COMPARISONS");
+      if (planGate) return planGate;
       await auth.ensureProfile(user, sql);
       const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
 
@@ -1153,6 +1181,8 @@ export async function buildServer(deps: ApiDeps) {
     if (gate) return gate;
     const user = await requireUser(req, reply);
     if (!user || user.isAnonymous) return;
+    const planGate = await featureGate(reply, user.id, "SAVED_COMPARISONS");
+    if (planGate) return planGate;
     await auth.ensureProfile(user, sql);
 
     const limit = Math.min(50, Math.max(1, Number(req.query.limit ?? 20) || 20));
@@ -1544,6 +1574,20 @@ export async function buildServer(deps: ApiDeps) {
     }
   );
 
+  // The developer portal reads the same summary with the wallet session.
+  // `/v1/developer/usage` stays API-key only (usage:read scope) for
+  // integrations; a session token there is rejected as a malformed key, which
+  // left the portal's usage page reporting 0/0.
+  app.get("/v1/me/developer/usage", async (req, reply) => {
+    const gate = developerGate(reply);
+    if (gate) return gate;
+    const user = await requireUser(req, reply);
+    if (!user || user.isAnonymous) return;
+    await auth.ensureProfile(user, sql);
+    const summary = await developerUsageRepo.summaryForUser(user.id, await developerAuth.quotaLimitFor(user.id));
+    return reply.send(summary);
+  });
+
   // ---- D6-E: developer intelligence API (thin orchestration, D6-E §43) ----
   registerDeveloperIntelligence({
     app,
@@ -1743,6 +1787,27 @@ export async function buildServer(deps: ApiDeps) {
       }
 
       const { scheduleType, status, alertRules } = req.body;
+      if (status !== undefined) {
+        if (status !== "ACTIVE" && status !== "PAUSED") {
+          return reply.code(400).send({ code: "INVALID_STATUS", message: "Status must be ACTIVE or PAUSED", requestId: randomUUID() });
+        }
+        // Resuming makes the monitor count against the entitlement again, so
+        // it is checked like creating one — including a monitor the plan
+        // paused (ENTITLEMENT_PAUSED): its owner can resume it once the plan
+        // has room, never past it. Checked before anything is written.
+        const running = monitor.status === "ACTIVE" || monitor.status === "DEGRADED";
+        if (status === "ACTIVE" && !running) {
+          const monitorLimit = await entitlements.limit(user.id, "monitors.active");
+          const active = await monitorRepo.countActiveForUser(user.id);
+          if (active >= monitorLimit) {
+            return reply.code(429).send({
+              code: "MONITOR_LIMIT_REACHED",
+              message: `Monitor limit reached (${monitorLimit} active)`,
+              requestId: randomUUID()
+            });
+          }
+        }
+      }
       if (scheduleType !== undefined) {
         if (!allowedSchedules().includes(scheduleType)) {
           return reply.code(400).send({ code: "INVALID_SCHEDULE", message: `Schedule must be one of: ${allowedSchedules().join(", ")}`, requestId: randomUUID() });
@@ -1750,9 +1815,6 @@ export async function buildServer(deps: ApiDeps) {
         await monitorRepo.updateSchedule(user.id, monitor.id, scheduleType, new Date(Date.now() + scheduleIntervalMs(scheduleType)).toISOString());
       }
       if (status !== undefined) {
-        if (status !== "ACTIVE" && status !== "PAUSED") {
-          return reply.code(400).send({ code: "INVALID_STATUS", message: "Status must be ACTIVE or PAUSED", requestId: randomUUID() });
-        }
         await monitorRepo.setStatus(user.id, monitor.id, status);
       }
       if (alertRules && typeof alertRules === "object") {

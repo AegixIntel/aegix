@@ -25,6 +25,10 @@ COPY packages/explanation/package.json packages/explanation/package.json
 COPY packages/logging/package.json packages/logging/package.json
 COPY packages/monitor/package.json packages/monitor/package.json
 COPY packages/webhook-delivery/package.json packages/webhook-delivery/package.json
+COPY packages/ai/package.json packages/ai/package.json
+COPY packages/billing/package.json packages/billing/package.json
+COPY packages/context/package.json packages/context/package.json
+COPY packages/markets/package.json packages/markets/package.json
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS build

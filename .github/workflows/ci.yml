@@ -246,7 +246,7 @@ jobs:
         with: { name: e2e-monitor-logs, path: artifacts/e2e-monitor.log, retention-days: 7 }
 
   e2e-d11:
-    name: E2E D11 billing revenue safety
+    name: E2E D11 billing and entitlements
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -283,7 +283,7 @@ jobs:
       - run: pnpm --filter "./packages/**" build
       - run: docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379 CONFIG SET maxmemory-policy noeviction
       - run: pnpm --filter @aegix/database migrate
-      - name: Run D11 billing E2E
+      - name: Run D11 E2E
         run: |
           mkdir -p artifacts
           set -o pipefail

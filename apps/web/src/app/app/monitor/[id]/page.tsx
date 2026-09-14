@@ -67,9 +67,16 @@ export default function MonitorDetailPage() {
     notifyDataQualityDegraded?: boolean;
     cooldownHours?: number;
   } }) {
-    const result = await updateMonitor(monitorId, p);
-    setMonitor(result.monitor);
-    setRules(result.rules);
+    setError(null);
+    try {
+      const result = await updateMonitor(monitorId, p);
+      setMonitor(result.monitor);
+      setRules(result.rules);
+    } catch (err) {
+      // A resume can be refused at the plan's monitor limit
+      // (MONITOR_LIMIT_REACHED); show why instead of failing silently.
+      setError(err instanceof Error ? err.message : "Failed to update monitor");
+    }
   }
 
   async function disable() {
@@ -97,10 +104,10 @@ export default function MonitorDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => void patch({ status: monitor?.status === "PAUSED" ? "ACTIVE" : "PAUSED" })}
+            onClick={() => void patch({ status: monitor?.status === "PAUSED" || monitor?.status === "ENTITLEMENT_PAUSED" ? "ACTIVE" : "PAUSED" })}
             className="btn-secondary px-4 py-2 text-xs"
           >
-            {monitor?.status === "PAUSED" ? "Resume" : "Pause"}
+            {monitor?.status === "PAUSED" || monitor?.status === "ENTITLEMENT_PAUSED" ? "Resume" : "Pause"}
           </button>
           <button
             onClick={() => void disable()}

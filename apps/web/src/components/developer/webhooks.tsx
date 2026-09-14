@@ -12,12 +12,16 @@ import {
   type Webhook
 } from "@/lib/api";
 
+// Must match WEBHOOK_EVENT_TYPES in packages/database (not imported: that
+// package is server-only). The API rejects any other event type.
 const EVENT_OPTIONS = [
-  "analysis.completed",
-  "comparison.completed",
-  "monitor.alert",
-  "notification.created"
+  "monitor.threat.created",
+  "correlation.appeared",
+  "correlation.increased",
+  "correlation.decreased",
+  "correlation.disappeared"
 ];
+const DEFAULT_EVENTS = ["monitor.threat.created"];
 
 function shortDate(iso: string | null): string {
   if (!iso) return "—";
@@ -35,7 +39,7 @@ export default function WebhooksSection() {
 
   // Create form
   const [url, setUrl] = useState("");
-  const [eventTypes, setEventTypes] = useState<string[]>(["analysis.completed"]);
+  const [eventTypes, setEventTypes] = useState<string[]>(DEFAULT_EVENTS);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [rotatedSecret, setRotatedSecret] = useState<{ id: string; secret: string } | null>(null);
 
@@ -61,7 +65,7 @@ export default function WebhooksSection() {
       const created = await createWebhook(url.trim(), eventTypes);
       setCreatedSecret(created.secret);
       setUrl("");
-      setEventTypes(["analysis.completed"]);
+      setEventTypes(DEFAULT_EVENTS);
       void load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");

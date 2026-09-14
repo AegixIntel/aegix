@@ -71,6 +71,10 @@ services:
       AUTH_DOMAIN: ${PUBLIC_WEB_ORIGIN:?required}
       AUTH_APP_URI: ${PUBLIC_WEB_ORIGIN:?required}
       CORS_ORIGIN: ${PUBLIC_WEB_ORIGIN:?required}
+      # nginx (the only published service) forwards /api/ straight to the API,
+      # so exactly one proxy hop is trusted for the client IP. Without it the
+      # rate limit and anonymous quota are shared by every visitor.
+      TRUST_PROXY_HOPS: "1"
       ENABLE_LEGACY_AUTH: "false"
       EMAIL_ENABLED: "false"
       ENABLE_EMAIL_NOTIFICATIONS: "false"

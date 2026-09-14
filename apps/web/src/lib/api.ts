@@ -252,7 +252,8 @@ export interface Monitor {
   wallet_address: string;
   saved_analysis_id: string | null;
   label: string | null;
-  status: "ACTIVE" | "PAUSED" | "DEGRADED" | "ERROR" | "DISABLED";
+  /** ENTITLEMENT_PAUSED: paused by the plan's monitor limit (D11), never by the owner. */
+  status: "ACTIVE" | "PAUSED" | "ENTITLEMENT_PAUSED" | "DEGRADED" | "ERROR" | "DISABLED";
   schedule_type: "DAILY" | "EVERY_12_HOURS" | "EVERY_6_HOURS" | "EVERY_MINUTE";
   last_checked_at: string | null;
   next_check_at: string | null;
@@ -680,7 +681,8 @@ export async function createDeveloperKey(name: string, scopes: string[], expires
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     throw new Error(body.message ?? `Create failed with status ${res.status}`);
   }
-  return res.json() as Promise<CreatedDeveloperKey>;
+  const body = (await res.json()) as { key: CreatedDeveloperKey };
+  return body.key;
 }
 
 export async function revokeDeveloperKey(id: string): Promise<void> {
@@ -690,11 +692,14 @@ export async function revokeDeveloperKey(id: string): Promise<void> {
 export async function rotateDeveloperKey(id: string): Promise<CreatedDeveloperKey> {
   const res = await fetch(`${API_BASE_URL}/v1/developer/keys/${id}/rotate`, { method: "POST", headers: authHeaders() });
   if (!res.ok) throw new Error(`Rotate failed with status ${res.status}`);
-  return res.json() as Promise<CreatedDeveloperKey>;
+  const body = (await res.json()) as { key: CreatedDeveloperKey };
+  return body.key;
 }
 
+/** The portal reads usage with the wallet session; `/v1/developer/usage`
+ *  is the API-key endpoint for integrations. */
 export async function getDeveloperUsage(): Promise<DeveloperUsageSummary> {
-  const res = await fetch(`${API_BASE_URL}/v1/developer/usage`, { headers: authHeaders() });
+  const res = await fetch(`${API_BASE_URL}/v1/me/developer/usage`, { headers: authHeaders() });
   if (res.status === 401) return { periodStart: "", periodEnd: "", used: 0, limit: 0, remaining: 0, resetAt: "", breakdown: [] };
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
   return res.json() as Promise<DeveloperUsageSummary>;
@@ -739,7 +744,8 @@ export async function createWebhook(url: string, eventTypes: string[]): Promise<
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(body.error?.message ?? `Create failed with status ${res.status}`);
   }
-  return res.json() as Promise<CreatedWebhook>;
+  const body = (await res.json()) as { data: CreatedWebhook };
+  return body.data;
 }
 
 export async function updateWebhook(
@@ -1028,6 +1034,8 @@ export interface BillingSubscription {
   gracePeriodEnd: string | null;
   trialEnd: string | null;
   selfServe: boolean;
+  /** The identity's open request for a paid plan, awaiting manual activation. */
+  upgradeRequest: { plan: PlanCode; status: "OPEN"; requestedAt: string } | null;
   engineVersion: string;
 }
 
@@ -1096,4 +1104,13 @@ export function cancelSubscription(immediate = false): Promise<{ status: string;
 
 export function resumeSubscription(): Promise<{ status: string; cancelAtPeriodEnd: boolean }> {
   return billingRequest("/v1/billing/subscription/resume", { method: "POST" });
+}
+
+/** Asks the AEGIX team for a paid plan. Grants nothing until an operator activates it. */
+export function requestUpgrade(plan: PlanCode, contact: string): Promise<{ request: { plan: PlanCode; status: "OPEN"; requestedAt: string } }> {
+  const trimmed = contact.trim();
+  return billingRequest("/v1/billing/upgrade-request", {
+    method: "POST",
+    body: JSON.stringify(trimmed ? { plan, contact: trimmed } : { plan })
+  });
 }
