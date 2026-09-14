@@ -1,8 +1,10 @@
 import { ImageResponse } from "next/og";
+import { AEGIX_MARK_PATH, AEGIX_MARK_VIEWBOX } from "@/components/aegix-logo";
 
 export const size = { width: 64, height: 64 };
 export const contentType = "image/png";
 
+/** Favicon: the official AEGIX mark in marble on the site's ink background. */
 export default function Icon() {
   return new ImageResponse(
     (
@@ -13,12 +15,11 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#05070d"
+          background: "#050505"
         }}
       >
-        <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-          <path d="M24 6 L42 40 H35.5 L29 28.5 H19 L12.5 40 H6 Z" fill="#8b7cff" />
-          <path d="M21.5 23.5 H26.5 L24 18.8 Z" fill="#05070d" />
+        <svg width="52" height="52" viewBox={AEGIX_MARK_VIEWBOX}>
+          <path d={AEGIX_MARK_PATH} fill="#f2f2f2" />
         </svg>
       </div>
     ),
