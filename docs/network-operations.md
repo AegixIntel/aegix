@@ -17,7 +17,7 @@ Apply migrations `0012` and `0013` with the existing migration runner. Set
 `ENABLE_INDEXED_TRANSACTIONS=true` on the analysis worker. Install/build the
 workspace normally. The product page is `/app/network` and requires a login.
 
-Set `DATABASE_URL`, `INDEXER_CHAIN`, `INDEXER_RPC_URL`, and a numeric
+Set `DATABASE_URL`, `INDEXER_CHAIN`, an RPC endpoint, and a numeric
 `INDEXER_START_HEIGHT`. The start is permanent for that chain's cursor; never
 claim history earlier than it. Use archive-capable RPC to backfill old data.
 
@@ -30,10 +30,30 @@ pnpm --filter @aegix/network indexer --follow
 pnpm --filter @aegix/network indexer --backfill
 ```
 
-`INDEXER_BATCH_SIZE` defaults to 32; `INDEXER_POLL_MS` defaults to 2000.
-RPC calls are spaced by at least 200 ms per process. Each chain needs its own
-process and RPC endpoint. Run one process per chain for efficiency; checkpoint
-row locks prevent two processes committing the same batch.
+`INDEXER_RPC_URLS` takes a comma-separated list of independent providers and is
+preferred over the single `INDEXER_RPC_URL`: a request that fails at the
+transport level, returns a non-2xx status or returns unparseable JSON moves to
+the next endpoint and cools the failing one down for `INDEXER_RPC_COOLDOWN_MS`.
+A well-formed JSON-RPC rejection (for example `-32015`) is an answer rather than
+an outage, so it does not rotate away from a working endpoint. Endpoint URLs are
+never written to logs or errors, because they routinely carry an API key.
+
+| Variable | Default | Meaning |
+|---|---:|---|
+| `INDEXER_BATCH_SIZE` | 32 | Slots/blocks per batch (maximum 256) |
+| `INDEXER_POLL_MS` | 2000 | Delay between idle batches |
+| `INDEXER_RPC_MIN_INTERVAL_MS` | 200 | Minimum spacing per endpoint |
+| `INDEXER_RPC_TIMEOUT_MS` | 30000 | Per-request timeout |
+| `INDEXER_RPC_MAX_ATTEMPTS` | endpoint count | Attempts across endpoints |
+| `INDEXER_RPC_COOLDOWN_MS` | 30000 | How long a failed endpoint is skipped |
+| `INDEXER_VERIFY_EVERY_BATCHES` | 60 | Re-run the network and archive-floor checks at this cadence |
+
+Each chain needs its own process and RPC endpoint. Run one process per chain for
+efficiency; checkpoint row locks prevent two processes committing the same batch.
+The network identity and archive-floor checks always run on the first batch and
+after any failure, then every `INDEXER_VERIFY_EVERY_BATCHES` batches — repeating
+them every batch only spends provider calls on an answer that cannot change
+between adjacent heights.
 
 The optional `docker-compose.network.yml` overlays the production compose file.
 It enables the network API and indexed transaction reuse, and adds an indexer
@@ -152,12 +172,45 @@ use the original response with a lossless parser for monetary auditing. Older
 blocks may have no original response. The implementation does not independently
 validate consensus or promise global archival completeness/throughput.
 
+## Retention
+
+An unbounded archive is not a viable default. A finalized Solana block read from
+mainnet measured roughly 6.6 MB while a slot lands about every 400 ms, so an
+unbounded index grows on the order of a terabyte per day. `network_blocks` also
+stores `raw` (the JSONB projection) alongside `raw_rpc` (the exact response
+text), so both copies are paid for.
+
+Retention is an explicit operator action, never automatic:
+
+```sh
+# Remove indexed blocks strictly below a height, in bounded batches.
+INDEXER_CHAIN=solana:mainnet pnpm --filter @aegix/network operator \
+  network:prune -- --before 320000000
+```
+
+The command takes the same row lock as ingestion, refuses a bound above the
+indexed cursor, removes child rows (memberships, transactions, projections)
+before the block rows, and reports the floor it leaves behind. Re-running it is a
+no-op once nothing below the bound remains. `--batch` bounds the work per
+invocation (default 5000) and `--max-batches` bounds the run (default 100).
+
+Pruning destroys wallet history below the floor, so the read API states the
+retained floor as an explicit limitation instead of letting a pruned range read
+as "this wallet has no older activity".
+
+Partitioning `network_blocks` was considered and deliberately not done yet: it
+needs the table recreated and existing rows moved, while the retention command
+already bounds growth. Revisit it when a measured retention window no longer
+fits the deployment's disk.
+
 ## Tests
 
 ```sh
 pnpm test:network
 # VPS, separate scratch database and Redis (not production):
 NETWORK_TEST_DATABASE_URL=... REDIS_URL=... pnpm test:network:operations
+# Ingestion, read-path and retention load, deterministic (no provider involved):
+pnpm loadtest:network -- --batches 8 --blocks 24 --queries 300 --concurrency 16
 ```
 
 The operations test refuses an existing `profiles` table instead of clearing it.
