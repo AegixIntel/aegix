@@ -14,6 +14,9 @@ function urlOrUndefined(v: unknown): unknown {
 }
 
 const envSchema = z.object({
+  ENABLE_NETWORK_API: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_INDEXED_TRANSACTIONS: z.preprocess(boolEnv, z.boolean()).default(false),
+  REPUTATION_POLICY_FILE: z.string().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   PORT: z.coerce.number().int().positive().default(3001),

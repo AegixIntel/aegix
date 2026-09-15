@@ -59,6 +59,7 @@ import { cachedComparison, canonicalComparePair, compareCacheKey, compareLockKey
 import { createDeveloperAuth, developerError, developerSuccess, setQuotaHeaders } from "./developer-api.js";
 import { generateApiKey } from "./developer-keys.js";
 import { registerDeveloperIntelligence } from "./developer-intelligence.js";
+import { registerNetwork } from "./network.js";
 import { registerWebhookRoutes } from "./webhooks.js";
 import { registerNotificationEmailRoutes } from "./notification-email.js";
 import { decodeNotificationCursor } from "./notification-cursor.js";
@@ -1598,6 +1599,7 @@ export async function buildServer(deps: ApiDeps) {
     developerAuth,
     recordUsage: recordDeveloperUsage
   });
+  registerNetwork({ app, sql, config, developerAuth, recordUsage: recordDeveloperUsage });
 
   // ---- D6-H: webhook management (product session, §124) ----
   // ---- Ask AEGIX (D9) ----
