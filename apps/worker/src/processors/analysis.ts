@@ -38,6 +38,8 @@ import { explainPath, explainSignal } from "@aegix/explanation";
 import { walletRef } from "@aegix/logging";
 import type { AnalysisJobData } from "@aegix/queue";
 import type { ProcessorContext } from "../worker.js";
+import { createNetworkQuery } from "@aegix/network";
+import { getIndexedTransaction } from "../indexed-transaction.js";
 
 const PIPELINE_VERSION = ANALYSIS_PIPELINE_VERSION;
 
@@ -87,6 +89,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
   const analyticsRepo = createWalletAnalyticsRepo(sql);
   const intelligenceRepo = createIntelligenceRepo(sql);
   const entityRepo = createEntityRegistryRepo(sql);
+  const indexed = config.ENABLE_INDEXED_TRANSACTIONS ? createNetworkQuery(sql) : null;
 
   const provider: BlockchainProvider = createProviderPoolFromConfig(config);
 
@@ -158,8 +161,12 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         return;
       }
       let raw;
+      let rawSource = provider.name;
       try {
-        raw = await provider.getTransaction(sig.signature);
+        const result = await getIndexedTransaction(sig.signature, provider,
+          indexed ? signature => indexed.transaction("solana:mainnet", signature) : undefined);
+        raw = result.transaction;
+        rawSource = result.source;
       } catch {
         stats.rpcFailures += 1;
         return;
@@ -171,7 +178,7 @@ export async function processAnalysis(job: Job<AnalysisJobData>, ctx: ProcessorC
         signature: sig.signature,
         raw: raw.json as ParsedTransactionLike,
         walletAddress,
-        rawProvider: provider.name
+        rawProvider: rawSource
       });
       stats.unknownProgramCount += outcome.unknownProgramCount;
       for (const unknown of outcome.unknownPrograms) {

@@ -80,7 +80,7 @@ export class SolanaRpcProvider implements BlockchainProvider {
         transaction?: unknown;
       } | null>("getTransaction", [
         signature,
-        { commitment: DEFAULT_COMMITMENT, maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }
+        { commitment: DEFAULT_COMMITMENT, maxSupportedTransactionVersion: 1, encoding: "jsonParsed" }
       ]);
       if (!response) return null;
       return {
