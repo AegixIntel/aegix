@@ -184,6 +184,11 @@ provider is integrated and no score or signal depends on an LLM.
 
 ## 7. Wallet Reputation API — PLANNED
 
+Infrastructure update: `packages/network` now validates versioned evidence
+digests and trusted reviewer signatures, including expiry and revocation.
+No labelled production dataset or calibrated reputation model is supplied;
+public scoring remains planned. See [network foundation](network-foundation.md).
+
 Reputation intelligence for on-chain applications: a reputation value, a risk
 band, wallet age, behavioral consistency, fraud signals and a confidence
 value, for use in DeFi, lending, OTC, marketplaces, DAOs, gaming and
@@ -207,10 +212,11 @@ governance, across five utilities: validator staking, data verification,
 research bounties, ecosystem incentives and governance. $AEX is not required
 for basic access to AEGIX's consumer products.
 
-**Current state: nothing is implemented.** No token, no contract, no staking
+**Current state: internal accounting foundation only.** `packages/network`
+provides atomic, replay-protected transfers between pre-funded internal accounts.
+This is not an on-chain token implementation. No token, no contract, no staking
 or slashing logic, no verification market, no governance mechanism, and no
-tokenomics document. The only references in the repository are roadmap
-labels. Treat every statement in this section as intent, and do not present
+tokenomics document. Treat token utility statements in this section as intent, and do not present
 $AEX as operational anywhere in public copy.
 
 ---
@@ -221,7 +227,9 @@ High throughput, low transaction cost, large on-chain activity, a fast-moving
 ecosystem and a lot of real-time data — the right starting point for
 intelligence over high-frequency on-chain activity. Solana is where AEGIX
 starts; the architecture is designed with multi-chain expansion in mind, and
-multi-chain is **PLANNED**.
+multi-chain privacy analysis is **PLANNED**. An opt-in infrastructure package now
+supports finalized raw block ingestion for Solana mainnet, Ethereum and Base;
+EVM normalization and privacy analysis are not implemented.
 
 ---
 
