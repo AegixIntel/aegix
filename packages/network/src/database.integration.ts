@@ -6,6 +6,7 @@ import postgres from "postgres";
 import { createAexLedger } from "./economics.js";
 import { createIndexStore } from "./store.js";
 import { runIndexer } from "./runner.js";
+import { pruneIndex } from "./maintenance.js";
 
 const url = process.env.NETWORK_TEST_DATABASE_URL;
 if (!url) throw new Error("NETWORK_TEST_DATABASE_URL required");
@@ -28,6 +29,17 @@ try {
   await assert.rejects(store.commit("solana:mainnet", current, 12, [{ ...block, height: 11 }]));
   assert.equal((await store.checkpoint("solana:mainnet", 10)).nextHeight, 11, "failed block write rolls back cursor");
   await assert.rejects(store.checkpoint("solana:mainnet", 9), /Start height/);
+
+  // Retention is bounded and repeatable: it must never cross the cursor, must
+  // report the floor it leaves behind, and must be safe to run twice.
+  await store.commit("solana:mainnet", await store.checkpoint("solana:mainnet", 10), 12,
+    [{ ...block, height: 11, hash: "h11", parentHeight: 10, parentHash: "h10" }]);
+  await assert.rejects(pruneIndex(isolated, "solana:mainnet", { before: 500 }), /cursor/);
+  const pruned = await pruneIndex(isolated, "solana:mainnet", { before: 11 });
+  assert.equal(pruned.deletedBlocks, 1, "pruning removes only blocks below the bound");
+  assert.equal(pruned.retainedFloor, 11, "the retained floor is reported for disclosure");
+  assert.equal((await pruneIndex(isolated, "solana:mainnet", { before: 11 })).deletedBlocks, 0,
+    "a repeated prune deletes nothing");
 
   await isolated`insert into aex_accounts (id, balance) values ('treasury', 100), ('alice', 0), ('bob', 0)`;
   const ledger = createAexLedger(isolated);
@@ -60,7 +72,7 @@ try {
   assert.equal(health?.last_error, null);
   assert.ok(health?.heartbeat_at);
   assert.equal(health?.finalized_height, "10");
-  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
+  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "retention prune", "prune bound guard", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
 } finally {
   await isolated.end();
   await sql.end();
