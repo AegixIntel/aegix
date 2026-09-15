@@ -33,6 +33,8 @@
     "test:e2e-d11": "node --import tsx tests/e2e-d11.ts",
     "test:e2e-d11-revenue-safety": "node --import tsx tests/e2e-d11-revenue-safety.ts",
     "test:migrations": "node --import tsx tests/migration-test.ts",
+    "test:network": "pnpm --filter @aegix/network test",
+    "test:network:operations": "node --import tsx tests/network-operations.ts",
     "test:web-routing": "node --import tsx tests/web-routing-smoke.ts",
     "test:web-restored": "node --import tsx tests/web-restored-smoke.ts",
     "release:gate": "bash scripts/release-gate.sh",
