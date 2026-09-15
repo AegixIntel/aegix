@@ -6,6 +6,12 @@ AEGIX is an on-chain privacy intelligence platform that helps wallet owners unde
 **Live products:** Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Threat Monitor, Developer Intelligence API
 **Planned:** Market Intelligence, AI Copilot, Wallet Reputation API, $AEX economic layer, multi-chain — see [docs/whitepaper.md](docs/whitepaper.md)
 **Primary principle:** *See What Others Don't.*
+
+**Network intelligence:** continuous finalized ingestion for Solana/Ethereum/Base,
+wallet history APIs and `/app/network`, persisted signed reputation evidence, indexed
+Solana transaction reuse, and internal $AEX accounting are implemented. Public reputation
+scores, an issued token and EVM privacy scoring still require further inputs/work.
+See [setup and operator commands](docs/network-operations.md).
 **Privacy pillar principle:** *Know What the Blockchain Knows.*
 
 > AEGIX must be able to explain why it believes a wallet is exposed. It never returns an unexplained score.

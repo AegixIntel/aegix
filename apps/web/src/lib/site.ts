@@ -97,7 +97,8 @@ export const appNavGroups: AppNavGroup[] = [
       { label: "Compare", href: "/app/compare" },
       { label: "Monitors", href: "/app/monitors" },
       { label: "Wallet Context", href: "/app/context" },
-      { label: "Markets", href: "/app/markets" }
+      { label: "Markets", href: "/app/markets" },
+      { label: "Network intelligence", href: "/app/network" }
     ]
   },
   {

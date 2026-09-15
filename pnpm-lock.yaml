@@ -113,6 +113,9 @@ importers:
       '@aegix/monitor':
         specifier: workspace:^
         version: link:../../packages/monitor
+      '@aegix/network':
+        specifier: workspace:*
+        version: link:../../packages/network
       '@aegix/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -247,6 +250,9 @@ importers:
       '@aegix/monitor':
         specifier: workspace:*
         version: link:../../packages/monitor
+      '@aegix/network':
+        specifier: workspace:*
+        version: link:../../packages/network
       '@aegix/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
@@ -566,6 +572,25 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.15
         version: 6.4.24
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/network:
+    dependencies:
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.9
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
       tsx:
         specifier: ^4.19.2
         version: 4.23.13

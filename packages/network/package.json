@@ -1,0 +1,20 @@
+{
+  "name": "@aegix/network",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/network.test.ts src/projection.test.ts",
+    "indexer": "node --import tsx src/cli.ts",
+    "operator": "node --import tsx src/operator.ts",
+    "test:integration": "node --import tsx src/database.integration.ts"
+  },
+  "dependencies": { "bs58": "^6.0.0", "postgres": "^3.4.5" },
+  "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.5.4" }
+}
