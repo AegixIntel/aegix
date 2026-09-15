@@ -30,6 +30,7 @@ COPY packages/ai/package.json packages/ai/package.json
 COPY packages/billing/package.json packages/billing/package.json
 COPY packages/context/package.json packages/context/package.json
 COPY packages/markets/package.json packages/markets/package.json
+COPY packages/network/package.json packages/network/package.json
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS build

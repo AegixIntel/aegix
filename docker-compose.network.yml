@@ -1,0 +1,26 @@
+# Optional overlay: docker compose -f docker-compose.production.yml -f docker-compose.network.yml --profile network up -d
+services:
+  api:
+    environment:
+      ENABLE_NETWORK_API: "true"
+      REPUTATION_POLICY_FILE: ${REPUTATION_POLICY_FILE:-}
+    # Mount your reviewed policy separately, read-only, if using reputation imports.
+  worker:
+    environment:
+      ENABLE_INDEXED_TRANSACTIONS: "true"
+  indexer:
+    profiles: ["network"]
+    build:
+      context: .
+      dockerfile: infra/docker/indexer.Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      INDEXER_CHAIN: ${INDEXER_CHAIN:-solana:mainnet}
+      INDEXER_RPC_URL: ${INDEXER_RPC_URL:-}
+      INDEXER_START_HEIGHT: ${INDEXER_START_HEIGHT:-}
+      INDEXER_BATCH_SIZE: ${INDEXER_BATCH_SIZE:-32}
+      INDEXER_POLL_MS: ${INDEXER_POLL_MS:-2000}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+    stop_grace_period: 45s
