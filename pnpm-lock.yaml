@@ -44,6 +44,9 @@ importers:
       '@aegix/monitor':
         specifier: workspace:*
         version: link:packages/monitor
+      '@aegix/network':
+        specifier: workspace:*
+        version: link:packages/network
       '@aegix/queue':
         specifier: workspace:*
         version: link:packages/queue

@@ -69,6 +69,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
     "@aegix/ai": "workspace:*",
-    "@aegix/billing": "workspace:*"
+    "@aegix/billing": "workspace:*",
+    "@aegix/network": "workspace:*"
   }
 }
