@@ -98,6 +98,10 @@ jobs:
         run: set -o pipefail && pnpm test:integration 2>&1 | tee artifacts/integration.log
       - name: Redis and BullMQ integration tests
         run: set -o pipefail && pnpm test:queue-integration 2>&1 | tee artifacts/queue-integration.log
+      - name: Create the network operations scratch database
+        run: docker run --rm --network host -e PGPASSWORD=postgres postgres:16-alpine psql -h 127.0.0.1 -U postgres -c "create database network_test_ops"
+      - name: Network operations against real authentication
+        run: set -o pipefail && NETWORK_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/network_test_ops pnpm test:network:operations 2>&1 | tee artifacts/network-operations.log
       - name: Upload integration logs on failure
         if: failure()
         uses: actions/upload-artifact@v6
@@ -306,3 +310,4 @@ jobs:
       - run: docker build -f infra/docker/worker.Dockerfile -t aegix-worker:ci .
       - run: docker build -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=/api -t aegix-web:ci .
       - run: docker build -f infra/docker/migrate.Dockerfile -t aegix-migrate:ci .
+      - run: docker build -f infra/docker/indexer.Dockerfile -t aegix-indexer:ci .
