@@ -1,7 +1,20 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import type postgres from "postgres";
 import { indexBatch, type BlockSource, type IndexStore } from "./indexer.js";
-import type { RpcPoolStats } from "./rpc.js";
+import { RpcRequestError, RpcUnavailableError, type RpcPoolStats } from "./rpc.js";
+
+/**
+ * A failure category an operator can act on: retry a throttle, raise a timeout,
+ * check archive coverage for a provider rejection. Deliberately a fixed set —
+ * provider messages are not recorded because they can carry the endpoint URL.
+ */
+function failureDetail(error: unknown): Record<string, unknown> {
+  if (error instanceof RpcUnavailableError) {
+    return { reason: error.reason, ...(error.status === undefined ? {} : { status: error.status }) };
+  }
+  if (error instanceof RpcRequestError && typeof error.rpcCode === "number") return { rpcCode: error.rpcCode };
+  return {};
+}
 
 export interface IndexerOptions {
   source: BlockSource;
@@ -56,7 +69,8 @@ export async function runIndexer(options: IndexerOptions) {
       await sql`update network_checkpoints set heartbeat_at = now(), last_error = ${code}
         where chain = ${source.chain}`.catch(() => {});
       log({ event: "index_error", chain: source.chain, code, attempt: failures,
-        kind: error instanceof Error ? error.name : "Unknown", durationMs: Date.now() - startedAt });
+        kind: error instanceof Error ? error.name : "Unknown", ...failureDetail(error),
+        durationMs: Date.now() - startedAt });
       if (options.once) throw new Error(code);
       delay = Math.min(60_000, options.pollMs * 2 ** Math.min(failures, 6));
     }

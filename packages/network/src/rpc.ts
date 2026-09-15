@@ -7,9 +7,31 @@ const RAW_RPC = Symbol("aegix.rawRpc");
 
 /** A valid JSON-RPC error response: the endpoint answered, so it is not unhealthy. */
 export class RpcRequestError extends Error {
+  readonly rpcCode: unknown;
   constructor(method: string, code: unknown) {
     super(`RPC ${method} rejected${typeof code === "number" && Number.isSafeInteger(code) ? ` (code ${code})` : ""}`);
     this.name = "RpcRequestError";
+    this.rpcCode = code;
+  }
+}
+
+export type RpcFailureReason = "timeout" | "transport" | "http" | "json";
+
+/**
+ * An endpoint failed in a way that is worth trying somewhere else. The reason is
+ * a fixed category rather than a provider message, because provider errors
+ * routinely echo the request URL and therefore its API key — an operator still
+ * needs to tell a throttle from a timeout, so the category and status are safe
+ * to record while the message stays generic.
+ */
+export class RpcUnavailableError extends Error {
+  readonly reason: RpcFailureReason;
+  readonly status: number | undefined;
+  constructor(method: string, reason: RpcFailureReason, status?: number) {
+    super(`RPC ${method} unavailable (${reason}${status === undefined ? "" : ` ${status}`})`);
+    this.name = "RpcUnavailableError";
+    this.reason = reason;
+    this.status = status;
   }
 }
 
@@ -77,7 +99,7 @@ export function createRpcPool(urls: readonly string[], options: RpcPoolOptions =
 
   const call: RpcCall = async (method, params) => {
     calls += 1;
-    let lastFailure = new Error(`RPC ${method} unavailable`);
+    let lastFailure: Error = new RpcUnavailableError(method, "transport");
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       attempts += 1;
       const target = select(Date.now());
@@ -86,7 +108,7 @@ export function createRpcPool(urls: readonly string[], options: RpcPoolOptions =
       if (wait) await sleep(wait);
       target.calls += 1;
 
-      const penalize = (error: Error) => {
+      const penalize = (error: RpcUnavailableError) => {
         lastFailure = error;
         target.failures += 1;
         endpointFailures += 1;
@@ -94,16 +116,20 @@ export function createRpcPool(urls: readonly string[], options: RpcPoolOptions =
       };
 
       let response: Response | undefined;
+      let timedOut = false;
       try {
         response = await fetch(target.endpoint, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
           signal: AbortSignal.timeout(timeoutMs)
         });
-      } catch { response = undefined; }
-      if (!response) { penalize(new Error(`RPC ${method} transport failure`)); continue; }
+      } catch (error) {
+        timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+        response = undefined;
+      }
+      if (!response) { penalize(new RpcUnavailableError(method, timedOut ? "timeout" : "transport")); continue; }
       // A provider answering 429 is throttling, not serving a usable result.
-      if (!response.ok) { penalize(new Error(`RPC ${method} HTTP ${response.status}`)); continue; }
+      if (!response.ok) { penalize(new RpcUnavailableError(method, "http", response.status)); continue; }
 
       let body: Record<string, unknown>;
       let rawRpc: string;
@@ -112,7 +138,7 @@ export function createRpcPool(urls: readonly string[], options: RpcPoolOptions =
         const parsed: unknown = JSON.parse(rawRpc);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
         body = parsed as Record<string, unknown>;
-      } catch { penalize(new Error("Invalid RPC JSON")); continue; }
+      } catch { penalize(new RpcUnavailableError(method, "json")); continue; }
 
       // A well-formed rejection is the endpoint doing its job: do not rotate away
       // from it, and do not hide the reason behind a generic failure.

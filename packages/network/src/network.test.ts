@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { walletIdentity } from "./chains.js";
 import { indexBatch, type BlockSource, type IndexCheckpoint, type IndexStore } from "./indexer.js";
-import { createBlockSource, createRpcPool, RpcRequestError } from "./rpc.js";
+import { createBlockSource, createRpcPool, RpcRequestError, RpcUnavailableError } from "./rpc.js";
 import { claimPayload, reputationReport, validateClaim, type ReputationClaim, type ValidationPolicy } from "./reputation.js";
 import { validateTransfer } from "./economics.js";
 
@@ -154,10 +154,51 @@ test("a JSON-RPC rejection is an answer, not an unhealthy endpoint", async () =>
   };
   try {
     const pool = createRpcPool(["https://a.example", "https://b.example"], { minimumIntervalMs: 0 });
-    await assert.rejects(pool.call("getBlock", [1]), RpcRequestError);
+    await assert.rejects(pool.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcRequestError);
+      assert.equal(error.rpcCode, -32015, "the provider's code is preserved for the operator");
+      return true;
+    });
     assert.equal(calls, 1, "a rejection does not burn the remaining endpoints");
     assert.equal(pool.stats().endpointFailures, 0);
     assert.equal(pool.stats().attempts, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+test("provider failures are classified so an operator can act on them", async () => {
+  const original = globalThis.fetch;
+  const classified = async (respond: () => Promise<Response> | Response) => {
+    globalThis.fetch = async () => respond();
+    const pool = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0 });
+    await assert.rejects(pool.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.ok(!error.message.includes("only.example"), "the endpoint stays out of the message");
+      return true;
+    });
+    globalThis.fetch = original;
+  };
+  try {
+    // A throttle is distinguishable from a timeout from a garbled body.
+    globalThis.fetch = async () => new Response("slow down", { status: 429 });
+    const throttled = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0 });
+    await assert.rejects(throttled.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.equal(error.reason, "http");
+      assert.equal(error.status, 429);
+      return true;
+    });
+
+    globalThis.fetch = async () => { const error = new Error("aborted"); error.name = "TimeoutError"; throw error; };
+    const timedOut = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0, timeoutMs: 1 });
+    await assert.rejects(timedOut.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.equal(error.reason, "timeout");
+      assert.equal(error.status, undefined);
+      return true;
+    });
+
+    await classified(() => new Response("<html>gateway error</html>", { status: 200 }));
+    await classified(() => { throw new TypeError("fetch failed"); });
   } finally { globalThis.fetch = original; }
 });
 
