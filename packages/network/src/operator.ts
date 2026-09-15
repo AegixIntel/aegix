@@ -22,16 +22,17 @@ async function main() {
       if (!process.env.INDEXER_CHAIN) throw new Error("INDEXER_CHAIN required");
       const before = Number(flag("before"));
       if (!Number.isSafeInteger(before) || before < 0) throw new Error("--before <height> is required");
-      const batch = flag("batch") === undefined ? 5_000 : Number(flag("batch"));
-      const maxBatches = flag("max-batches") === undefined ? 100 : Number(flag("max-batches"));
-      if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 10_000) throw new Error("Invalid --max-batches");
+      const batch = flag("batch") === undefined ? 64 : Number(flag("batch"));
+      const rowBudget = flag("row-budget") === undefined ? 50_000 : Number(flag("row-budget"));
+      const maxBatches = flag("max-batches") === undefined ? 1_000 : Number(flag("max-batches"));
+      if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 100_000) throw new Error("Invalid --max-batches");
       const chain = parseChain(process.env.INDEXER_CHAIN);
       let done = false;
       let batches = 0;
       const totals = { deletedBlocks: 0, deletedTransactions: 0, deletedAddresses: 0, deletedProjections: 0 };
       let floor: number | null = null;
       while (!done && batches < maxBatches) {
-        const result = await pruneIndex(sql, chain, { before, batch });
+        const result = await pruneIndex(sql, chain, { before, batch, rowBudget });
         totals.deletedBlocks += result.deletedBlocks;
         totals.deletedTransactions += result.deletedTransactions;
         totals.deletedAddresses += result.deletedAddresses;

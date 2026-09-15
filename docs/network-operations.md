@@ -12,7 +12,7 @@ Operator transfer -> atomic internal ledger -> authenticated /v1/me/aex
 
 ## Enable
 
-Apply migrations `0012` and `0013` with the existing migration runner. Set
+Apply migrations `0012` through `0014` with the existing migration runner. Set
 `ENABLE_NETWORK_API=true` on the API, and optionally
 `ENABLE_INDEXED_TRANSACTIONS=true` on the analysis worker. Install/build the
 workspace normally. The product page is `/app/network` and requires a login.
@@ -188,11 +188,24 @@ INDEXER_CHAIN=solana:mainnet pnpm --filter @aegix/network operator \
   network:prune -- --before 320000000
 ```
 
-The command takes the same row lock as ingestion, refuses a bound above the
-indexed cursor, removes child rows (memberships, transactions, projections)
-before the block rows, and reports the floor it leaves behind. Re-running it is a
-no-op once nothing below the bound remains. `--batch` bounds the work per
-invocation (default 5000) and `--max-batches` bounds the run (default 100).
+Retention and ingestion do not overlap — ingestion only appends at or above the
+cursor while this only removes strictly below the bound — so the command takes no
+row lock on the checkpoint and cannot stall a running indexer. It refuses a bound
+above the indexed cursor, removes child rows (memberships, transactions,
+projections) before the block rows, and reports the floor it leaves behind.
+Re-running it is a no-op once nothing below the bound remains.
+
+Work is bounded three ways, because blocks are not uniform: `--batch` limits
+blocks considered per invocation (default 64), `--row-budget` limits child rows
+removed per invocation (default 50000, so a busy block cannot become an unbounded
+transaction), and `--max-batches` limits the run (default 1000). Removing a block
+costs roughly its transaction volume, which on mainnet is tens of thousands of
+address memberships.
+
+The deletes rely on the indexes added in migration `0014`. Without them a prune
+degrades into a sequential scan per removed parent row: on a 16-block live sample
+(22,749 transactions, 320,042 memberships) deleting two blocks took 53 seconds
+before those indexes existed.
 
 Pruning destroys wallet history below the floor, so the read API states the
 retained floor as an explicit limitation instead of letting a pruned range read

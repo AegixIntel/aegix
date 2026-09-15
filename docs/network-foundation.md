@@ -24,7 +24,8 @@ requirements and adds `@aegix/network` as an independent infrastructure package.
 | Reputation | Evidence import/storage, digest verification, versioned signed claims, distinct trusted Ed25519 reviewers, quorum, expiry/revocation, API and UI | No supplied labelled dataset or calibrated model; score, risk band and confidence remain null |
 | $AEX | Internal atomic-unit transfer ledger, purpose/evidence references, replay protection, locked balances and atomic journal writes | Pre-funded internal accounting only; no issued token, on-chain custody, mint/deposit/withdrawal, staking lockups/slashing or governance |
 
-Migrations 0012 and 0013 add network/evidence/accounting tables. The existing
+Migrations 0012 and 0013 add network/evidence/accounting tables; 0014 adds the
+indexes retention deletes and foreign-key checks depend on. The existing
 analysis worker can optionally reuse indexed parsed transactions, with RPC
 fallback. The new product page is `/app/network`. The network package does not
 expose public write endpoints or accept untrusted reviewer policies. It is not
