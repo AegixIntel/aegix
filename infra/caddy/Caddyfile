@@ -1,0 +1,13 @@
+# AEGIX HTTPS edge (docker-compose.edge.yml). Certificates are issued and
+# renewed automatically; Caddy adds X-Forwarded-For and X-Forwarded-Proto,
+# which nginx passes on to the API.
+
+{$AEGIX_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy proxy:8080
+}
+
+www.{$AEGIX_DOMAIN} {
+	redir https://{$AEGIX_DOMAIN}{uri} permanent
+}

@@ -35,8 +35,10 @@ RUN pnpm install --frozen-lockfile --prod=false
 FROM deps AS build
 ARG NEXT_PUBLIC_API_URL=/api
 ARG API_INTERNAL_URL=http://api:3001
+ARG NEXT_PUBLIC_SITE_URL=https://aegixintelligence.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 COPY tsconfig.base.json ./
 COPY packages/types packages/types
 COPY packages/config packages/config

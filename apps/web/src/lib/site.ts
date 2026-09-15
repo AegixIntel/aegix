@@ -1,7 +1,19 @@
 /** Public site constants shared across the product and marketing surfaces. */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegix.app";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegixintelligence.com";
 
 export const NAV_BRAND = "AEGIX";
+
+/** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
+export const LEGAL_ENTITY = "AEGIX Developer";
+export const LEGAL_EFFECTIVE_DATE = "14 September 2026";
+/** Public contact for legal, privacy and billing questions; shown on the legal pages once set. */
+export const LEGAL_CONTACT_EMAIL: string | null = null;
+
+export const legalLinks = [
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Refund Policy", href: "/refund" }
+];
 
 export type NavLinkItem = { label: string; href: string; status?: string };
 export type NavGroup = { label: string; items: NavLinkItem[]; href?: string };
@@ -63,6 +75,14 @@ export const siteRail: NavLinkItem[] = [
   { label: "Monitor", href: "/app/monitors", status: "LIVE" },
   { label: "Developers", href: "/developers", status: "LIVE" },
   { label: "Market Intel", href: "/app/markets", status: "LIVE" }
+];
+
+/** Status-driven roadmap, shared by /roadmap and the landing page. */
+export const roadmapGroups = [
+  { label: "SHIPPED", items: ["Intelligence Core", "Wallet X-Ray", "Attack My Wallet", "Compare Intelligence", "Privacy Monitor", "Developer Intelligence API"] },
+  { label: "CURRENT", items: ["Public Product Launch", "Multi-User Production", "Documentation", "Infrastructure Hardening"] },
+  { label: "NEXT", items: ["Market Intelligence", "Narrative Radar", "Anomaly Detection", "Signal Engine"] },
+  { label: "LATER", items: ["AI Intelligence Copilot", "Wallet Reputation", "Intelligence Network", "$AEX Economic Layer", "Multi-Chain"] }
 ];
 
 export type AppNavItem = { label: string; href: string };

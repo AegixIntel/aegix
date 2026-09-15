@@ -23,7 +23,12 @@ async function main() {
       ["/markets", ["Open Markets", "Temporal correlation does not establish causation"]],
       // Server-rendered shell only: plan, usage and invoice data arrive
       // client-side after an authenticated fetch.
-      ["/app/billing", ["Plan &amp; usage", "Invoices", "No invoices yet"]]
+      ["/app/billing", ["Plan &amp; usage", "Invoices", "No invoices yet"]],
+      // Legal documents are static, fully server-rendered, and linked from every public page's footer.
+      ["/terms", ["Terms of Service", "non-custodial", "AEGIX Developer", "Refund Policy"]],
+      ["/privacy-policy", ["Privacy Policy", "AEGIX Developer", "Personal Data Protection Law"]],
+      ["/refund", ["Refund Policy", "are not refundable", "Cancel at any time"]],
+      ["/markets", ['href="/terms"', 'href="/privacy-policy"', 'href="/refund"']]
     ] as const) {
       const response = await fetch(`http://127.0.0.1:${port}${route}`, { signal: AbortSignal.timeout(10000) });
       assert.equal(response.status, 200, route);

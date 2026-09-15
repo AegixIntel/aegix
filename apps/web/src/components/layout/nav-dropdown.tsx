@@ -1,21 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StatusBadge } from "@/components/ui/primitives";
 import type { NavGroup } from "@/lib/site";
 
-/** Desktop dropdown menu item group. */
+/** Desktop dropdown menu item group.
+ *  Mouse: hover opens, and a click on the trigger keeps it open (a toggle
+ *  here would close the menu the hover just opened). Touch and keyboard:
+ *  the trigger toggles. Escape or moving focus away closes it. */
 export function NavDropdown({ group }: { group: NavGroup }) {
   const [open, setOpen] = useState(false);
+  const lastPointer = useRef("");
 
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <div
+      className="relative"
+      onPointerEnter={(e) => e.pointerType === "mouse" && setOpen(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setOpen(false)}
+      onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="true"
-        onClick={() => setOpen((v) => !v)}
+        onPointerDown={(e) => {
+          lastPointer.current = e.pointerType;
+        }}
+        onClick={() => {
+          if (lastPointer.current === "mouse") setOpen(true);
+          else setOpen((v) => !v);
+          lastPointer.current = "";
+        }}
         className="flex items-center gap-1 rounded px-1 py-1 text-sm text-muted-foreground transition hover:text-marble"
       >
         {group.label}
@@ -25,7 +44,7 @@ export function NavDropdown({ group }: { group: NavGroup }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-white/10 bg-ink-deep p-2 shadow-xl shadow-black/40">
+        <div className="absolute left-0 top-full z-50 w-64 border border-white/10 bg-ink-deep p-1.5 pt-2">
           {group.items.map((item) => (
             <Link
               key={`${item.label}-${item.href}`}

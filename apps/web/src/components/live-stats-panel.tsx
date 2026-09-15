@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getPublicStats, type PublicStats } from "@/lib/api";
+import { cn } from "@/lib/cn";
 
 function fmt(n: number | null): string {
   if (n === null || Number.isNaN(n)) return "—";
@@ -17,6 +18,33 @@ const STATS: Array<{ key: keyof PublicStats; label: string }> = [
   { key: "monitors", label: "Monitors" },
   { key: "populationSize", label: "Population" }
 ];
+
+/** Counts up to a real value once it arrives. Never invents a number. */
+function CountUp({ value }: { value: number | null }) {
+  const [shown, setShown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (value === null) {
+      setShown(null);
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(value);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / 1100);
+      setShown(Math.round(value * (1 - Math.pow(1 - t, 3))));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  return <>{fmt(shown)}</>;
+}
 
 /** Live aggregate metrics from the backend. Shows "—" when unavailable —
  *  numbers are never fabricated. */
@@ -38,25 +66,22 @@ export default function LiveStatsPanel() {
     };
   }, []);
 
+  const live = stats !== null;
+
   return (
-    <div className="data-panel border border-white/10">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
-        <span className="mono-label">AEGIX system · live</span>
-        <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-accent-bright">
-          <span className="live-dot h-1.5 w-1.5 rounded-full bg-accent-bright" aria-hidden="true" />
-          {stats ? "Live" : loading ? "Loading" : "Offline"}
-        </span>
+    <div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-3 lg:grid-cols-[minmax(0,1.3fr)_repeat(5,minmax(0,1fr))]">
+      <div className="flex items-center gap-2.5 bg-ink-deep px-4 py-5 lg:px-8">
+        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "live-dot bg-accent-bright" : "bg-muted-2")} aria-hidden="true" />
+        <span className="mono-label">{live ? "AEGIX system · live" : loading ? "Connecting…" : "Stats offline"}</span>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-white/10 sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5">
-        {STATS.map((s) => (
-          <div key={s.key} className="px-4 py-4">
-            <p className="mono-label text-muted-2">{s.label}</p>
-            <p className="mt-1 font-mono text-2xl font-semibold tracking-tight text-marble">
-              {stats ? fmt(stats[s.key] as number | null) : "—"}
-            </p>
-          </div>
-        ))}
-      </div>
+      {STATS.map((s) => (
+        <div key={s.key} className="bg-ink-deep px-4 py-5">
+          <p className="mono-label">{s.label}</p>
+          <p className="mt-1.5 font-mono text-2xl font-medium tabular-nums tracking-tight text-marble">
+            {stats ? <CountUp value={stats[s.key] as number | null} /> : "—"}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,38 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { SectionLabel, StatusBadge, InlineArrowLink, CodePreview } from "@/components/ui/primitives";
+import { InlineArrowLink, StatusBadge } from "@/components/ui/primitives";
 import LiveStatsPanel from "@/components/live-stats-panel";
 import { Reveal } from "@/components/motion/reveal";
 import { InteractiveSystemMap } from "@/components/marketing/system-map";
+import { HeroTrace } from "@/components/marketing/hero-trace";
+import { TypedRequest } from "@/components/marketing/typed-request";
+import { roadmapGroups } from "@/lib/site";
 
-/** Visual panel used as a restrained banner inside a section.
- *  `size="md"` constrains the panel width (centered) for smaller images. */
-function VisualPanel({
-  src,
-  alt,
-  caption,
-  size = "full"
-}: {
-  src: string;
-  alt: string;
-  caption: string;
-  size?: "full" | "md";
-}) {
-  return (
-    <div className={size === "md" ? "mx-auto mt-10 max-w-2xl" : "mt-10"}>
-      <div className="aspect-video overflow-hidden rounded-lg border border-white/10">
-        <Image
-          src={src}
-          alt={alt}
-          width={1280}
-          height={720}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      </div>
-      <p className="mt-3 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">{caption}</p>
-    </div>
-  );
+/** Stagger index consumed by the landing motion CSS (`--i`). */
+function at(i: number) {
+  return { "--i": i } as React.CSSProperties;
 }
 
 /* Category strip above hero — product names with status. */
@@ -44,10 +22,10 @@ export function CategoryStrip() {
     { label: "Intelligence Network", status: "RESEARCH" }
   ];
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-white/10 px-4 py-3 lg:px-8">
+    <div className="flex items-center gap-x-8 overflow-x-auto whitespace-nowrap border-b border-white/10 px-4 py-3 [scrollbar-width:none] lg:flex-wrap lg:px-8">
       {items.map((it) => (
-        <span key={it.label} className="flex items-center gap-2">
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">{it.label}</span>
+        <span key={it.label} className="flex flex-none items-center gap-2.5">
+          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{it.label}</span>
           <StatusBadge label={it.status} />
         </span>
       ))}
@@ -55,35 +33,48 @@ export function CategoryStrip() {
   );
 }
 
-/* Hero — statement left, live stats mini-panel right. Staggered reveal. */
+/* Hero — statement left, illustrative relationship trace right, live
+   system numbers underneath. Motion here is CSS-only and runs on load. */
 export function HeroStatement() {
   return (
     <section className="hero-ambient relative overflow-hidden border-b border-white/10">
-      <div className="relative z-10 grid gap-10 px-4 py-16 md:py-24 lg:grid-cols-[1.3fr_1fr] lg:px-8">
+      <div className="relative z-10 grid gap-12 px-4 pb-16 pt-14 md:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-10 lg:px-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
         <div>
-          <Reveal as="p" className="section-label-accent">Financial &amp; On-Chain Intelligence</Reveal>
-          <Reveal as="h1" delay={80} className="mt-6 statement-lg">
-            See what
-            <br />
-            others don&apos;t.
-          </Reveal>
-          <Reveal delay={160} className="mt-8 max-w-xl text-lg leading-relaxed text-muted-foreground">
+          <p className="section-label-accent hero-fade" style={at(0)}>
+            Financial &amp; On-Chain Intelligence
+          </p>
+          <h1 className="statement-lg mt-7">
+            <span className="hero-line" style={at(0)}>
+              <span>See what</span>
+            </span>
+            <span className="hero-line" style={at(1)}>
+              <span>
+                others <span className="redact">don&apos;t.</span>
+              </span>
+            </span>
+          </h1>
+          <p className="hero-fade mt-8 max-w-lg text-lg leading-relaxed text-muted-foreground" style={at(2)}>
             AEGIX transforms public on-chain and financial data into relationships, patterns, signals and
             intelligence.
-          </Reveal>
-          <Reveal delay={220} as="p" className="mt-2 text-sm text-muted-2">Starting with privacy intelligence on Solana.</Reveal>
-          <Reveal delay={280} className="mt-10 flex flex-col gap-3 sm:flex-row">
+          </p>
+          <p className="hero-fade mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2" style={at(3)}>
+            Starting with privacy intelligence on Solana
+          </p>
+          <div className="hero-fade mt-10 flex flex-col gap-3 sm:flex-row" style={at(4)}>
             <Link href="/app/analyze" className="btn-primary">
               Launch AEGIX <span className="btn-arrow text-inherit">→</span>
             </Link>
             <Link href="/methodology" className="btn-secondary">
               Explore the intelligence layer
             </Link>
-          </Reveal>
+          </div>
         </div>
-        <Reveal delay={200} className="flex items-start lg:pt-2">
-          <LiveStatsPanel />
-        </Reveal>
+        <div className="hero-fade" style={at(3)}>
+          <HeroTrace />
+        </div>
+      </div>
+      <div className="relative z-10 border-t border-white/10">
+        <LiveStatsPanel />
       </div>
     </section>
   );
@@ -94,195 +85,275 @@ export function SystemMap() {
   return <InteractiveSystemMap />;
 }
 
-/* How it works — numbered. */
+/* Shared two-column section header: title left, supporting copy right. */
+function SectionHeader({ label, title, body }: { label: string; title: string; body: string }) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-end">
+      <Reveal>
+        <p className="section-label">{label}</p>
+        <h2 className="section-title mt-5 max-w-2xl">{title}</h2>
+      </Reveal>
+      <Reveal delay={100} as="p" className="editorial-body max-w-md lg:justify-self-end">
+        {body}
+      </Reveal>
+    </div>
+  );
+}
+
+/* How it works — a traced line connects three steps. */
 export function HowItWorks() {
   const steps = [
-    { n: "01", t: "Analyze a wallet", b: "Enter a Solana address. AEGIX fetches public activity and normalizes it." },
-    { n: "02", t: "Read the evidence", b: "See exposure, dimensions, signals and verifiable evidence — not guesses." },
-    { n: "03", t: "Monitor the change", b: "Track exposure over time and get alerted to meaningful changes." }
+    {
+      n: "01",
+      t: "Analyze a wallet",
+      b: "Enter a Solana address. AEGIX fetches public activity and normalizes it.",
+      artifact: "$ analyze 4Nd1…q8Rz"
+    },
+    {
+      n: "02",
+      t: "Read the evidence",
+      b: "See exposure, dimensions, signals and verifiable evidence — not guesses.",
+      artifact: "funding · entity · counterparty"
+    },
+    {
+      n: "03",
+      t: "Monitor the change",
+      b: "Track exposure over time and get alerted to meaningful changes.",
+      artifact: "exposure Δ → alert"
+    }
   ];
   return (
     <section className="border-b border-white/10">
-      <div className="px-4 py-16 md:py-24 lg:px-8">
-        <div className="max-w-2xl">
-          <Reveal as="div"><SectionLabel>How it works</SectionLabel></Reveal>
-          <Reveal as="h2" delay={60} className="mt-6 font-display text-3xl font-semibold tracking-tight text-marble md:text-5xl">
-            From on-chain activity to exposure.
-          </Reveal>
-        </div>
-        <div className="mt-12 grid gap-8 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <Reveal key={s.n} as="div" delay={i * 120} className="border-t border-white/10 pt-6">
-              <span className="font-mono text-sm text-muted-2">{s.n}</span>
-              <h3 className="mt-3 font-display text-xl font-semibold text-marble">{s.t}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{s.b}</p>
-            </Reveal>
-          ))}
-        </div>
+      <div className="px-4 py-20 md:py-28 lg:px-8">
+        <SectionHeader
+          label="How it works"
+          title="From on-chain activity to exposure."
+          body="A wallet address goes in. A sourced exposure model comes out, and keeps being watched."
+        />
+        <Reveal fade={false} className="relative mt-16">
+          <div className="absolute inset-x-0 top-0 h-px bg-white/10" aria-hidden="true" />
+          <div className="rv-line absolute inset-x-0 top-0 h-px bg-accent-bright/70" style={at(1)} aria-hidden="true" />
+          <ol className="grid gap-12 md:grid-cols-3 md:gap-8">
+            {steps.map((s, i) => (
+              <li key={s.n} className="relative pt-9">
+                <span
+                  className="rv-pop absolute left-0 top-0 h-2 w-2 -translate-y-1/2 bg-accent-bright"
+                  style={at(i * 4 + 2)}
+                  aria-hidden="true"
+                />
+                <div className="rv" style={at(i * 4 + 3)}>
+                  <span className="font-mono text-xs text-muted-2">{s.n}</span>
+                  <h3 className="mt-3 font-display text-xl font-semibold text-marble">{s.t}</h3>
+                  <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">{s.b}</p>
+                  <p className="mt-6 border-l border-white/15 pl-3 font-mono text-xs text-muted-foreground">{s.artifact}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Reveal>
       </div>
     </section>
   );
 }
 
-/* Product line — rows with category + status + link. */
+/* Product line — indexed rows; hover traces a rule down the left edge. */
 const PRODUCTS = [
-  { cat: "Wallet X-Ray", status: "LIVE", name: "Wallet X-Ray", body: "Understand what your public wallet activity may reveal.", href: "/app/analyze", link: "analyze.aegix.app →" },
-  { cat: "Attack My Wallet", status: "LIVE", name: "Attack My Wallet", body: "Follow observable paths through your on-chain activity.", href: "/app/attack", link: "attack.aegix.app →" },
-  { cat: "Compare", status: "LIVE", name: "Compare Wallets", body: "Two wallets. One relationship model. Strength vs confidence.", href: "/app/compare", link: "compare.aegix.app →" },
-  { cat: "Monitor", status: "LIVE", name: "Privacy Monitor", body: "Exposure changes. AEGIX notices.", href: "/app/monitors", link: "monitor.aegix.app →" },
-  { cat: "Developer", status: "LIVE", name: "Developer Intelligence API", body: "Scoped keys, metered quota, usage reporting, signed webhooks.", href: "/developers", link: "developers.aegix.app →" },
-  { cat: "Market Intelligence", status: "IN DEVELOPMENT", name: "Market Intelligence", body: "Narrative radar, anomaly detection, cross-market signal engine.", href: "/markets", link: "Explore the roadmap →" }
+  { status: "LIVE", name: "Wallet X-Ray", body: "Understand what your public wallet activity may reveal.", href: "/app/analyze" },
+  { status: "LIVE", name: "Attack My Wallet", body: "Follow observable paths through your on-chain activity.", href: "/app/attack" },
+  { status: "LIVE", name: "Compare Wallets", body: "Two wallets. One relationship model. Strength vs confidence.", href: "/app/compare" },
+  { status: "LIVE", name: "Privacy Monitor", body: "Exposure changes. AEGIX notices.", href: "/app/monitors" },
+  { status: "LIVE", name: "Developer Intelligence API", body: "Scoped keys, metered quota, usage reporting, signed webhooks.", href: "/developers" },
+  { status: "IN DEVELOPMENT", name: "Market Intelligence", body: "Narrative radar, anomaly detection, cross-market signal engine.", href: "/markets" }
 ];
 
 export function ProductLine() {
   return (
     <section className="border-b border-white/10">
-      <div className="px-4 py-16 md:py-24 lg:px-8">
-        <div className="max-w-2xl">
-          <Reveal as="div"><SectionLabel>Product Line</SectionLabel></Reveal>
-          <Reveal as="h2" delay={60} className="mt-6 font-display text-3xl font-semibold tracking-tight text-marble md:text-5xl">
-            The rails, end to end.
-          </Reveal>
-          <Reveal delay={120} className="mt-6 editorial-body">
-            One loop: analyze on-chain activity, surface intelligence, monitor change.
-          </Reveal>
-        </div>
-        <div className="mt-12 border-t border-white/10">
+      <div className="px-4 py-20 md:py-28 lg:px-8">
+        <SectionHeader
+          label="Product line"
+          title="The rails, end to end."
+          body="One loop: analyze on-chain activity, surface intelligence, monitor change."
+        />
+        <ul className="mt-14 border-t border-white/10">
           {PRODUCTS.map((p, i) => (
-            <Reveal key={p.name} as="div" delay={i * 90}>
-              <Link href={p.href} className="group grid gap-4 border-b border-white/10 py-6 transition hover:border-white/25 md:grid-cols-[16rem_1fr_auto] md:items-baseline">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{p.cat}</span>
-                  <StatusBadge label={p.status} />
+            <Reveal key={p.name} as="li" delay={i * 70}>
+              <Link
+                href={p.href}
+                className="group relative block overflow-hidden border-b border-white/10 transition-colors duration-300 hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-bright"
+              >
+                <span
+                  className="absolute inset-y-0 left-0 w-px origin-bottom scale-y-0 bg-accent-bright transition-transform duration-500 ease-out group-hover:scale-y-100"
+                  aria-hidden="true"
+                />
+                <div className="grid gap-3 py-6 pr-4 transition-transform duration-500 ease-out group-hover:translate-x-4 md:grid-cols-[3.5rem_minmax(0,1fr)_9.5rem_13rem] md:items-baseline md:gap-6">
+                  <span className="font-mono text-xs tabular-nums text-muted-2">{String(i + 1).padStart(2, "0")}</span>
+                  <div>
+                    <h3 className="font-display text-xl font-semibold text-marble">{p.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{p.body}</p>
+                  </div>
+                  <div>
+                    <StatusBadge label={p.status} />
+                  </div>
+                  <span className="flex items-center gap-3 font-mono text-xs text-muted-2 transition-colors duration-300 group-hover:text-marble md:justify-end">
+                    {p.href}
+                    <span className="text-accent-bright transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
+                      →
+                    </span>
+                  </span>
                 </div>
-                <div>
-                  <h3 className="font-display text-xl font-semibold text-marble">{p.name}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{p.body}</p>
-                </div>
-                <span className="font-mono text-xs text-muted-2 transition group-hover:text-accent-bright">{p.link}</span>
               </Link>
             </Reveal>
           ))}
-        </div>
-        <VisualPanel
-          size="md"
-          src="/assets/aegix-wallet-intelligence.jpg"
-          alt="AEGIX Wallet Intelligence interface showing a privacy exposure score, evidence breakdown, and linked entities"
-          caption="Privacy Intelligence · Wallet X-Ray" 
-        />
+        </ul>
       </div>
     </section>
   );
 }
 
-/* Developer infra — code-like preview. */
+/* Developer infra — the actual request, typed out. */
 export function DeveloperInfra() {
+  const facts = ["Scoped API keys", "Metered quota", "Usage reporting", "Signed webhooks"];
   return (
     <section className="border-b border-white/10">
-      <div className="grid gap-12 px-4 py-16 md:py-24 lg:grid-cols-2 lg:px-8">
-        <div>
-          <Reveal as="div"><SectionLabel>Developers</SectionLabel></Reveal>
-          <Reveal as="h2" delay={60} className="mt-6 font-display text-3xl font-semibold tracking-tight text-marble md:text-5xl">
-            Intelligence is infrastructure.
+      <div className="grid grid-cols-1 gap-14 px-4 py-20 md:py-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
+        <div className="min-w-0">
+          <Reveal>
+            <p className="section-label">Developers</p>
+            <h2 className="section-title mt-5">Intelligence is infrastructure.</h2>
           </Reveal>
-          <Reveal delay={120} className="mt-6 editorial-body">
-            Applications can consume AEGIX intelligence programmatically — scoped keys, metered quota, usage
-            reporting, and signed webhooks.
+          <Reveal delay={100} as="p" className="mt-6 max-w-lg editorial-body">
+            Applications can consume AEGIX intelligence programmatically. Submit a wallet, poll the analysis,
+            or receive a signed webhook when it is ready.
           </Reveal>
-          <Reveal delay={180} className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/developers" className="btn-primary">Open developer platform</Link>
-            <Link href="/docs" className="btn-secondary">Read the docs</Link>
+          <Reveal fade={false} as="ul" className="mt-10 grid max-w-lg grid-cols-2 border-t border-white/10">
+            {facts.map((f, i) => (
+              <li
+                key={f}
+                className="rv border-b border-white/10 py-3 font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground odd:pr-4"
+                style={at(i + 1)}
+              >
+                {f}
+              </li>
+            ))}
+          </Reveal>
+          <Reveal delay={200} className="mt-10 flex flex-col gap-3 sm:flex-row">
+            <Link href="/developers" className="btn-primary">
+              Open developer platform <span className="btn-arrow text-inherit">→</span>
+            </Link>
+            <Link href="/docs/api/wallet-intelligence" className="btn-secondary">
+              Read the API reference
+            </Link>
           </Reveal>
         </div>
-        <Reveal delay={140} className="relative">
-          <CodePreview>{`POST /v1/developer/intelligence/wallet
-
-Authorization: Bearer aegix_live_...
-
-{
-  "wallet": "<SOLANA_ADDRESS>"
-}
-
-→ analysisId
-→ status
-→ pollUrl`}</CodePreview>
-          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-2">
-            Scoped · Metered · Signed webhooks
-          </p>
+        <Reveal delay={120} className="min-w-0">
+          <TypedRequest />
         </Reveal>
-      </div>
-      <div className="px-4 lg:px-8">
-        <VisualPanel
-          size="md"
-          src="/assets/aegix-intelligence-infrastructure.jpg"
-          alt="AEGIX intelligence infrastructure — servers and API layers"
-          caption="Developers · Intelligence Is Infrastructure"
-        />
       </div>
     </section>
   );
 }
 
-/* Epistemic principle. */
+/* Epistemic principle — two sets approach and stop short of each other. */
 export function Epistemic() {
   return (
-    <section className="border-b border-white/10 bg-white/[0.015]">
-      <div className="px-4 py-20 text-center md:py-28 lg:px-8">
-        <Reveal as="h2" className="statement mx-auto max-w-3xl">
-          Correlation is not identity.
-        </Reveal>
-        <Reveal delay={120} className="mx-auto mt-8 max-w-xl text-lg leading-relaxed text-muted-foreground">
+    <section className="overflow-hidden border-b border-white/10 bg-white/[0.015]">
+      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className="plate relative min-h-[20rem] border-b border-white/10 lg:border-b-0 lg:border-r">
+          <Image
+            src="/assets/aegix-columns.jpg"
+            alt="Classical stone columns of an institutional building against a morning sky"
+            fill
+            sizes="(min-width: 1024px) 35vw, 100vw"
+            className="plate-img object-cover object-[35%_50%]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#090909]/80" aria-hidden="true" />
+          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(8)}>
+            A core principle
+          </p>
+        </div>
+        <div className="px-4 py-24 text-center md:py-32 lg:px-10">
+        <div className="relative mx-auto h-40 max-w-lg" aria-hidden="true">
+          <div
+            className="gap-circle gap-a flex h-32 w-32 items-center justify-center rounded-full border border-accent-bright/60 bg-accent/[0.06]"
+            style={{ transitionDelay: "120ms" }}
+          >
+            <span className="font-mono text-[10px] uppercase leading-snug tracking-[0.14em] text-accent-bright">
+              Observed
+              <br />
+              relationship
+            </span>
+          </div>
+          <div
+            className="gap-circle gap-b flex h-32 w-32 items-center justify-center rounded-full border border-dashed border-white/25"
+            style={{ transitionDelay: "220ms" }}
+          >
+            <span className="font-mono text-[10px] uppercase leading-snug tracking-[0.14em] text-muted-foreground">
+              Real-world
+              <br />
+              owner
+            </span>
+          </div>
+          <span className="rv-pop absolute left-1/2 top-1/2 -ml-2 -mt-3 font-serif text-2xl text-marble" style={at(12)}>
+            ≠
+          </span>
+        </div>
+        <p className="rv mt-6 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-2" style={at(14)}>
+          AEGIX stops at the gap
+        </p>
+        <h2 className="statement mx-auto mt-10 max-w-3xl">
+          <span className="rv-mask" style={at(2)}>
+            <span>Correlation is not identity.</span>
+          </span>
+        </h2>
+        <p className="rv mx-auto mt-8 max-w-xl text-lg leading-relaxed text-muted-foreground" style={at(5)}>
           AEGIX reports observable relationships, evidence and confidence. It does not turn correlation into
           unsupported claims about real-world ownership.
-        </Reveal>
-      </div>
+        </p>
+        </div>
+      </Reveal>
     </section>
   );
 }
 
-/* Network / Solana + roadmap teaser. */
+/* Network / Solana + roadmap by status. */
 export function NetworkAndRoadmap() {
   return (
-    <section className="border-b border-white/10">
-      <div className="px-4 py-16 md:py-24 lg:px-8">
-        <div className="grid gap-12 md:grid-cols-2">
-          <div>
-            <Reveal as="div"><SectionLabel>Network</SectionLabel></Reveal>
-            <Reveal as="h2" delay={60} className="mt-6 font-display text-2xl font-semibold text-marble md:text-4xl">
-              Built for the real-time on-chain economy.
-            </Reveal>
-            <Reveal delay={120} as="p" className="mt-4 text-muted-foreground">AEGIX starts on Solana.</Reveal>
-          </div>
-          <div>
-            <Reveal as="div"><SectionLabel>Roadmap</SectionLabel></Reveal>
-            <Reveal delay={80} className="mt-6 flex flex-wrap gap-2">
-              <StatusBadge label="SHIPPED" />
-              <StatusBadge label="CURRENT" />
-              <StatusBadge label="NEXT" />
-              <StatusBadge label="LATER" />
-            </Reveal>
-            <Reveal delay={140} as="p" className="mt-4 text-sm text-muted-foreground">
-              Status-driven, not date-driven. See what&apos;s shipped, in development, and planned.{" "}
-              <InlineArrowLink href="/roadmap">Explore the roadmap</InlineArrowLink>
-            </Reveal>
-          </div>
-        </div>
-        <div className="mt-12 grid gap-8 md:grid-cols-2">
-          <Reveal delay={120}>
-            <VisualPanel
-              src="/assets/aegix-market-structure.jpg"
-              alt="AEGIX market structure concept — aspirational research direction, in development"
-              caption="Future · Market Intelligence (IN DEVELOPMENT)"
-            />
-          </Reveal>
-          <Reveal delay={220}>
-            <VisualPanel
-              src="/assets/aegix-ecosystem-vision.jpg"
-              alt="AEGIX ecosystem vision — aspirational future direction"
-              caption="Vision · AEGIX Ecosystem"
-            />
-          </Reveal>
-        </div>
+    <section id="network" className="border-b border-white/10">
+      <div className="px-4 py-20 md:py-28 lg:px-8">
+        <SectionHeader
+          label="Network · Roadmap"
+          title="Built for the real-time on-chain economy."
+          body="AEGIX starts on Solana. The roadmap is status-driven, not date-driven: what has shipped, what is being built, and what comes later."
+        />
+        <Reveal fade={false} className="mt-14 grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+          {roadmapGroups.map((g, gi) => (
+            <div key={g.label} className="bg-ink-deep p-6">
+              <div className="rv flex items-center justify-between" style={at(gi)}>
+                <StatusBadge label={g.label} />
+                <span className="font-mono text-[11px] tabular-nums text-muted-2">{String(g.items.length).padStart(2, "0")}</span>
+              </div>
+              <ul className="mt-6 space-y-2.5">
+                {g.items.map((item, ii) => (
+                  <li
+                    key={item}
+                    className={`rv flex items-center gap-2.5 text-sm ${g.label === "SHIPPED" ? "text-marble/90" : "text-muted-foreground"}`}
+                    style={at(gi + ii * 0.6 + 1)}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 flex-none ${g.label === "SHIPPED" ? "bg-accent-bright" : "border border-white/25"}`}
+                      aria-hidden="true"
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </Reveal>
+        <Reveal delay={120} className="mt-8">
+          <InlineArrowLink href="/roadmap">Explore the roadmap</InlineArrowLink>
+        </Reveal>
       </div>
     </section>
   );
@@ -291,12 +362,42 @@ export function NetworkAndRoadmap() {
 /* Final CTA. */
 export function FinalCta() {
   return (
-    <section className="px-4 py-24 text-center md:py-32 lg:px-8">
-      <Reveal as="h2" className="statement-lg">See what others don&apos;t.</Reveal>
-      <Reveal delay={100} className="mx-auto mt-8 max-w-md text-lg text-muted-foreground">Start with your wallet.</Reveal>
-      <Reveal delay={180} className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-        <Link href="/app/analyze" className="btn-primary">Launch AEGIX <span className="btn-arrow text-inherit">→</span></Link>
-        <Link href="/docs" className="btn-secondary">Read the docs</Link>
+    <section className="overflow-hidden">
+      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="flex flex-col justify-center px-4 py-24 md:py-32 lg:px-8">
+          <h2 className="statement-lg">
+            <span className="rv-mask" style={at(0)}>
+              <span>Start with</span>
+            </span>
+            <span className="rv-mask" style={at(1)}>
+              <span>your own wallet.</span>
+            </span>
+          </h2>
+          <p className="rv mt-8 max-w-md text-lg text-muted-foreground" style={at(4)}>
+            One address. Every observable link, with evidence and confidence attached.
+          </p>
+          <div className="rv mt-10 flex flex-col gap-3 sm:flex-row" style={at(5)}>
+            <Link href="/app/analyze" className="btn-primary">
+              Launch AEGIX <span className="btn-arrow text-inherit">→</span>
+            </Link>
+            <Link href="/docs" className="btn-secondary">
+              Read the docs
+            </Link>
+          </div>
+        </div>
+        <div className="plate relative min-h-[26rem] border-t border-white/10 lg:border-l lg:border-t-0" style={{ transitionDelay: "150ms" }}>
+          <Image
+            src="/assets/aegix-observer.jpg"
+            alt="A person standing at a window, looking out over a city at night"
+            fill
+            sizes="(min-width: 1024px) 32vw, 100vw"
+            className="plate-img object-cover object-[50%_35%]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-deep via-transparent to-transparent lg:bg-gradient-to-r lg:from-ink-deep/80 lg:via-transparent lg:to-transparent" aria-hidden="true" />
+          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(7)}>
+            See what others don&apos;t
+          </p>
+        </div>
       </Reveal>
     </section>
   );

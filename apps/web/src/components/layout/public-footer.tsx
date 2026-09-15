@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AegixMark } from "@/components/aegix-logo";
-import { footerColumns, SITE_URL } from "@/lib/site";
+import { footerColumns, LEGAL_ENTITY, legalLinks, SITE_URL } from "@/lib/site";
 
 function FooterColumn({ title, links }: { title: string; links: { label: string; href: string }[] }) {
   return (
@@ -45,7 +45,14 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 text-xs text-muted-2 sm:flex-row sm:items-center">
-          <span>© {new Date().getFullYear()} AEGIX. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} {LEGAL_ENTITY}. All rights reserved.</span>
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+            {legalLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="transition hover:text-marble">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
           <span className="mono-address">{SITE_URL.replace(/^https?:\/\//, "")}</span>
         </div>
       </div>

@@ -1,0 +1,43 @@
+# HTTPS edge for a single-host deployment, layered on the production stack:
+#
+#   docker compose -p aegix -f docker-compose.production.yml -f docker-compose.edge.yml \
+#     --env-file <protected env file> up -d
+#
+# Caddy terminates TLS with automatically issued and renewed Let's Encrypt
+# certificates for AEGIX_DOMAIN (and redirects www to it), then forwards to the
+# nginx proxy. The proxy's host port is narrowed to loopback so the plain-HTTP
+# stack is reachable only through the edge.
+#
+# Requirements: AEGIX_DOMAIN and www.AEGIX_DOMAIN resolve to this host, and
+# ports 80 and 443 are open to the internet (80 answers the ACME challenge).
+services:
+  edge:
+    image: caddy:2.8-alpine
+    environment:
+      AEGIX_DOMAIN: ${AEGIX_DOMAIN:?required}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-data:/data
+      - edge-config:/config
+    depends_on:
+      proxy: { condition: service_healthy }
+    restart: unless-stopped
+
+  api:
+    environment:
+      # client → Caddy → nginx → API: two proxies append X-Forwarded-For, so two
+      # hops are trusted. With one, every visitor would share the edge's IP for
+      # rate limits and anonymous quotas.
+      TRUST_PROXY_HOPS: "2"
+
+  proxy:
+    ports: !override
+      - "127.0.0.1:${AEGIX_HTTP_PORT:-8080}:8080"
+
+volumes:
+  edge-data:
+  edge-config:

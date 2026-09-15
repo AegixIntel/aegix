@@ -9,7 +9,7 @@ export default function ApiCompareDocPage() {
       <DocHeading eyebrow="Developer API" title="Compare Intelligence" lead="Compare two wallets and read cross-wallet correlation." />
 
       <DocSection title="POST /v1/developer/intelligence/compare">
-        <DocCode>{`curl -X POST https://aegix.app/v1/developer/intelligence/compare \\
+        <DocCode>{`curl -X POST https://aegixintelligence.com/api/v1/developer/intelligence/compare \\
   -H "Authorization: Bearer aegix_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"walletA":"<ADDR_A>","walletB":"<ADDR_B>"}'`}</DocCode>
@@ -17,7 +17,7 @@ export default function ApiCompareDocPage() {
 
       <DocSection title="GET /v1/developer/intelligence/comparison/:pairId">
         <p>Fetch a cached comparison by its canonical pair id. The pair identity is symmetric — <code className="font-mono">(A,B)</code> and <code className="font-mono">(B,A)</code> map to the same result.</p>
-        <DocCode>{`curl https://aegix.app/v1/developer/intelligence/comparison/<pairId> \\
+        <DocCode>{`curl https://aegixintelligence.com/api/v1/developer/intelligence/comparison/<pairId> \\
   -H "Authorization: Bearer aegix_live_..."`}</DocCode>
       </DocSection>
 
