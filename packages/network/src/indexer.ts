@@ -33,17 +33,44 @@ export function height(value: unknown): number {
   return value;
 }
 
+/**
+ * Which defensive checks this batch performs. Both are per-invocation by
+ * default; a long-running daemon re-runs them periodically instead of on every
+ * batch, which otherwise costs two extra provider calls per batch for an answer
+ * that cannot change between adjacent heights.
+ */
+export interface IndexChecks {
+  network?: boolean;
+  archiveFloor?: boolean;
+}
+export interface BatchResult {
+  indexed: number;
+  nextHeight: number;
+  finalizedHeight: number;
+  /** Provider calls this batch issued; the operator's throughput budget. */
+  rpcCalls: number;
+}
+
 /** Bounded work per invocation; failures leave the persistent cursor unchanged. */
-export async function indexBatch(source: BlockSource, store: IndexStore, start: number, batchSize = 32) {
+export async function indexBatch(source: BlockSource, store: IndexStore, start: number,
+  batchSize = 32, checks: IndexChecks = {}): Promise<BatchResult> {
   height(start);
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 256) throw new Error("Invalid batch size");
-  await source.verifyNetwork();
+  const verifyNetwork = checks.network ?? true;
+  const checkArchiveFloor = checks.archiveFloor ?? true;
+  let rpcCalls = 0;
+  if (verifyNetwork) { rpcCalls += 1; await source.verifyNetwork(); }
   const checkpoint = await store.checkpoint(source.chain, start);
+  rpcCalls += 1;
   const finalized = height(await source.finalizedHeight());
   const from = height(checkpoint.nextHeight);
-  if (from > finalized) return { indexed: 0, nextHeight: from, finalizedHeight: finalized };
-  if (from < height(await source.firstAvailableHeight())) throw new Error("Archive history unavailable; checkpoint preserved");
+  if (from > finalized) return { indexed: 0, nextHeight: from, finalizedHeight: finalized, rpcCalls };
+  if (checkArchiveFloor) {
+    rpcCalls += 1;
+    if (from < height(await source.firstAvailableHeight())) throw new Error("Archive history unavailable; checkpoint preserved");
+  }
   const to = Math.min(finalized, height(from + batchSize - 1));
+  rpcCalls += 1;
   const heights = await source.heights(from, to);
   if (!Array.isArray(heights)) throw new Error("Invalid block range");
   let previous = from - 1;
@@ -53,6 +80,7 @@ export async function indexBatch(source: BlockSource, store: IndexStore, start: 
   for (const slot of heights) {
     height(slot);
     if (slot < from || slot > to || slot <= previous) throw new Error("Invalid block range ordering");
+    rpcCalls += 1;
     const block = await source.block(slot);
     if (block.chain !== source.chain || block.height !== slot || !block.hash || !block.parentHash) throw new Error("Invalid block identity");
     height(block.parentHeight);
@@ -66,5 +94,5 @@ export async function indexBatch(source: BlockSource, store: IndexStore, start: 
     parentHash = block.hash;
   }
   await store.commit(source.chain, checkpoint, height(to + 1), blocks);
-  return { indexed: blocks.length, nextHeight: to + 1, finalizedHeight: finalized };
+  return { indexed: blocks.length, nextHeight: to + 1, finalizedHeight: finalized, rpcCalls };
 }
