@@ -3,7 +3,14 @@ import postgres from "postgres";
 import { createReputationStore } from "./reputation-store.js";
 import { readReputationPolicy } from "./policy.js";
 import { createAexLedger } from "./economics.js";
+import { pruneIndex } from "./maintenance.js";
+import { parseChain } from "./chains.js";
 import type { SignedClaim } from "./reputation.js";
+
+function flag(name: string): string | undefined {
+  const index = process.argv.indexOf(`--${name}`);
+  return index === -1 ? undefined : process.argv[index + 1];
+}
 
 /** Operator-only commands: possession of the DB credentials is required. */
 async function main() {
@@ -11,6 +18,31 @@ async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL required");
   const sql = postgres(process.env.DATABASE_URL, { max: 2 });
   try {
+    if (command === "network:prune") {
+      if (!process.env.INDEXER_CHAIN) throw new Error("INDEXER_CHAIN required");
+      const before = Number(flag("before"));
+      if (!Number.isSafeInteger(before) || before < 0) throw new Error("--before <height> is required");
+      const batch = flag("batch") === undefined ? 5_000 : Number(flag("batch"));
+      const maxBatches = flag("max-batches") === undefined ? 100 : Number(flag("max-batches"));
+      if (!Number.isSafeInteger(maxBatches) || maxBatches < 1 || maxBatches > 10_000) throw new Error("Invalid --max-batches");
+      const chain = parseChain(process.env.INDEXER_CHAIN);
+      let done = false;
+      let batches = 0;
+      const totals = { deletedBlocks: 0, deletedTransactions: 0, deletedAddresses: 0, deletedProjections: 0 };
+      let floor: number | null = null;
+      while (!done && batches < maxBatches) {
+        const result = await pruneIndex(sql, chain, { before, batch });
+        totals.deletedBlocks += result.deletedBlocks;
+        totals.deletedTransactions += result.deletedTransactions;
+        totals.deletedAddresses += result.deletedAddresses;
+        totals.deletedProjections += result.deletedProjections;
+        floor = result.retainedFloor;
+        done = result.done;
+        batches += 1;
+      }
+      console.log(JSON.stringify({ chain, before, batches, done, retainedFloor: floor, ...totals }));
+      return;
+    }
     if (command === "reputation:import" || command === "reputation:revoke") {
       if (!process.env.REPUTATION_POLICY_FILE || !fileOrId) throw new Error("Policy and claim required");
       const store = createReputationStore(sql, await readReputationPolicy(process.env.REPUTATION_POLICY_FILE));

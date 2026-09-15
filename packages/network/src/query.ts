@@ -8,7 +8,9 @@ export function createNetworkQuery(sql: postgres.Sql) {
   return {
     async status() {
       const rows = await sql`select chain, start_height::text, next_height::text, last_height::text,
-        finalized_height::text, updated_at, heartbeat_at, last_error from network_checkpoints`;
+        finalized_height::text, updated_at, heartbeat_at, last_error,
+        (select min(height)::text from network_blocks b where b.chain = network_checkpoints.chain) as retained_floor
+        from network_checkpoints`;
       return Object.entries(CHAINS).map(([chain, capabilities]) => ({ chain, ...capabilities,
         coverage: rows.find(row => row.chain === chain) ?? null }));
     },
@@ -27,10 +29,17 @@ export function createNetworkQuery(sql: postgres.Sql) {
       const transactions = rows.slice(0, limit);
       const last = transactions.at(-1);
       const [coverage] = await sql`select start_height::text, next_height::text, last_height::text, finalized_height::text,
-        heartbeat_at, last_error from network_checkpoints where chain = ${chain}`;
+        heartbeat_at, last_error,
+        (select min(height)::text from network_blocks b where b.chain = ${chain}) as retained_floor
+        from network_checkpoints where chain = ${chain}`;
+      // Storage is bounded by an operator retention floor; say so instead of
+      // letting a pruned range read as "this wallet has no older activity".
+      const pruned = coverage?.retained_floor != null && Number(coverage.retained_floor) > Number(coverage.start_height);
       return { wallet: walletIdentity(chain, address), coverage: coverage ?? null, transactions,
         nextCursor: more && last ? { height: Number(last.height), position: Number(last.position) } : null,
-        limitations: ["History covers the indexed range only.", "Address involvement does not establish ownership.",
+        limitations: ["History covers the indexed range only.",
+          ...(pruned ? [`Blocks below height ${coverage!.retained_floor} were pruned by retention; earlier history is unavailable.`] : []),
+          "Address involvement does not establish ownership.",
           ...(CHAINS[chain].family === "evm" ? ["EVM success is unknown without receipts; value is the requested native amount, not a confirmed transfer.", "Internal calls and token logs are not included."] : [])] };
     },
     async transaction(chain: NetworkChain, id: string) {
