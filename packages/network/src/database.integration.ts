@@ -7,6 +7,7 @@ import { createAexLedger } from "./economics.js";
 import { createIndexStore } from "./store.js";
 import { runIndexer } from "./runner.js";
 import { pruneIndex } from "./maintenance.js";
+import { createNetworkQuery } from "./query.js";
 
 const url = process.env.NETWORK_TEST_DATABASE_URL;
 if (!url) throw new Error("NETWORK_TEST_DATABASE_URL required");
@@ -47,12 +48,18 @@ try {
   // block with rows is taken.
   const bounded = await pruneIndex(isolated, "solana:mainnet", { before: 13, batch: 10, rowBudget: 1 });
   assert.equal(bounded.done, false, "a budgeted prune reports that work remains");
+  assert.equal(bounded.retainedFloor, 12, "the floor is reported while some blocks remain");
   const rest = await pruneIndex(isolated, "solana:mainnet", { before: 13, batch: 10, rowBudget: 1_000 });
   assert.equal(rest.done, true, "nothing below the bound remains");
   assert.equal(bounded.deletedBlocks + rest.deletedBlocks, 3, "every block below the bound is removed");
-  assert.equal(rest.retainedFloor, 13, "the retained floor is reported for disclosure");
+  assert.equal(rest.retainedFloor, null, "an emptied index retains no floor");
   assert.equal((await pruneIndex(isolated, "solana:mainnet", { before: 13 })).deletedBlocks, 0,
     "a repeated prune deletes nothing");
+  // An index that was populated and then fully pruned must not read as a wallet
+  // with no activity.
+  const disclosure = await createNetworkQuery(isolated).history("solana:mainnet", wallet, 5);
+  assert.ok(disclosure.limitations.some(line => line.includes("pruned by retention")),
+    "an emptied index still discloses retention");
   // Deleting a transaction must not be possible while its memberships remain.
   const [dangling] = await isolated`select count(*)::int as rows from network_transaction_addresses a
     left join network_transactions t on t.chain = a.chain and t.tx_id = a.tx_id where t.tx_id is null`;

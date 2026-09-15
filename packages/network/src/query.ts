@@ -33,12 +33,18 @@ export function createNetworkQuery(sql: postgres.Sql) {
         (select min(height)::text from network_blocks b where b.chain = ${chain}) as retained_floor
         from network_checkpoints where chain = ${chain}`;
       // Storage is bounded by an operator retention floor; say so instead of
-      // letting a pruned range read as "this wallet has no older activity".
-      const pruned = coverage?.retained_floor != null && Number(coverage.retained_floor) > Number(coverage.start_height);
+      // letting a pruned range read as "this wallet has no older activity". An
+      // index that was populated and then fully pruned reports no floor at all,
+      // which is exactly the case that must not read as "never used".
+      const floor = coverage?.retained_floor == null ? null : Number(coverage.retained_floor);
+      const indexedSomething = coverage != null && Number(coverage.next_height) > Number(coverage.start_height);
+      const pruned = indexedSomething && (floor === null || floor > Number(coverage!.start_height));
       return { wallet: walletIdentity(chain, address), coverage: coverage ?? null, transactions,
         nextCursor: more && last ? { height: Number(last.height), position: Number(last.position) } : null,
         limitations: ["History covers the indexed range only.",
-          ...(pruned ? [`Blocks below height ${coverage!.retained_floor} were pruned by retention; earlier history is unavailable.`] : []),
+          ...(pruned ? [floor === null
+            ? "Every indexed block has been pruned by retention; history is unavailable."
+            : `Blocks below height ${floor} were pruned by retention; earlier history is unavailable.`] : []),
           "Address involvement does not establish ownership.",
           ...(CHAINS[chain].family === "evm" ? ["EVM success is unknown without receipts; value is the requested native amount, not a confirmed transfer.", "Internal calls and token logs are not included."] : [])] };
     },
