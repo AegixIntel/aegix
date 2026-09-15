@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     `;
     assert.equal(requests?.exists, true, "migration 0011 creates the upgrade request table");
     assert.equal(Number(count?.count), 13, "D7 upgrade records migrations 0009-0013 exactly once");
-    console.log("11 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
+    console.log("13 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
   } finally {
     await upgraded.end();
   }
