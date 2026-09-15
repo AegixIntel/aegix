@@ -162,7 +162,7 @@ async function main() {
     // ---- retention ----
     const pruneBefore = start + Math.floor(BATCHES * BLOCKS * PRUNE_FRACTION);
     const pruneStarted = Date.now();
-    const pruned = await pruneIndex(sql, chain, { before: pruneBefore, batch: 100_000 });
+    const pruned = await pruneIndex(sql, chain, { before: pruneBefore, batch: 5_000, rowBudget: 5_000_000 });
     const pruneMs = Date.now() - pruneStarted;
     const [afterBlocks] = await sql`select count(*)::int as blocks from network_blocks`;
     const [afterTx] = await sql`select count(*)::int as transactions from network_transactions`;
@@ -171,7 +171,7 @@ async function main() {
     assert.equal(orphans?.rows, 0, "pruning leaves no orphaned memberships");
     assert.equal(pruned.retainedFloor, pruneBefore, "the retained floor is the prune bound");
     // Re-running is a no-op, which is what makes the command safe to repeat.
-    const again = await pruneIndex(sql, chain, { before: pruneBefore, batch: 100_000 });
+    const again = await pruneIndex(sql, chain, { before: pruneBefore, batch: 5_000, rowBudget: 5_000_000 });
     assert.equal(again.deletedBlocks, 0, "a repeated prune deletes nothing");
     // And the read path discloses the pruned range rather than implying absence.
     const disclosure = await query.history(chain, hot, 5);
