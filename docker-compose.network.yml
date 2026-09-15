@@ -17,9 +17,16 @@ services:
       DATABASE_URL: ${DATABASE_URL:?required}
       INDEXER_CHAIN: ${INDEXER_CHAIN:-solana:mainnet}
       INDEXER_RPC_URL: ${INDEXER_RPC_URL:-}
+      # Preferred: comma-separated independent providers, rotated on failure.
+      INDEXER_RPC_URLS: ${INDEXER_RPC_URLS:-}
       INDEXER_START_HEIGHT: ${INDEXER_START_HEIGHT:-}
       INDEXER_BATCH_SIZE: ${INDEXER_BATCH_SIZE:-32}
       INDEXER_POLL_MS: ${INDEXER_POLL_MS:-2000}
+      INDEXER_RPC_MIN_INTERVAL_MS: ${INDEXER_RPC_MIN_INTERVAL_MS:-200}
+      INDEXER_RPC_TIMEOUT_MS: ${INDEXER_RPC_TIMEOUT_MS:-30000}
+      INDEXER_RPC_MAX_ATTEMPTS: ${INDEXER_RPC_MAX_ATTEMPTS:-2}
+      INDEXER_RPC_COOLDOWN_MS: ${INDEXER_RPC_COOLDOWN_MS:-30000}
+      INDEXER_VERIFY_EVERY_BATCHES: ${INDEXER_VERIFY_EVERY_BATCHES:-60}
     depends_on:
       migrate: { condition: service_completed_successfully }
     restart: unless-stopped

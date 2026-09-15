@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { walletIdentity } from "./chains.js";
 import { indexBatch, type BlockSource, type IndexCheckpoint, type IndexStore } from "./indexer.js";
-import { createBlockSource } from "./rpc.js";
+import { createBlockSource, createRpcPool, RpcRequestError, RpcUnavailableError } from "./rpc.js";
 import { claimPayload, reputationReport, validateClaim, type ReputationClaim, type ValidationPolicy } from "./reputation.js";
 import { validateTransfer } from "./economics.js";
 
@@ -107,6 +107,130 @@ test("Solana verifies the full genesis hash and requests finalized versioned tra
   await source.verifyNetwork();
   assert.equal((await source.block(10)).height, 10);
   await assert.rejects(createBlockSource("solana:mainnet", async () => "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp").verifyNetwork());
+});
+
+test("the provider pool rotates past an endpoint that fails at the transport level", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async url => {
+    if (String(url).includes("dead.example")) throw new Error("ECONNREFUSED https://dead.example/rpc?key=secret");
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x1" }), { status: 200 });
+  };
+  try {
+    const pool = createRpcPool(["https://dead.example/rpc?key=secret", "https://live.example/rpc"],
+      { minimumIntervalMs: 0, cooldownMs: 60_000 });
+    assert.equal(await pool.call("eth_chainId", []), "0x1");
+    const stats = pool.stats();
+    assert.equal(stats.calls, 1);
+    assert.equal(stats.endpointFailures, 1);
+    assert.equal(stats.endpoints[0]!.failures, 1);
+    assert.equal(stats.endpoints[1]!.calls, 1);
+    assert.equal(stats.endpoints[0]!.cooling, true);
+    assert.equal(pool.endpointCount, 2);
+    // The cooling endpoint is skipped until its cooldown expires.
+    await pool.call("eth_chainId", []);
+    assert.equal(pool.stats().endpoints[0]!.calls, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+test("exhausted endpoints fail without leaking the provider URL or its key", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("ECONNREFUSED https://secret.example/rpc?key=abc123"); };
+  try {
+    const pool = createRpcPool(["https://secret.example/rpc?key=abc123"], { maxAttempts: 1, cooldownMs: 0 });
+    await assert.rejects(pool.call("getSlot", []), (error: Error) => {
+      assert.ok(!error.message.includes("abc123"), "no credential in the error");
+      assert.ok(!error.message.includes("secret.example"), "no endpoint in the error");
+      return true;
+    });
+  } finally { globalThis.fetch = original; }
+});
+
+test("a JSON-RPC rejection is an answer, not an unhealthy endpoint", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32015, message: "unsupported" } }), { status: 200 });
+  };
+  try {
+    const pool = createRpcPool(["https://a.example", "https://b.example"], { minimumIntervalMs: 0 });
+    await assert.rejects(pool.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcRequestError);
+      assert.equal(error.rpcCode, -32015, "the provider's code is preserved for the operator");
+      return true;
+    });
+    assert.equal(calls, 1, "a rejection does not burn the remaining endpoints");
+    assert.equal(pool.stats().endpointFailures, 0);
+    assert.equal(pool.stats().attempts, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+test("provider failures are classified so an operator can act on them", async () => {
+  const original = globalThis.fetch;
+  const classified = async (respond: () => Promise<Response> | Response) => {
+    globalThis.fetch = async () => respond();
+    const pool = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0 });
+    await assert.rejects(pool.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.ok(!error.message.includes("only.example"), "the endpoint stays out of the message");
+      return true;
+    });
+    globalThis.fetch = original;
+  };
+  try {
+    // A throttle is distinguishable from a timeout from a garbled body.
+    globalThis.fetch = async () => new Response("slow down", { status: 429 });
+    const throttled = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0 });
+    await assert.rejects(throttled.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.equal(error.reason, "http");
+      assert.equal(error.status, 429);
+      return true;
+    });
+
+    globalThis.fetch = async () => { const error = new Error("aborted"); error.name = "TimeoutError"; throw error; };
+    const timedOut = createRpcPool(["https://only.example"], { maxAttempts: 1, cooldownMs: 0, timeoutMs: 1 });
+    await assert.rejects(timedOut.call("getBlock", [1]), (error: unknown) => {
+      assert.ok(error instanceof RpcUnavailableError);
+      assert.equal(error.reason, "timeout");
+      assert.equal(error.status, undefined);
+      return true;
+    });
+
+    await classified(() => new Response("<html>gateway error</html>", { status: 200 }));
+    await classified(() => { throw new TypeError("fetch failed"); });
+  } finally { globalThis.fetch = original; }
+});
+
+test("batch metrics count provider calls and deferred checks drop the redundant ones", async () => {
+  const counted = () => {
+    const calls: string[] = [];
+    const source: BlockSource = {
+      chain: "solana:mainnet",
+      verifyNetwork: async () => { calls.push("verify"); },
+      finalizedHeight: async () => { calls.push("finalized"); return 12; },
+      firstAvailableHeight: async () => { calls.push("first"); return 0; },
+      heights: async () => { calls.push("heights"); return [10]; },
+      block: async slot => { calls.push("block"); return { chain: "solana:mainnet", height: slot,
+        hash: `h${slot}`, parentHeight: slot - 1, parentHash: `h${slot - 1}`, raw: {} }; }
+    };
+    return { calls, source };
+  };
+  const store: IndexStore = {
+    checkpoint: async () => ({ nextHeight: 10, lastHeight: 9, lastHash: "h9" }),
+    commit: async () => {}
+  };
+  const full = counted();
+  const verified = await indexBatch(full.source, store, 10, 4);
+  assert.deepEqual(full.calls, ["verify", "finalized", "first", "heights", "block"]);
+  assert.equal(verified.rpcCalls, 5);
+  assert.equal(verified.indexed, 1);
+
+  const deferred = counted();
+  const steady = await indexBatch(deferred.source, store, 10, 4, { network: false, archiveFloor: false });
+  assert.deepEqual(deferred.calls, ["finalized", "heights", "block"], "a steady batch skips both defensive checks");
+  assert.equal(steady.rpcCalls, 3);
+  assert.equal(steady.nextHeight, 13);
 });
 
 function reviewed() {

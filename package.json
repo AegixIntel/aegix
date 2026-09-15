@@ -42,6 +42,7 @@
     "loadtest:correlation": "node --import tsx tests/load-test-correlation.ts",
     "loadtest:monitors": "node --import tsx tests/load-test-monitors.ts",
     "loadtest:public": "node --import tsx tests/load-test-public.ts",
+    "loadtest:network": "node --import tsx tests/load-test-network.ts",
     "verify:programs": "node --import tsx scripts/verify-programs.ts",
     "verify:ai-provider": "node --import tsx scripts/verify-ai-provider.ts",
     "verify:markets-provider": "node --import tsx scripts/verify-markets-provider.ts",
@@ -68,6 +69,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",
     "@aegix/ai": "workspace:*",
-    "@aegix/billing": "workspace:*"
+    "@aegix/billing": "workspace:*",
+    "@aegix/network": "workspace:*"
   }
 }

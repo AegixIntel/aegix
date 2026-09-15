@@ -12,7 +12,7 @@ const url = process.env.NETWORK_LIVE_TEST_DATABASE_URL;
 if (!url || new URL(url).pathname !== "/network_live_test") throw new Error("network_live_test database required");
 const sql = postgres(url);
 try {
-  for (const migration of ["0012_network_foundation.sql", "0013_network_operations.sql"]) {
+  for (const migration of ["0012_network_foundation.sql", "0013_network_operations.sql", "0014_network_retention_indexes.sql"]) {
     await sql.unsafe(await readFile(new URL(`../../database/migrations/${migration}`, import.meta.url), "utf8"));
   }
   for (const [chain, endpoint] of [["solana:mainnet", process.env.SOLANA_LIVE_RPC_URL ?? "https://api.mainnet-beta.solana.com"], ["eip155:8453", "https://mainnet.base.org"]] as Array<[NetworkChain, string]>) {
