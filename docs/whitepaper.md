@@ -47,16 +47,23 @@ across `packages/blockchain`, `packages/normalizer`,
 `packages/intelligence`, `packages/graph`, `packages/correlation` and
 `packages/commonality`.
 
-### Markets — IN DEVELOPMENT
+### Markets — LIVE, within a bounded slice
 
-Stocks, ETFs, sectors, volume, price behavior, historical correlation and
-market breadth. No market data provider is integrated and no engine exists.
-This is a direction, not a feature.
+BTC, ETH and SOL price, 24h volume, a bounded hourly history, freshness and
+deterministic signals, implemented in `packages/markets` and served by
+`GET /v1/markets`, `GET /v1/markets/:asset` and `GET /v1/markets/:asset/ask`,
+read at `/app/markets`. The provider is keyless and the response is cached
+rather than persisted.
+
+Stocks, ETFs, sectors, market breadth, historical correlation and the
+sector/company/ETF/narrative graph are **IN DEVELOPMENT**: no engine and no
+licensed data source exists for them. See §4.
 
 ### Macro and narratives — IN DEVELOPMENT
 
 Market themes, sector rotation, cross-market movement, emerging narratives,
-historical patterns and anomaly signals. Same status as above.
+historical patterns and anomaly signals. No engine and no data source; this
+is a direction, not a feature.
 
 ---
 
@@ -135,16 +142,26 @@ per-key quotas and usage reporting. Also absent from earlier drafts.
 
 ---
 
-## 4. AEGIX Markets — IN DEVELOPMENT
+## 4. AEGIX Markets
 
-Four directions, none implemented. They are stated here as design intent and
-are marked the same way on the website (`/markets`).
+**Shipped.** Market Intelligence for BTC, ETH and SOL: price, 24h volume, a
+bounded hourly history, freshness and quality reporting, and five
+deterministic signal types — price deviation, volume spike, volatility
+expansion, momentum and anomaly (`packages/markets/src/signals.ts`). The
+anomaly signal is a statistical outlier against a short price window; it is
+not evidence of manipulation, and the product copy says so.
+
+**The four directions below have no engine and no data source.** They are
+stated as design intent and marked the same way on the website (`/markets`,
+`/roadmap`).
 
 - **Narrative Radar** — detect when a theme moves from noise to momentum to
   market attention to consensus.
 - **Anomaly Detector** — surface activity that deviates from historical
   expectation across price, volume, sector behavior and relative
-  performance. The output is "pay attention", never "buy" or "sell".
+  performance. The output is "pay attention", never "buy" or "sell". This is
+  the market-domain detector; the repository has no historical baseline store
+  for it.
 - **Cross-Market Intelligence** — map relationships between on-chain
   activity, crypto assets, sectors, public companies, ETFs and macro
   signals.
@@ -170,15 +187,23 @@ traditional-market half depends on the market data work in §4.
 
 ---
 
-## 6. AEGIX AI — PLANNED
+## 6. AEGIX AI — LIVE when a provider credential is configured
 
-An explanation copilot that answers why a signal appeared, what changed
-today, which factors drive an anomaly, and where a wallet is most exposed.
+Ask AEGIX answers questions grounded in the deterministic evidence AEGIX has
+already issued: `POST /v1/wallets/:address/ask` and
+`POST /v1/markets/:asset/ask`, surfaced inside Wallet Context and Markets
+(`packages/ai`). It is reached through an OpenAI-compatible provider
+configured by `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`, with Groq
+available by pointing the base URL at its OpenAI-compatible path. With no
+credential configured the route reports `MISSING_CREDENTIAL` rather than
+answering. Answers are validated against the supplied evidence and citations
+are enforced, so the model explains findings and decides none of them.
 
-`packages/explanation` produces deterministic, template-based explanations
-for every signal and path today. That is not an AI layer and must not be
-described as one. Optional LLM configuration placeholders exist, but no
-provider is integrated and no score or signal depends on an LLM.
+The wider **AI Intelligence Copilot** — explaining an anomaly, "what changed
+today", portfolio-level reasoning — is **PLANNED**. `packages/explanation`
+additionally produces deterministic, template-based explanations for every
+signal and path today; that is not an AI layer and must not be described as
+one. No score or signal depends on an LLM.
 
 ---
 
@@ -235,15 +260,19 @@ EVM normalization and privacy analysis are not implemented.
 
 ## 10. Roadmap — status, not dates
 
+The machine-checkable source of truth is the `products` list in
+`apps/web/src/lib/site.ts`. `/roadmap`, the landing status surfaces, the
+`/privacy` status list and the navigation badges are all derived from it, so
+they cannot disagree with each other. This table mirrors that list;
+per-item qualifiers — a shipped capability that is gated, or one whose input
+does not exist yet — are shown beside the item on `/roadmap`.
+
 | Status | Capability |
 |---|---|
-| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Threat Monitor, Developer Intelligence API, signed webhooks, population commonality |
+| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
-| NEXT | Market Intelligence, Narrative Radar, Anomaly Detection, Signal Engine |
+| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence |
 | LATER | AI Intelligence Copilot, Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
-
-This table is the source of truth for `/roadmap` and for the landing page
-status panel. They must agree.
 
 ---
 
@@ -255,7 +284,9 @@ status panel. They must agree.
 2. **More than a dashboard.** Data → relationship → pattern → signal →
    intelligence. Dashboards show; AEGIX interprets.
 3. **Privacy and markets.** Understand what your wallet reveals; understand
-   what markets are revealing. Today only the first half is live.
+   what markets are revealing. The privacy pillar is complete, and the market
+   side is live only as BTC, ETH and SOL price, volume and deterministic
+   signals — the wider market direction is not built.
 4. **Cross-market vision.** Capital, narratives and sentiment move across
    ecosystems, and AEGIX is designed to map those relationships.
 5. **Signal convergence.** The strongest insight rarely comes from one

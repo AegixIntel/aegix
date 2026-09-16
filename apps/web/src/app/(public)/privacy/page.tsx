@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SectionLabel, EditorialHeading, StatusBadge, FeatureRow, TechnicalMetric, ProductStatus } from "@/components/ui/primitives";
+import { statusGroups } from "@/lib/site";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -23,10 +24,7 @@ export default function PrivacyPage() {
         </div>
 
         <div className="mt-14">
-          <ProductStatus
-            live={["Wallet X-Ray", "Attack My Wallet", "Compare Wallets", "Privacy Monitor"]}
-            inDevelopment={["Market Intelligence"]}
-          />
+          <ProductStatus groups={statusGroups("PRIVACY_PAGE")} />
         </div>
       </div>
 

@@ -11,9 +11,12 @@ and `ENABLE_EMAIL_NOTIFICATIONS=false`. Existing optional email compatibility
 remains isolated behind both flags. Webhook delivery remains supported when
 enabled and configured.
 
-No D8 or roadmap capability is part of this gate. Market/narrative
-intelligence, anomaly/signal engines, AI Copilot, reputation, multi-chain, a
-webhook consumer SDK, `$AEX`, and a global indexer remain future work.
+Not part of this gate. Since this document was written, Wallet Context (D8)
+and Ask AEGIX (D9) shipped, and Market Intelligence (D10) shipped for BTC, ETH
+and SOL price and volume only. Narrative and cross-market intelligence, a
+wallet-domain anomaly/signal engine, the wider AI Copilot, reputation,
+multi-chain, a webhook consumer SDK, `$AEX`, and a global indexer remain
+future work. Product status is derived from `apps/web/src/lib/site.ts`.
 
 Billing (D11 V1) is complete with manual subscription provisioning:
 `BILLING_PROVIDER=manual`, users request an upgrade in the Billing UI and an

@@ -35,6 +35,7 @@ jobs:
           fi
       - run: pnpm build
       - run: pnpm test:web-routing
+      - run: pnpm test:web-restored
 
   unit-tests:
     name: Pure unit tests
