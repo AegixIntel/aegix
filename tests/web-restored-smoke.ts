@@ -38,11 +38,14 @@ async function main() {
     }
     // The roadmap must agree with the shipped product state. The hand-written
     // list it replaced had Market Intelligence under NEXT while the navigation
-    // called it LIVE, so that specific disagreement is asserted directly.
+    // called it LIVE, so that specific disagreement is asserted directly. The
+    // match is anchored on the item boundary: a bare "Market Intelligence"
+    // would also match "Cross-Market Intelligence", which belongs under NEXT.
     const roadmapHtml = await fetch(`http://127.0.0.1:${port}/roadmap`, { signal: AbortSignal.timeout(10000) }).then((r) => r.text());
     const nextColumn = roadmapHtml.slice(roadmapHtml.indexOf(">NEXT<"), roadmapHtml.indexOf(">LATER<"));
     assert.ok(nextColumn.length > 0, "/roadmap renders a NEXT group before LATER");
-    assert.ok(!nextColumn.includes("Market Intelligence"), "/roadmap does not file Market Intelligence under NEXT");
+    assert.ok(!nextColumn.includes(">Market Intelligence"), "/roadmap does not file Market Intelligence under NEXT");
+    assert.ok(nextColumn.includes(">Cross-Market Intelligence"), "/roadmap does file Cross-Market Intelligence under NEXT");
     console.log("D8/D10/D11 and roadmap production UI route rendering: PASS");
   } finally {
     if (child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
