@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import type { IndexCheckpoint, IndexStore } from "./indexer.js";
 import { height } from "./indexer.js";
+import { jsonbSafe } from "./jsonb.js";
 import { persistProjection } from "./projection.js";
 
 export function createIndexStore(sql: postgres.Sql): IndexStore {
@@ -28,7 +29,7 @@ export function createIndexStore(sql: postgres.Sql): IndexStore {
         for (const block of blocks) {
           await tx`insert into network_blocks (chain, height, hash, parent_height, parent_hash, raw, raw_rpc)
             values (${chain}, ${block.height}, ${block.hash}, ${block.parentHeight}, ${block.parentHash},
-              ${tx.json(JSON.parse(JSON.stringify(block.raw)))}, ${block.rawRpc ?? null})`;
+              ${tx.json(jsonbSafe(block.raw))}, ${block.rawRpc ?? null})`;
           await persistProjection(tx, block);
         }
         const last = blocks.at(-1);

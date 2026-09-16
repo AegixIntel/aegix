@@ -166,11 +166,23 @@ cursor; investigate provider availability, archive coverage, schema readiness,
 and finalized parent continuity. Logs deliberately omit connection URLs and
 driver messages that may contain credentials.
 
+The failure line carries a class an operator can act on: `reason`/`status` for a
+transport or HTTP failure, `rpcCode` for a provider rejection, and `sqlState`
+for a database error — `22P05`, for instance, is a payload PostgreSQL refuses to
+store, which is a code change rather than a retry. A driver message is never
+logged, because it can quote the row being written.
+
 `network_blocks.raw_rpc` retains the exact RPC response text for new blocks,
 including integers above JavaScript's safe range. JSONB is a query projection;
 use the original response with a lossless parser for monetary auditing. Older
 blocks may have no original response. The implementation does not independently
 validate consensus or promise global archival completeness/throughput.
+
+A `jsonParsed` envelope can carry a NUL code point inside its strings — slot
+425503014 has seven, in vote account seed fields. PostgreSQL cannot represent
+U+0000 in `jsonb`, so the projection stores U+FFFD in its place and `raw_rpc`
+keeps the exact response. Without that substitution the insert fails, the cursor
+never advances, and the daemon retries the same block indefinitely.
 
 ## Retention
 

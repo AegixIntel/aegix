@@ -13,6 +13,11 @@ function failureDetail(error: unknown): Record<string, unknown> {
     return { reason: error.reason, ...(error.status === undefined ? {} : { status: error.status }) };
   }
   if (error instanceof RpcRequestError && typeof error.rpcCode === "number") return { rpcCode: error.rpcCode };
+  // A database failure carries a SQLSTATE and nothing else an operator can act
+  // on: the driver's message may quote the row being written, so the code is
+  // recorded and the message is not.
+  const sqlState = (error as { code?: unknown } | null)?.code;
+  if (typeof sqlState === "string" && /^[0-9A-Z]{5}$/.test(sqlState)) return { sqlState };
   return {};
 }
 

@@ -102,6 +102,13 @@ jobs:
         run: docker run --rm --network host -e PGPASSWORD=postgres postgres:16-alpine psql -h 127.0.0.1 -U postgres -c "create database network_test_ops"
       - name: Network operations against real authentication
         run: set -o pipefail && NETWORK_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/network_test_ops pnpm test:network:operations 2>&1 | tee artifacts/network-operations.log
+      - name: Create the network package scratch database
+        run: docker run --rm --network host -e PGPASSWORD=postgres postgres:16-alpine psql -h 127.0.0.1 -U postgres -c "create database network_test_package"
+      - name: Network package integration
+        # Checkpoint CAS, retention, and the jsonb payload guard. A payload
+        # PostgreSQL refuses to store is a database-level failure that no unit
+        # test can reach.
+        run: set -o pipefail && NETWORK_TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/network_test_package pnpm --filter @aegix/network test:integration 2>&1 | tee artifacts/network-package-integration.log
       - name: Upload integration logs on failure
         if: failure()
         uses: actions/upload-artifact@v6

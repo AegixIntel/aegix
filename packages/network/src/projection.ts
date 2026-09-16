@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { CHAINS, walletIdentity } from "./chains.js";
 import type { IndexedBlock } from "./indexer.js";
+import { jsonbSafe } from "./jsonb.js";
 
 export interface ProjectedTransaction {
   tx_id: string; height: number; position: number; block_time: string | null;
@@ -62,7 +63,7 @@ export async function persistProjection(tx: postgres.TransactionSql, block: Inde
     const rows = slice.map(({ addresses: _addresses, ...row }) => ({ ...row, chain: block.chain }));
     await tx`insert into network_transactions
       select chain, tx_id, height, position, block_time, success, sender, recipient, value_atomic, raw
-      from jsonb_to_recordset(${tx.json(JSON.parse(JSON.stringify(rows)))}) as x(
+      from jsonb_to_recordset(${tx.json(jsonbSafe(rows))}) as x(
         chain text, tx_id text, height bigint, position integer, block_time timestamptz,
         success boolean, sender text, recipient text, value_atomic text, raw jsonb)`;
     const memberships = slice.flatMap(row => row.addresses.map(address => ({ chain: block.chain, address, tx_id: row.tx_id, height: row.height, position: row.position })));

@@ -192,3 +192,140 @@ tokenomics, EVM          unchanged from D12
 
 D13 changes nothing about PR-11: credentials still need rotating, infrastructure
 still needs provisioning, and nothing is deployed.
+
+---
+
+## 8. Follow-up: sustained ingestion, and the payload PostgreSQL refuses
+
+Run on 2026-09-16 on `projecteon-v2`, from a fresh tree, against an isolated
+PostgreSQL 16 on a private port and the same public endpoint §6 measured. §7
+called multi-hour behaviour with a real provider unmeasured. This is that run —
+85 minutes, 725 batches — and it found a defect that stops ingestion
+permanently.
+
+### The defect
+
+`network_blocks.raw` is `jsonb`. PostgreSQL cannot represent U+0000 inside
+`jsonb`: an escape sequence in the JSON text decodes to a NUL code point, which
+no text type can hold, and the insert is rejected with `unsupported Unicode
+escape sequence` (SQLSTATE `22P05`). A `jsonParsed` envelope does carry them —
+slot 425503014 has seven, in vote account seed fields.
+
+The consequence is worse than one failed batch. The cursor only moves inside the
+commit transaction, so the failing block is retried forever:
+
+```text
+2026-09-16 07:09:05 UTC [114] ERROR:  unsupported Unicode escape sequence
+2026-09-16 07:09:05 UTC [114] DETAIL:  \u0000 cannot be converted to text.
+2026-09-16 07:09:05 UTC [114] CONTEXT:  JSON data, line 1: ...","seed":"\u0018\u0000...
+2026-09-16 07:09:05 UTC [114] STATEMENT:  insert into network_blocks (chain, ..., raw, raw_rpc) values ($1, ..., $6, $7)
+```
+
+Twenty-seven batches committed, then the daemon sat on height 425503014 for the
+rest of the run. `behind` grew, `last_error` stayed `INDEX_BATCH_FAILED`, and an
+operator could not tell why: the failure line carried `kind=PostgresError` and
+nothing else. §5 fixed exactly this opacity for provider failures; a database
+failure had been left without it.
+
+### The fix
+
+A NUL code point is recorded as U+FFFD in the JSONB projection, and the exact
+RPC text is untouched in `network_blocks.raw_rpc`. Substitution happens at one
+boundary (`jsonbSafe`, `packages/network/src/jsonb.ts`) and both writers use it:
+the block row, and the projected transaction row, which has the same shape and
+the same exposure.
+
+A failure now carries its SQLSTATE, which is what tells an operator whether to
+retry or to change code. The driver message is still never logged — it can quote
+the row being written.
+
+The regression tests assert the reason the guard exists rather than only its
+behaviour: PostgreSQL genuinely rejects the payload, a NUL-bearing block commits
+anyway, `raw_rpc` keeps the exact envelope, and the next block still commits.
+The package integration suite is now wired into the CI integration job, because
+a database-level write failure is invisible to unit tests — which is why this
+survived D13.
+
+Proof on the live daemon: restarted against the same checkpoint, the cursor left
+the stuck height and never stalled again.
+
+```text
+next_height 425503014 (stuck, pre-fix)  ->  425503076 after three minutes, last_error cleared
+```
+
+### What 85 minutes of ingestion measured
+
+```text
+window                    85 minutes, 725 batches, 0 failed batches
+blocks committed          1,450 (0.284 per second)
+provider calls            2,926 (2.02 per block — the batch budget §3 claims)
+batch duration            p50 4.6 s, p95 8.8 s, max 17.7 s (two blocks per batch)
+heartbeat age             max 17 s; no stall, no restart, no error line
+process RSS               239 MB at start, 366 MB at the end, 838 MB peak
+distance behind the head  2 -> 14,673 (2.87 slots per second)
+```
+
+The loop is stable and bounded. The public endpoint is still the wall: mainnet
+produces roughly 2.5 slots per second and the free endpoint served 0.284 blocks
+per second, so the index fell behind by 172 slots a minute and would never
+recover. §6 called that procurement; a sustained run confirms it as a measured
+limit rather than a 90-second impression.
+
+Memory is the other answer §7 wanted: RSS moved in a 239–838 MB band across the
+85 minutes and ended below its midpoint, so nothing about this loop leaks on the
+timescale an operator would notice.
+
+### Retention under live ingestion
+
+Three prunes ran against the live daemon:
+
+```text
+07:45  window 50   232 blocks   254,175 txs   2,162,227 memberships    49 s
+08:01  window 60   312 blocks   333,401 txs   3,002,801 memberships    68 s
+08:51  window 80   776 blocks   862,506 txs   9,410,732 memberships   166 s
+```
+
+Ingestion never stopped: the batch counter advanced through every prune
+(141→154, 302→322, 700→715). That is §4's claim, now demonstrated under load
+rather than argued from the absence of an overlap. Prune throughput is about
+4.7 blocks per second, or 47,000 member rows per second.
+
+Retention bounds the index, not the file. After the third prune the database
+still occupied 14 GB holding 1.5 million live memberships and 9.4 million dead
+tuples, and autovacuum's last pass predated the delete — the space was not yet
+reusable. An operator sizing disk has to budget for reuse lag, not only for the
+retained window. That is a measurement, not a defect, but it is narrower than
+§7's wording ("retention already bounds growth") implies.
+
+### Restart continuity
+
+`SIGTERM` to the node process — never through `pnpm`, per §5 — at cursor
+447,467,086 exited within 30 seconds, and the restart resumed from the stored
+checkpoint: the next batch began at 447,467,086 and the cursor reached
+447,467,108 with no gap and no discontinuity error. Integrity held across all
+three prunes and the restart:
+
+```text
+orphaned memberships 0   orphaned transactions 0   blocks at or above the cursor 0
+duplicate block hashes 0   blocks without a projection 0   cursor hash chain intact
+```
+
+### §7 after this run
+
+```text
+sustained ingestion      85 minutes measured: loop stable, RSS bounded, no stall
+provider capacity        confirmed, not resolved — 0.284 blocks/s against ~2.5
+                         slots/s produced. A paid provider is still procurement
+signature discovery      unchanged
+storage sizing           measured: ~10 MB per committed block with indexes, and
+                         the file does not shrink when rows are pruned; size the
+                         disk for the live window plus dead-tuple reuse
+partitioning             unchanged, and still deferred: retention bounds live
+                         rows, so revisit it when reuse lag binds instead
+rate-limit tuning        unchanged: still needs measured headroom on the chosen provider
+reputation model         unchanged
+tokenomics, EVM          unchanged
+```
+
+D13 still changes nothing about PR-11.
+
