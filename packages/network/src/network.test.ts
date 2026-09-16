@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import type postgres from "postgres";
 import { walletIdentity } from "./chains.js";
 import { indexBatch, type BlockSource, type IndexCheckpoint, type IndexStore } from "./indexer.js";
+import { jsonbSafe } from "./jsonb.js";
+import { runIndexer } from "./runner.js";
 import { createBlockSource, createRpcPool, RpcRequestError, RpcUnavailableError } from "./rpc.js";
 import { claimPayload, reputationReport, validateClaim, type ReputationClaim, type ValidationPolicy } from "./reputation.js";
 import { validateTransfer } from "./economics.js";
@@ -36,6 +39,47 @@ function fixture() {
   };
   return { source, store, cursor: () => checkpoint.nextHeight, commits: () => commits };
 }
+test("a NUL code point in an RPC payload is recorded as jsonb-safe, not stored", () => {
+  const envelope = { seed: "\u0018\u0000\u0000", nested: { logs: ["seed\u0000value"] }, fee: 1, ok: true, empty: null };
+  const safe = jsonbSafe(envelope) as typeof envelope;
+  assert.deepEqual(safe, { seed: "\u0018\uFFFD\uFFFD", nested: { logs: ["seed\uFFFDvalue"] }, fee: 1, ok: true, empty: null });
+  assert.equal(safe.seed.length, envelope.seed.length, "the replacement preserves length");
+  assert.equal(envelope.seed, "\u0018\u0000\u0000", "the source payload is never mutated");
+  assert.ok(!JSON.stringify(safe).includes("\\u0000"), "no NUL escape survives into the jsonb payload");
+});
+
+test("a payload without NUL code points survives the copy unchanged", () => {
+  const clean = { blockTime: 1_700_000_000, transactions: [{ meta: { fee: 1 } }] };
+  assert.deepEqual(jsonbSafe(clean), clean);
+});
+
+test("a database failure records the SQLSTATE an operator must act on", async () => {
+  const events: Array<Record<string, unknown>> = [];
+  // A tag function is all the runner needs from the connection here.
+  const sql = (() => Promise.resolve([])) as unknown as postgres.Sql;
+  await assert.rejects(runIndexer({
+    source: {
+      chain: "solana:mainnet", verifyNetwork: async () => {}, finalizedHeight: async () => 10,
+      firstAvailableHeight: async () => 0, heights: async () => [10],
+      block: async () => ({ chain: "solana:mainnet", height: 10, hash: "h10", parentHeight: 9, parentHash: "h9", raw: {} })
+    },
+    store: {
+      checkpoint: async () => ({ nextHeight: 10, lastHeight: 9, lastHash: "h9" }),
+      commit: async () => {
+        const failure = new Error("insert into network_blocks values ('block payload')") as Error & { code: string };
+        failure.code = "22P05";
+        throw failure;
+      }
+    },
+    sql, start: 10, batchSize: 1, signal: new AbortController().signal, once: true, pollMs: 1,
+    log: event => events.push(event)
+  }), /INDEX_BATCH_FAILED/);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.sqlState, "22P05");
+  assert.equal(events[0]?.kind, "Error");
+  assert.ok(!JSON.stringify(events[0]).includes("block payload"), "the driver message is never logged");
+});
+
 test("global scan persists produced blocks across skipped slots and resumes", async () => {
   const f = fixture();
   assert.equal((await indexBatch(f.source, f.store, 10)).indexed, 2);

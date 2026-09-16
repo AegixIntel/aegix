@@ -65,6 +65,28 @@ try {
     left join network_transactions t on t.chain = a.chain and t.tx_id = a.tx_id where t.tx_id is null`;
   assert.equal(dangling?.rows, 0, "retention leaves no orphaned memberships");
 
+  // A jsonParsed mainnet envelope carries NUL escapes inside its strings — slot
+  // 425503014 has seven, in vote-account seed fields — and jsonb cannot store
+  // U+0000. PostgreSQL rejects the insert, so an unsanitized block fails its
+  // write, the cursor never advances, and the daemon retries that block
+  // forever. The rejection is asserted first so the guard cannot be removed
+  // without this test explaining why it exists.
+  await assert.rejects(isolated`select ${isolated.json({ seed: "\u0000" })}::jsonb`, /Unicode escape/);
+  const nulBlock = { chain: "solana:mainnet" as const, height: 13, hash: "h13", parentHeight: 12, parentHash: "h12",
+    rawRpc: '{"seed":"\\u0000"}',
+    raw: { blockTime: 1_700_000_000, seed: "\u0018\u0000\u0000", transactions: [{ transaction: { signatures: ["sig-nul"],
+      message: { accountKeys: [{ pubkey: wallet }] } }, meta: { err: null, fee: 1, logMessages: ["seed\u0000value"] } }] } };
+  await store.commit("solana:mainnet", await store.checkpoint("solana:mainnet", 10), 14, [nulBlock]);
+  assert.equal((await store.checkpoint("solana:mainnet", 10)).nextHeight, 14, "a NUL-bearing block still commits");
+  const [stored] = await isolated`select raw, raw_rpc from network_blocks where chain = 'solana:mainnet' and height = 13`;
+  assert.equal(stored?.raw.seed, "\u0018\uFFFD\uFFFD", "the parsed copy records the code point it could not store");
+  assert.equal(stored?.raw_rpc, '{"seed":"\\u0000"}', "the exact envelope is preserved in raw_rpc");
+  const [storedTx] = await isolated`select raw from network_transactions where chain = 'solana:mainnet' and tx_id = 'sig-nul'`;
+  assert.equal(storedTx?.raw.meta.logMessages[0], "seed\uFFFDvalue", "projected payloads are sanitized too");
+  // Ingestion continues past the block rather than stalling on it.
+  await store.commit("solana:mainnet", await store.checkpoint("solana:mainnet", 10), 15, [withTransaction(14)]);
+  assert.equal((await store.checkpoint("solana:mainnet", 10)).nextHeight, 15, "the next block commits");
+
   await isolated`insert into aex_accounts (id, balance) values ('treasury', 100), ('alice', 0), ('bob', 0)`;
   const ledger = createAexLedger(isolated);
   const transfer = { eventKey: "bounty-1", debitAccount: "treasury", creditAccount: "alice", amount: "60", purpose: "RESEARCH_BOUNTY" as const, evidenceRef: "reviewed-case-1" };
@@ -96,7 +118,7 @@ try {
   assert.equal(health?.last_error, null);
   assert.ok(health?.heartbeat_at);
   assert.equal(health?.finalized_height, "10");
-  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "retention prune", "prune bound guard", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
+  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "retention prune", "prune bound guard", "nul escape payload", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
 } finally {
   await isolated.end();
   await sql.end();
