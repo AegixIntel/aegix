@@ -11,6 +11,15 @@ import {
   PipelineDiagram,
   ProductStatus
 } from "@/components/ui/primitives";
+import { roadmapGroups, statusGroups } from "@/lib/site";
+
+/**
+ * NOT IMPORTED BY ANYTHING. The live landing page composes
+ * `components/marketing/home-sections.tsx`; this file is an older draft kept
+ * only until someone with authority removes it. Its status content is now
+ * derived from `products` like every other surface, so it can no longer
+ * contradict the shipped product state while it waits.
+ */
 
 /* ------------------------------------------------------------------ */
 /* HERO — statement dominant, restrained visual below.                */
@@ -106,10 +115,7 @@ export function LiveIntelligenceSection() {
         </div>
 
         <div className="mt-12">
-          <ProductStatus
-            live={["Wallet X-Ray", "Attack My Wallet", "Compare Wallets", "Privacy Monitor", "Developer Intelligence API"]}
-            inDevelopment={["Market Intelligence"]}
-          />
+          <ProductStatus groups={statusGroups("PRIVACY_PAGE")} />
         </div>
 
         <div className="mt-14">
@@ -399,25 +405,26 @@ Authorization: Bearer aegix_live_...
 }
 
 /* ------------------------------------------------------------------ */
-/* MARKET INTELLIGENCE — IN DEVELOPMENT                               */
+/* MARKET DIRECTION — IN DEVELOPMENT                                  */
 /* ------------------------------------------------------------------ */
 export function MarketSection() {
+  const direction = roadmapGroups.find((g) => g.label === "NEXT")?.items ?? [];
   return (
     <section className="border-b border-white/10">
       <div className="container-page py-20 md:py-28">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
-            <SectionLabel status="IN DEVELOPMENT">Market Intelligence</SectionLabel>
+            <SectionLabel status="IN DEVELOPMENT">Market Direction</SectionLabel>
             <EditorialHeading className="mt-6">Markets beyond the surface.</EditorialHeading>
             <p className="mt-6 editorial-body">
-              AEGIX is expanding into market intelligence — detecting narratives, anomalies, and emerging
-              signals before they become consensus.
+              Market Intelligence ships today as BTC, ETH and SOL price, volume and deterministic signals. The
+              wider market direction below has no engine and no data source yet.
             </p>
             <ul className="mt-8 space-y-2">
-              {["Narrative Radar", "Anomaly Detection", "Cross-Market Intelligence", "Signal Engine"].map((i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+              {direction.map((i) => (
+                <li key={i.name} className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span className="h-1 w-1 rounded-full bg-muted-2" aria-hidden="true" />
-                  {i}
+                  {i.name}
                 </li>
               ))}
             </ul>
@@ -496,12 +503,6 @@ export function NetworkSection() {
 }
 
 export function RoadmapTeaserSection() {
-  const groups = [
-    { label: "Shipped", items: ["Intelligence Core", "Wallet X-Ray", "Attack My Wallet", "Compare Intelligence", "Privacy Monitor", "Developer Intelligence API"], tone: "SHIPPED" },
-    { label: "Current", items: ["Public Product Launch", "Multi-User Production", "Documentation", "Infrastructure Hardening"], tone: "CURRENT" },
-    { label: "Next", items: ["Market Intelligence", "Narrative Radar", "Anomaly Detection", "Signal Engine"], tone: "NEXT" },
-    { label: "Later", items: ["AI Intelligence Copilot", "Wallet Reputation", "Intelligence Network", "$AEX Economic Layer", "Multi-Chain"], tone: "LATER" }
-  ] as const;
   return (
     <section className="border-b border-white/10">
       <div className="container-page py-20 md:py-24">
@@ -514,13 +515,13 @@ export function RoadmapTeaserSection() {
           </p>
         </div>
         <div className="mt-12 grid gap-x-12 gap-y-0 md:grid-cols-4">
-          {groups.map((g) => (
+          {roadmapGroups.map((g) => (
             <div key={g.label} className="border-t border-white/10 py-6">
               <StatusBadge label={g.label} className="mb-4" />
               <ul className="space-y-2">
                 {g.items.map((i) => (
-                  <li key={i} className="text-sm text-muted-foreground">
-                    {i}
+                  <li key={i.name} className="text-sm text-muted-foreground">
+                    {i.name}
                   </li>
                 ))}
               </ul>

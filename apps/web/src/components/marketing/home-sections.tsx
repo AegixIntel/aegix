@@ -6,26 +6,20 @@ import { Reveal } from "@/components/motion/reveal";
 import { InteractiveSystemMap } from "@/components/marketing/system-map";
 import { HeroTrace } from "@/components/marketing/hero-trace";
 import { TypedRequest } from "@/components/marketing/typed-request";
-import { roadmapGroups } from "@/lib/site";
+import { roadmapGroups, categoryProducts, productLineProducts } from "@/lib/site";
 
 /** Stagger index consumed by the landing motion CSS (`--i`). */
 function at(i: number) {
   return { "--i": i } as React.CSSProperties;
 }
 
-/* Category strip above hero — product names with status. */
+/* Category strip above hero — pillar names with their derived status. */
 export function CategoryStrip() {
-  const items = [
-    { label: "Privacy Intelligence", status: "LIVE" },
-    { label: "Market Intelligence", status: "IN DEVELOPMENT" },
-    { label: "AI Copilot", status: "PLANNED" },
-    { label: "Intelligence Network", status: "RESEARCH" }
-  ];
   return (
     <div className="flex items-center gap-x-8 overflow-x-auto whitespace-nowrap border-b border-white/10 px-4 py-3 [scrollbar-width:none] lg:flex-wrap lg:px-8">
-      {items.map((it) => (
-        <span key={it.label} className="flex flex-none items-center gap-2.5">
-          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{it.label}</span>
+      {categoryProducts.map((it) => (
+        <span key={it.id} className="flex flex-none items-center gap-2.5">
+          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{it.name}</span>
           <StatusBadge label={it.status} />
         </span>
       ))}
@@ -156,16 +150,8 @@ export function HowItWorks() {
   );
 }
 
-/* Product line — indexed rows; hover traces a rule down the left edge. */
-const PRODUCTS = [
-  { status: "LIVE", name: "Wallet X-Ray", body: "Understand what your public wallet activity may reveal.", href: "/app/analyze" },
-  { status: "LIVE", name: "Attack My Wallet", body: "Follow observable paths through your on-chain activity.", href: "/app/attack" },
-  { status: "LIVE", name: "Compare Wallets", body: "Two wallets. One relationship model. Strength vs confidence.", href: "/app/compare" },
-  { status: "LIVE", name: "Privacy Monitor", body: "Exposure changes. AEGIX notices.", href: "/app/monitors" },
-  { status: "LIVE", name: "Developer Intelligence API", body: "Scoped keys, metered quota, usage reporting, signed webhooks.", href: "/developers" },
-  { status: "IN DEVELOPMENT", name: "Market Intelligence", body: "Narrative radar, anomaly detection, cross-market signal engine.", href: "/markets" }
-];
-
+/* Product line — indexed rows; hover traces a rule down the left edge.
+   Rows come from `products` (PRODUCT_LINE surface), status included. */
 export function ProductLine() {
   return (
     <section className="border-b border-white/10">
@@ -176,7 +162,7 @@ export function ProductLine() {
           body="One loop: analyze on-chain activity, surface intelligence, monitor change."
         />
         <ul className="mt-14 border-t border-white/10">
-          {PRODUCTS.map((p, i) => (
+          {productLineProducts.map((p, i) => (
             <Reveal key={p.name} as="li" delay={i * 70}>
               <Link
                 href={p.href}
@@ -336,7 +322,8 @@ export function NetworkAndRoadmap() {
               <ul className="mt-6 space-y-2.5">
                 {g.items.map((item, ii) => (
                   <li
-                    key={item}
+                    key={item.name}
+                    title={item.note}
                     className={`rv flex items-center gap-2.5 text-sm ${g.label === "SHIPPED" ? "text-marble/90" : "text-muted-foreground"}`}
                     style={at(gi + ii * 0.6 + 1)}
                   >
@@ -344,7 +331,7 @@ export function NetworkAndRoadmap() {
                       className={`h-1.5 w-1.5 flex-none ${g.label === "SHIPPED" ? "bg-accent-bright" : "border border-white/25"}`}
                       aria-hidden="true"
                     />
-                    {item}
+                    {item.name}
                   </li>
                 ))}
               </ul>

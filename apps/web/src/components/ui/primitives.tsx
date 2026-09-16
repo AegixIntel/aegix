@@ -160,32 +160,27 @@ export function PipelineDiagram({ steps, className }: { steps: string[]; classNa
   );
 }
 
-/** LIVE vs IN DEVELOPMENT product status list. */
-export function ProductStatus({ live, inDevelopment }: { live: string[]; inDevelopment: string[] }) {
+/** Product status groups. The caller derives them from `products` (lib/site). */
+export function ProductStatus({ groups }: { groups: Array<{ label: string; items: string[] }> }) {
+  if (groups.length === 0) return null;
   return (
-    <div className="grid gap-8 md:grid-cols-2">
-      <div>
-        <StatusBadge label="LIVE" className="mb-3" />
-        <ul className="space-y-2">
-          {live.map((item) => (
-            <li key={item} className="flex items-center gap-2 text-sm text-marble/90">
-              <span className="h-1 w-1 rounded-full bg-accent-bright" aria-hidden="true" />
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div>
-        <StatusBadge label="IN DEVELOPMENT" className="mb-3" />
-        <ul className="space-y-2">
-          {inDevelopment.map((item) => (
-            <li key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="h-1 w-1 rounded-full bg-muted-2" aria-hidden="true" />
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div className={cn("grid gap-8", groups.length > 1 && "md:grid-cols-2")}>
+      {groups.map((group) => {
+        const live = group.label === "LIVE";
+        return (
+          <div key={group.label}>
+            <StatusBadge label={group.label} className="mb-3" />
+            <ul className="space-y-2">
+              {group.items.map((item) => (
+                <li key={item} className={cn("flex items-center gap-2 text-sm", live ? "text-marble/90" : "text-muted-foreground")}>
+                  <span className={cn("h-1 w-1 rounded-full", live ? "bg-accent-bright" : "bg-muted-2")} aria-hidden="true" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }

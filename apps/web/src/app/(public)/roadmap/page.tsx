@@ -28,11 +28,14 @@ export default function RoadmapPage() {
             <div>
               <StatusBadge label={g.label} />
             </div>
-            <ul className="grid gap-x-10 gap-y-2 sm:grid-cols-2">
+            <ul className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
               {g.items.map((i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="h-1 w-1 rounded-full bg-muted-2" aria-hidden="true" />
-                  {i}
+                <li key={i.name} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <span className="mt-1.5 h-1 w-1 flex-none rounded-full bg-muted-2" aria-hidden="true" />
+                  <span>
+                    {i.name}
+                    {i.note && <span className="mt-1 block text-[11px] leading-snug text-muted-2">{i.note}</span>}
+                  </span>
                 </li>
               ))}
             </ul>
