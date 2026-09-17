@@ -222,9 +222,53 @@ annotation convention   `products.note` is rendered on /roadmap and as a
                         the same qualifier on /privacy, that surface needs the
                         same rendering
 two unused images       left in place deliberately, see §3
-whitepaper §7-§9        reputation, $AEX and multi-chain status paragraphs
-                        were already accurate and were not touched
+whitepaper §7-§9        not part of the original scope; re-verified afterwards
+                        in §6, and §7's wording was tightened as a result
 ```
+
+---
+
+## 6. Re-verification: whitepaper §7–§9
+
+Sections 7, 8 and 9 were the parts of the whitepaper this change did not touch,
+and §5 originally asserted they "were already accurate" without re-reading
+them. They were read against the code afterwards. All three hold; one wording
+imprecision was corrected.
+
+```text
+§7 reputation   CONFIRMED. reputation.ts validates a claim against the
+                domain-tagged payload (AEGIX_REPUTATION_CLAIM_V1 plus
+                datasetVersion), a sha256 evidence digest, and Ed25519
+                reviewer signatures from an operator-controlled policy with a
+                quorum, an expiry check and a revocation set. No score is
+                published: reputationReport returns score, riskBand and
+                confidence as null with the reason stated, and no reputation
+                score column exists in the schema.
+§8 $AEX         CONFIRMED. economics.ts is internal, pre-funded accounting:
+                one transaction, an advisory lock on the event key for replay
+                protection, pre-funded accounts and an insufficient-balance
+                rejection. No Solana program, no mint, no staking or slashing
+                logic, no governance mechanism, no tokenomics document, and
+                the API reports tokenLive: false.
+§9 multi-chain  CONFIRMED. chains.ts registers solana:mainnet, eip155:1 and
+                eip155:8453, and rpc.ts implements ingestion for both
+                families (getGenesisHash/getBlock against
+                eth_chainId/eth_getBlockByNumber). privacyAnalysis is true for
+                Solana only and the normalizer is Solana-only, so "EVM
+                normalization and privacy analysis are not implemented" holds.
+```
+
+**Corrected, not confirmed.** §7 said "versioned evidence digests". The digest
+is a plain sha256 over the evidence blob; the versioning lives in the claim
+payload and its domain tag. The paragraph now says exactly that, so a reader
+does not go looking for a version field that is not there.
+
+**Found and left as written.** `architecture.md` §10 still lists
+`GET /v1/reputation/:address` and `GET /v1/intelligence/:address` among future
+endpoints. The built route is `/v1/network/reputation/:chain/:address` (with a
+developer variant), because a reputation lookup is chain-scoped and the
+address alone cannot identify one. The design section is the target and the
+PR record is reality, so no route was renamed to match the sketch.
 
 Nothing about `PR-11` changes: credentials still need rotating, infrastructure
 still needs provisioning, and nothing is deployed. This milestone is not a step
