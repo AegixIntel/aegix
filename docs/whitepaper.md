@@ -209,10 +209,16 @@ one. No score or signal depends on an LLM.
 
 ## 7. Wallet Reputation API — PLANNED
 
-Infrastructure update: `packages/network` now validates versioned evidence
-digests and trusted reviewer signatures, including expiry and revocation.
-No labelled production dataset or calibrated reputation model is supplied;
-public scoring remains planned. See [network foundation](network-foundation.md).
+Infrastructure update: `packages/network` validates a claim against a
+versioned, domain-tagged payload (`AEGIX_REPUTATION_CLAIM_V1` plus a dataset
+version), a sha256 evidence digest, and Ed25519 signatures from an
+operator-controlled reviewer policy with a quorum, expiry and revocation
+(`packages/network/src/reputation.ts`). The digest itself is a plain sha256
+over the evidence blob — the versioning lives in the claim payload. No
+labelled production dataset or calibrated reputation model is supplied, so
+`reputationReport` returns `score`, `riskBand` and `confidence` as null and
+says why; public scoring remains planned. See
+[network foundation](network-foundation.md).
 
 Reputation intelligence for on-chain applications: a reputation value, a risk
 band, wallet age, behavioral consistency, fraud signals and a confidence
