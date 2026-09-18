@@ -43,7 +43,7 @@ export default function PrivacyPage() {
             title="Attack My Wallet"
             body="Simulated paths an observer could follow through public data."
             detail={["Relationship Graph", "Funding Paths", "Entity Exposure", "Linkability Signals"]}
-            href="/app/analyze"
+            href="/app/attack"
             cta="Attack My Wallet"
           />
         </section>

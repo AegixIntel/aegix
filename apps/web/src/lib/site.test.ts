@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   products,
@@ -112,5 +113,33 @@ test("landing surfaces resolve to products with a real status", () => {
   assert.ok(groups.length > 0, "the privacy page status list has entries");
   for (const group of groups) {
     assert.ok(group.items.length > 0, `${group.label} is not an empty column`);
+  }
+});
+
+/**
+ * The capability matrix carries the runtime condition beside each status, so
+ * it restates the status list in a second place — the same shape of drift this
+ * file exists to catch. It is compared in both directions: every product must
+ * appear under its own status, and the table may not claim a status for
+ * anything that is not a product.
+ */
+test("the capability matrix matches the product status list", () => {
+  const doc = readFileSync(new URL("../../../../docs/capability-matrix.md", import.meta.url), "utf8");
+  const statuses: ProductStatus[] = ["LIVE", "IN DEVELOPMENT", "PLANNED", "RESEARCH"];
+  const documented = new Map<string, ProductStatus>();
+  for (const line of doc.split("\n")) {
+    if (!line.startsWith("| ")) continue;
+    const cells = line.split("|").map((cell) => cell.trim());
+    // "| Capability | Status | Runtime condition |" splits into 5 cells. A row
+    // with a different shape is skipped rather than guessed at, and the count
+    // assertion below turns that into a failure.
+    if (cells.length !== 5) continue;
+    const status = statuses.find((s) => s === cells[2]);
+    if (status) documented.set(cells[1]!, status);
+  }
+
+  assert.equal(documented.size, products.length, "the matrix documents every product exactly once");
+  for (const p of products) {
+    assert.equal(documented.get(p.name), p.status, `${p.name} is ${p.status} in the capability matrix`);
   }
 });

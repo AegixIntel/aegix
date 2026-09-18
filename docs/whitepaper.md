@@ -271,7 +271,9 @@ The machine-checkable source of truth is the `products` list in
 `/privacy` status list and the navigation badges are all derived from it, so
 they cannot disagree with each other. This table mirrors that list;
 per-item qualifiers — a shipped capability that is gated, or one whose input
-does not exist yet — are shown beside the item on `/roadmap`.
+does not exist yet — are shown beside the item on `/roadmap`. What each
+capability needs in order to actually operate — the flag, credential or input
+it depends on — is in [capability-matrix.md](capability-matrix.md).
 
 | Status | Capability |
 |---|---|

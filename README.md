@@ -3,18 +3,40 @@
 AEGIX is an on-chain privacy intelligence platform that helps wallet owners understand what publicly observable blockchain activity may reveal about them.
 
 **Primary chain:** Solana
-**Live products:** Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Threat Monitor, Developer Intelligence API
-**Planned:** Market Intelligence, AI Copilot, Wallet Reputation API, $AEX economic layer, multi-chain — see [docs/whitepaper.md](docs/whitepaper.md)
 **Primary principle:** *See What Others Don't.*
-
-**Network intelligence:** continuous finalized ingestion for Solana/Ethereum/Base,
-wallet history APIs and `/app/network`, persisted signed reputation evidence, indexed
-Solana transaction reuse, and internal $AEX accounting are implemented. Public reputation
-scores, an issued token and EVM privacy scoring still require further inputs/work.
-See [setup and operator commands](docs/network-operations.md).
 **Privacy pillar principle:** *Know What the Blockchain Knows.*
 
 > AEGIX must be able to explain why it believes a wallet is exposed. It never returns an unexplained score.
+
+## Status
+
+Product status has one source of truth: the `products` list in
+`apps/web/src/lib/site.ts`. `/roadmap`, the landing status surfaces, the `/privacy`
+status list and the navigation badges are all derived from it, so they cannot
+disagree. Runtime conditions — what a capability actually needs in order to operate —
+are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative version is
+[docs/whitepaper.md](docs/whitepaper.md).
+
+- **Live:** Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor,
+  Wallet Context, Ask AEGIX (requires a configured LLM provider), Developer Intelligence
+  API, Signed Webhooks, Population Commonality (flag off by default, and additionally
+  gated on population sufficiency), Market Intelligence (BTC, ETH and SOL only).
+- **In development:** Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market
+  Intelligence — no engine and no data source exists for any of them.
+- **Planned:** AI Intelligence Copilot, Wallet Reputation, $AEX economic layer,
+  multi-chain. **Research:** Intelligence Network.
+
+### Network ingestion
+
+Finalized-block ingestion for Solana, Ethereum and Base, the wallet history read APIs and
+`/app/network`, persisted signed reputation evidence, indexed Solana transaction reuse and
+internal $AEX accounting are implemented in `packages/network`. They are not deployed
+infrastructure: network reads are off by default (`ENABLE_NETWORK_API=false`), ingestion is
+an operator-run CLI rather than a continuously synchronised indexer, and an 85-minute live
+run fell behind mainnet without recovering on a free endpoint
+([docs/milestone-d13-network-hardening.md](docs/milestone-d13-network-hardening.md)).
+Public reputation scores, an issued token and EVM privacy scoring still require inputs the
+repository does not have. See [setup and operator commands](docs/network-operations.md).
 
 ## Repository layout
 

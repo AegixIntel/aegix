@@ -209,7 +209,7 @@ function GraphVisual() {
           </g>
         </g>
       </svg>
-      <p className="mt-2 font-mono text-[10px] text-muted-2">Strongest route: A → B → entity · 2 hops</p>
+      <p className="mt-2 font-mono text-[10px] text-muted-2">Path shape: wallet → wallet → entity · bounded hops</p>
     </div>
   );
 }
@@ -241,10 +241,10 @@ function ExposureVisual() {
 
 function IntelligenceVisual() {
   const items = [
-    { k: "Exposure", v: "78 / 100" },
-    { k: "Correlation", v: "71 / 100" },
-    { k: "Confidence", v: "0.76" },
-    { k: "Evidence", v: "5 families" }
+    { k: "Exposure", v: "score · severity band" },
+    { k: "Relationship", v: "strength" },
+    { k: "Confidence", v: "reported separately" },
+    { k: "Evidence", v: "families · cited" }
   ];
   return (
     <div aria-hidden="true">
@@ -252,7 +252,7 @@ function IntelligenceVisual() {
         {items.map((it, i) => (
           <li key={it.k} style={at(i)} className="flex items-center justify-between border-b border-white/[0.06] pb-2 font-mono text-xs">
             <span className="text-muted-foreground">{it.k}</span>
-            <span className="tabular-nums text-marble/90">{it.v}</span>
+            <span className="text-marble/90">{it.v}</span>
           </li>
         ))}
       </ul>
@@ -269,6 +269,20 @@ const VISUALS: Record<StageId, () => React.ReactNode> = {
   EXPOSURE: ExposureVisual,
   INTELLIGENCE: IntelligenceVisual
 };
+
+/**
+ * The stage panels are schematics of what a stage produces, not the output of
+ * any wallet. They carry no scores, so they are labelled rather than left to
+ * read as an analysis result — the hero trace sets the same expectation.
+ */
+function VisualFrame({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <div className={cn("border border-white/10 bg-black/30", className)}>
+      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2">Illustrative · not live data</p>
+      {children}
+    </div>
+  );
+}
 
 /* ---------------------------- component ---------------------------- */
 
@@ -419,9 +433,9 @@ export function InteractiveSystemMap() {
                   <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">{stage.description}</p>
                   <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">Action · {stage.action}</p>
                 </div>
-                <div className="border border-white/10 bg-black/30 p-4">
+                <VisualFrame className="p-4">
                   <Visual />
-                </div>
+                </VisualFrame>
               </div>
             </div>
           </div>
@@ -471,9 +485,9 @@ export function InteractiveSystemMap() {
                 </p>
                 <h3 className="mt-2 font-serif text-2xl text-marble">{stage.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{stage.description}</p>
-                <div className="mt-4 border border-white/10 bg-black/30 p-3">
+                <VisualFrame className="mt-4 p-3">
                   <Visual />
-                </div>
+                </VisualFrame>
               </div>
             </div>
           </div>

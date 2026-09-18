@@ -22,6 +22,9 @@ async function main() {
       ["/app/markets", ["Markets Intelligence", "BTC", "ETH", "SOL", "Load market"]],
       ["/markets", ["Open Markets", "Temporal correlation does not establish causation"]],
       ["/roadmap", ["SHIPPED", "Market Intelligence", "Narrative Radar", "Anomaly Detection"]],
+      // The landing page's illustrative diagrams must say so. The system map
+      // used to render 78/100 and 71/100 as though they were an analysis.
+      ["/", ["Illustrative · not live data", "Correlation is not identity."]],
       // Server-rendered shell only: plan, usage and invoice data arrive
       // client-side after an authenticated fetch.
       ["/app/billing", ["Plan &amp; usage", "Invoices", "No invoices yet"]],
@@ -36,6 +39,9 @@ async function main() {
       const html = await response.text();
       for (const text of texts) assert.ok(html.includes(text), `${route} renders ${text}`);
     }
+    // No public surface may render a score-shaped value it did not compute.
+    const landingHtml = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(10000) }).then((r) => r.text());
+    assert.ok(!/\d{1,3}\s*\/\s*100/.test(landingHtml), "the landing page renders no score-shaped value");
     // The roadmap must agree with the shipped product state. The hand-written
     // list it replaced had Market Intelligence under NEXT while the navigation
     // called it LIVE, so that specific disagreement is asserted directly. The
@@ -46,7 +52,7 @@ async function main() {
     assert.ok(nextColumn.length > 0, "/roadmap renders a NEXT group before LATER");
     assert.ok(!nextColumn.includes(">Market Intelligence"), "/roadmap does not file Market Intelligence under NEXT");
     assert.ok(nextColumn.includes(">Cross-Market Intelligence"), "/roadmap does file Cross-Market Intelligence under NEXT");
-    console.log("D8/D10/D11 and roadmap production UI route rendering: PASS");
+    console.log("D8/D10/D11, landing copy and roadmap production UI route rendering: PASS");
   } finally {
     if (child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
   }
