@@ -1,7 +1,14 @@
 # AEGIX Public-Beta Production Readiness
 
-Evidence date: 2026-09-11. This document describes the release candidate, not
-a completed production deployment.
+Evidence date: 2026-09-18 (deployment closure pass). The sections dated
+2026-09-11 below were written for the release candidate. Where the deployment has
+moved since, this document now says so rather than leaving the earlier claim
+standing.
+
+AEGIX is deployed and serving `https://aegixintelligence.com` at commit
+`4e835e2` — that is current `main`, deployed 2026-09-18T07:10Z with the live
+schema forwarded 0011 → 0014. The deployment is no longer behind `main`. Launch
+remains blocked — see "Launch blockers" at the end of this document.
 
 ## Release decision and scope
 
@@ -39,8 +46,25 @@ scope (`docs/milestone-d11.md` §6).
 | Program catalog identity | VERIFIED | `pnpm verify:programs` — all catalog program IDs resolve to executable, loader-owned mainnet accounts |
 | Container builds | VERIFIED | API, worker, web, and migration production Dockerfiles |
 | Disposable backup/restore | VERIFIED | logical backup restored to a separate disposable database with schema/data checks |
-| Real production deployment | NOT VERIFIED | No authorized target infrastructure or credentials were used |
-| Real production backup/restore | BLOCKED | PENDING PRODUCTION INFRASTRUCTURE; procedure is documented and disposable rehearsal is complete |
+| Full pre-deploy gate on current `main` | VERIFIED | re-run 2026-09-18T06:59:09Z → 07:05:10Z on `4e835e2`, exit 0: typecheck, lint, unit, build, `verify:programs`, web routing/restored, migrations, integration, queue, network operations, D6/D7/D9/D10/D11, D11 revenue safety, pipeline wiring, deterministic goldens, 4 images |
+| Real production deployment | VERIFIED | `https://aegixintelligence.com` serving `4e835e2`, deployed 2026-09-18T07:10Z; migration job applied 0012–0014 (`schema_migrations` 11 → 14); all seven services healthy |
+| Real production backup | VERIFIED | pre-deploy `predeploy-20260918T070605Z.dump`, 189456 bytes, 44 table-data entries; post-deploy `aegix-20260918T071028Z.dump`, 207209 bytes, 53 entries |
+| Isolated restore of the production backup | VERIFIED | restored into a disposable container; row counts matched live exactly (`plans=3`, `profiles=3`, `schema_migrations=14`); container removed |
+| Production database untouched by the restore drill | VERIFIED | the drill only reads live and restores into a disposable container |
+| Production wallet authentication | VERIFIED | real challenge/sign/verify against the public origin: challenge domain-bound, session issued; replayed challenge rejected (400) and a wrong signature rejected (401) |
+| Production domain, DNS, TLS, redirects, HSTS | VERIFIED | Let's Encrypt cert for the apex, HTTP 308 → HTTPS, www 301 → apex, HSTS present |
+| Production internal ports | VERIFIED | PostgreSQL, Redis, API and proxy are not reachable from the public internet; public listeners are 443/80 only |
+| Production queue and logs | VERIFIED | no `error`/`fatal` in the API log for the deployment window; monitor/webhook queue counts bounded (see "Open items") |
+| Production runtime product smoke — Markets | VERIFIED | live `GET /v1/markets`: 3 canonical assets (BTC, ETH, SOL), all `AVAILABLE` |
+| Production runtime product smoke — Wallet X-Ray / Attack My Wallet | VERIFIED | real analysis completed on the deployed build over a live public wallet; `GET /v1/wallets/:address/x-ray` returns the report with `attackPaths` |
+| Production runtime product smoke — Wallet Context | VERIFIED | `GET /v1/wallets/:address/context` returns the profile from the completed analysis |
+| Production runtime product smoke — Compare Intelligence | VERIFIED | real `POST /v1/compare` over two analysed wallets returns a pair |
+| Production runtime product smoke — Privacy Threat Monitor | VERIFIED | monitor created through the live API, persisted in `GET /v1/me/monitors`, then deleted |
+| Production runtime product smoke — Developer API | VERIFIED | key created (201), authenticated `/v1/developer/status` (200), rotate invalidated the old key (401) and accepted the new one (200), consumed key revoked |
+| Production runtime product smoke — Signed Webhooks | VERIFIED | endpoint created (201) with a signing secret, test delivery accepted (200) |
+| Production runtime product smoke — Manual billing | VERIFIED | operator CLI listed the live upgrade request, `--plan pro` created `free → pro (ACTIVE)` and fulfilled the request; API then reported `plan=pro/ACTIVE`, `selfServe=false`, raised entitlements; cancel set `CANCELED` / `cancelAtPeriodEnd=true` |
+| Production runtime product smoke — Ask AEGIX | PROVIDER-GATED | production has no LLM credential configured; `POST /v1/wallets/:address/ask` returns `503 AI_UNAVAILABLE / MISSING_CREDENTIAL` rather than a fabricated answer. Not claimed operational. |
+| Production analysis latency (large wallets) | VERIFIED with caveat | a ~2000-signature public wallet took ~15 minutes to reach `READY` on the single public RPC; the bounded budgets hold, but this is slow (see "Open items") |
 | Email delivery | NOT REQUIRED FOR BETA | Feature remains disabled and SMTP is not required at startup |
 
 Command counts and final outcomes belong in the release report accompanying
@@ -241,9 +265,12 @@ change, and no score dimension was added or removed.
 - [x] Production environment validation reviewed
 - [x] Disposable backup/restore rehearsal green
 - [x] Rollback, backup/restore, queue operations, and incidents documented
-- [ ] Real infrastructure provisioned and secrets installed
-- [ ] Real production backup/restore drill
-- [ ] Real deployment and post-deploy smoke test
+- [x] Real infrastructure provisioned and secrets installed
+- [x] Real production backup/restore drill
+- [x] Real deployment and post-deploy smoke test
+- [x] Production running current `main` (`4e835e2`, deployed 2026-09-18T07:10Z; live schema at 0014)
+- [ ] Exposed Helius RPC API key rotated (see Launch blockers)
+- [ ] Paid-plan payment method defined (see Launch blockers)
 
 ## Known public-beta limitations
 
@@ -258,3 +285,74 @@ change, and no score dimension was added or removed.
 - Population commonality activates only when the existing real-data
   sufficiency gate passes; a feature flag alone never enables the penalty.
 - Email is not part of the required public-beta notification path.
+
+## Launch blockers (2026-09-18)
+
+Evidence-based, and deliberately not softened. Launch remains blocked while any
+of these is open.
+
+Resolved in the 2026-09-18 deployment pass: production now runs `4e835e2`
+(current `main`), including `79e2cc7 fix(billing): require confirmed payment for
+manual renewal`. The forward migration of the live database (0011 → 0014) applied
+cleanly and the deployment was verified end to end.
+
+1. **An exposed RPC credential has not been rotated.** A Helius API key for
+   `mainnet.helius-rpc.com` is committed in a tracked file
+   (`.commandcode/settings.json`) and also appears in the historical `.env`
+   removed in `be14b8b`. The repository is private and production does **not**
+   use this key (production's `RPC_URL` is the public `api.mainnet-beta.solana.com`),
+   but it is a development/build credential that must be treated as compromised.
+   Rotation status: **required, not done**. Removing it from the current tree
+   does not un-expose it, so rotation comes first.
+
+2. **Paid-plan payment is undefined.** `BILLING_PROVIDER=manual` and no payment
+   method, destination, currency or matching rule is recorded
+   (`docs/deployment-runbook.md` §13 is the place for it). The Free plan runs
+   normally, but paid-plan sales are blocked: no paid plan may be granted in
+   exchange for payment the operator has not defined how to accept.
+
+### Open items that are not launch blockers
+
+- Production RPC is a single public endpoint with no failover configured; the
+  config loader warns about it at startup. Correct, but fragile under load.
+- A stale Next.js standalone server from an earlier session listens on
+  `0.0.0.0:3000` and serves an old build (canonical URLs still point at
+  `aegix.app`), bypassing the TLS edge. It predates this work and was left
+  running rather than killed. It should be stopped by whoever owns it.
+- The web responses carry HSTS but not `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy` or a CSP.
+- `LEGAL_CONTACT_EMAIL` in `apps/web/src/lib/site.ts` is `null`, so the legal
+  documents name the operator but give no contact channel. Operator TODO: set a
+  real monitored address. No address was invented here.
+- The disposable `aegixrestore` Compose project (`/tmp/aegix-restore`) is still
+  running from the previous session's restore rehearsal. It is not production
+  and this pass did not remove it, because it was not created by this work.
+- The verification pass left `aegix-gate-pg` / `aegix-gate-redis` (the release
+  gate's disposable datastores, loopback-only) running. Same reasoning: not
+  created by this work, so not removed.
+- **Deleting a webhook while one of its deliveries is still queued fails that
+  job.** Reproduced twice in the smoke (the `webhooks` test delivery, then the
+  endpoint delete): the worker logs
+  `insert or update on table "webhook_deliveries" violates foreign key
+  constraint "webhook_deliveries_webhook_id_fkey"` and the job lands in the dead
+  letter queue. The user-visible delete succeeds; the residue is a failed job,
+  not a lost record. Not a launch blocker, but it should skip gracefully when
+  the endpoint is gone.
+- A very large public wallet (≈2000 signatures, the configured bound) took about
+  fifteen minutes to reach `READY` on the single public RPC. The budgets hold and
+  the result is correct, but the latency is user-visible for hub-sized wallets.
+
+### Smoke residue left in production (auditable, inert)
+
+The runtime smoke created disposable wallet identities. What remains is
+deliberate, because deleting it would delete the ledger that proves the flow:
+
+- two `CANCELED` Pro subscriptions (`cancel_at_period_end = true`) with their
+  `SUBSCRIPTION_CREATED` / `CANCELLATION_SCHEDULED` ledger entries, and their two
+  upgrade requests `FULFILLED`;
+- two monitors in `DISABLED` state — deleting a monitor sets it disabled rather
+  than removing the row, so this is the app's own behaviour, and a disabled
+  monitor runs no checks;
+- no active API key, webhook, saved wallet or open upgrade request was left
+  behind (the three orphaned `prod-smoke` keys from the first pass were revoked
+  after the smoke, and the dead-letter queue is empty).

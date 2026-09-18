@@ -212,3 +212,71 @@ Record incident times, commit/image digests, affected queues/providers, feature
 flag changes, mitigation, and recovery evidence. Exclude credentials, full API
 keys, signed URLs, authorization headers, payload secrets, and stack traces from
 public reports.
+
+## 12. Manual billing operations (V1)
+
+V1 provisions paid plans manually (`BILLING_PROVIDER=manual`). There is no
+self-service checkout and no payment processor to reconcile against, so the
+operator is the payment system. Every command below runs the same state machine
+and appends the same `billing_events` entry as any other transition — none of
+them is a database edit, so the ledger stays a complete history of how each
+subscription reached its state.
+
+Run them with the target database in scope: the script reads `DATABASE_URL`, so
+confirm which database that points at before acting. Do not improvise SQL
+instead of these commands.
+
+```bash
+pnpm billing:grant -- --requests                      # open upgrade requests
+pnpm billing:grant -- --user <uuid> --show            # subscription, open request, recent ledger
+pnpm billing:grant -- --user <uuid> --plan pro        # grant (or change to) a paid plan
+pnpm billing:grant -- --user <uuid> --action CANCEL   # end at period end
+pnpm billing:grant -- --user <uuid> --action CANCEL_IMMEDIATELY   # end now
+pnpm billing:grant -- --user <uuid> --action RESUME   # revoke a scheduled cancellation
+pnpm billing:grant -- --user <uuid> --action PAYMENT_FAILED
+pnpm billing:grant -- --user <uuid> --action PAYMENT_RECOVERED
+pnpm billing:grant -- --user <uuid> --action EXPIRE
+pnpm billing:grant -- --invoice <id> --mark-paid      # confirmed payment: OPEN -> PAID, one more period
+```
+
+### Routine
+
+- **Check pending upgrade requests at least once a day** (`--requests`). Nothing
+  notifies you: a request is intent only and creates no subscription, so it waits
+  until an operator acts on it.
+- Confirm the payment **outside** AEGIX (see §13 for the method the operator must
+  define first), then grant the plan. A grant answers the identity's open request.
+- When a paid period's invoice is raised `OPEN`, confirm payment and settle it
+  with `--mark-paid`.
+
+### Behaviour that matters when something goes wrong
+
+- **A manual subscription never renews on the clock.** When its period elapses
+  unpaid it expires, entitlements return to free, and the closed period is
+  invoiced `OPEN` so it stays collectible. Only `--mark-paid` starts the next
+  period.
+- **`--mark-paid` is idempotent.** The invoice id is the ledger event key, so a
+  replayed command reports "already settled" and extends nothing. A `VOID` or
+  unknown invoice is refused.
+- **Nothing is deleted.** Monitors beyond the free level move to
+  `ENTITLEMENT_PAUSED` and return to `ACTIVE` when a paid period resumes; a
+  monitor the owner paused themselves is never touched.
+- **If a payment is disputed or charged twice**, `--show` gives the ledger entry
+  and the invoice, and `--action PAYMENT_FAILED` moves the subscription to
+  `PAST_DUE` for the grace window. Do not fix a billing mistake by editing rows.
+
+## 13. Paid-plan payment method (operator decision — OPEN)
+
+AEGIX V1 has no payment processor, and this runbook deliberately does not invent
+one. Before any paid plan is sold, the operator must record, in this section:
+
+- accepted payment method(s);
+- the destination account/wallet that receives payment;
+- currency or asset;
+- how an incoming payment is matched to an upgrade request (which identifier);
+- when entitlement is granted relative to receipt;
+- how refunds and chargebacks are handled.
+
+Until that is written down, **paid-plan sales are blocked**: the Free plan runs
+normally, but nothing here supports collecting money, so `--plan pro` must not be
+granted in exchange for payment that the operator has not defined how to accept.
