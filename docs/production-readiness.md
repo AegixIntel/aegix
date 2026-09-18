@@ -64,6 +64,7 @@ scope (`docs/milestone-d11.md` §6).
 | Production runtime product smoke — Signed Webhooks | VERIFIED | endpoint created (201) with a signing secret, test delivery accepted (200) |
 | Production runtime product smoke — Manual billing | VERIFIED | operator CLI listed the live upgrade request, `--plan pro` created `free → pro (ACTIVE)` and fulfilled the request; API then reported `plan=pro/ACTIVE`, `selfServe=false`, raised entitlements; cancel set `CANCELED` / `cancelAtPeriodEnd=true` |
 | Production runtime product smoke — Ask AEGIX | PROVIDER-GATED | production has no LLM credential configured; `POST /v1/wallets/:address/ask` returns `503 AI_UNAVAILABLE / MISSING_CREDENTIAL` rather than a fabricated answer. Not claimed operational. |
+| Production user isolation | VERIFIED | from a fresh identity against the live origin: another identity's monitor read/deleted → 404, another identity's invoice read → 404, own ledger empty, anonymous monitors/subscription → 401 |
 | Production analysis latency (large wallets) | VERIFIED with caveat | a ~2000-signature public wallet took ~15 minutes to reach `READY` on the single public RPC; the bounded budgets hold, but this is slow (see "Open items") |
 | Email delivery | NOT REQUIRED FOR BETA | Feature remains disabled and SMTP is not required at startup |
 
