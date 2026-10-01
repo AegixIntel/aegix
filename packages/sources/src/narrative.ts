@@ -18,17 +18,29 @@ import { SourceError, fetchJson, type SeriesObservation, type SeriesSource } fro
 
 export const NARRATIVE_SOURCE = "gdelt-doc-v2";
 /**
- * GDELT asks for at most one request every five seconds, and in practice
- * answers 429 well inside that: measured from the production host, requests
- * fifteen seconds apart were still refused about two times in three. So the
- * spacing is generous and a refused topic is retried, each time after a
- * longer wait, before it is given up as a gap for this sweep.
+ * How the source paces itself, and why.
+ *
+ * GDELT documents one request every five seconds. Measured from the
+ * production host it is far stricter: eight topics in one sweep got one
+ * answer, and retrying a refused topic five times with waits of up to ninety
+ * seconds still lost three topics in four. A burst is what it refuses.
+ *
+ * So a sweep asks for exactly one topic, chosen by rotation, and the worker
+ * sweeps every ten minutes. Each topic is refreshed every eighty minutes, and
+ * each answer covers three days, so a topic can miss many turns in a row
+ * before an hour of it is lost.
  */
-export const GDELT_MIN_INTERVAL_MS = 10_000;
-export const GDELT_MAX_ATTEMPTS = 5;
-export const GDELT_RETRY_BACKOFF_MS = 20_000;
+export const NARRATIVE_ROTATION_MS = 600_000;
+export const GDELT_MAX_ATTEMPTS = 3;
+export const GDELT_RETRY_WAIT_MS = 60_000;
+export const GDELT_TIMESPAN = "3d";
 /** A timeline response routinely takes 10–30 seconds. */
 export const GDELT_TIMEOUT_MS = 45_000;
+
+/** The topic whose turn it is at `at`. Stateless, so every replica agrees. */
+export function narrativeTopicFor(at: Date, topics: readonly NarrativeTopic[] = NARRATIVE_TOPICS, rotationMs = NARRATIVE_ROTATION_MS): NarrativeTopic {
+  return topics[Math.floor(at.getTime() / rotationMs) % topics.length]!;
+}
 
 export interface NarrativeTopic { id: string; label: string; query: string }
 
@@ -85,9 +97,10 @@ export function createNarrativeSource(options: {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   topics?: readonly NarrativeTopic[];
-  /** Injected in tests; production waits out GDELT's request spacing. */
+  rotationMs?: number;
+  /** Injected in tests; production waits before asking a refused topic again. */
   sleep?: (ms: number) => Promise<void>;
-  /** Told about every topic that ended the sweep with no data, and why. */
+  /** Told when the topic whose turn it was ended the sweep with no data, and why. */
   onTopicFailure?: (topicId: string, code: string, attempts: number) => void;
 } = {}): SeriesSource {
   const topics = options.topics ?? NARRATIVE_TOPICS;
@@ -98,41 +111,28 @@ export function createNarrativeSource(options: {
     name: NARRATIVE_SOURCE,
     series: narrativeSeries(topics),
     async collect(at) {
-      const observations: SeriesObservation[] = [];
-      let failures = 0;
-      let requests = 0;
-      for (const topic of topics) {
-        const query = new URLSearchParams({ query: topic.query, mode: "timelinevol", format: "json", timespan: "2d" });
-        let lastError: unknown = null;
-        let attempts = 0;
-        let points: Array<{ eventTime: string; value: number }> | null = null;
-        while (attempts < GDELT_MAX_ATTEMPTS && points === null) {
-          // Every request after the first waits; a retry waits longer each time.
-          if (requests > 0) await sleep(GDELT_MIN_INTERVAL_MS + attempts * GDELT_RETRY_BACKOFF_MS);
-          requests += 1;
-          attempts += 1;
-          try {
-            const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
-            points = hourlyNarrativeVolume(payload, at);
-          } catch (error) {
-            lastError = error;
-            // Only a refusal or a timeout is worth asking again; a malformed
-            // answer will be malformed the second time too.
-            if (error instanceof SourceError && error.code === "MALFORMED_RESPONSE") break;
+      const topic = narrativeTopicFor(at, topics, options.rotationMs);
+      const query = new URLSearchParams({ query: topic.query, mode: "timelinevol", format: "json", timespan: GDELT_TIMESPAN });
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= GDELT_MAX_ATTEMPTS; attempt++) {
+        if (attempt > 1) await sleep(GDELT_RETRY_WAIT_MS * (attempt - 1));
+        try {
+          const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
+          return hourlyNarrativeVolume(payload, at).map((point): SeriesObservation => (
+            { seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE }));
+        } catch (error) {
+          lastError = error;
+          const code = error instanceof SourceError ? error.code : "PROVIDER_ERROR";
+          // Only a refusal or a timeout is worth asking again; a malformed
+          // answer will be malformed the second time too.
+          if (code === "MALFORMED_RESPONSE" || attempt === GDELT_MAX_ATTEMPTS) {
+            options.onTopicFailure?.(topic.id, code, attempt);
+            break;
           }
         }
-        if (points === null) {
-          // One topic failing leaves a gap in that topic, not in all of them.
-          failures += 1;
-          options.onTopicFailure?.(topic.id, lastError instanceof SourceError ? lastError.code : "PROVIDER_ERROR", attempts);
-          if (failures === topics.length) throw lastError;
-          continue;
-        }
-        for (const point of points) {
-          observations.push({ seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE });
-        }
       }
-      return observations;
+      // The gap is this topic's alone, and its next turn re-reads three days.
+      throw lastError;
     }
   };
 }

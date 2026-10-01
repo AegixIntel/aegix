@@ -5,7 +5,7 @@ import {
   RAYDIUM_CLMM_PROGRAM, TOKENIZED_STOCKS, TOKEN_2022_PROGRAM, USDC_MINT, XSTOCKS_MINT_AUTHORITY,
   createTokenizedStockSource, decodeClmmPoolPrice, isTokenizedStockSymbol, tokenizedStockSeries, type TokenizedStock
 } from "./tokenized-stocks.js";
-import { NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries } from "./narrative.js";
+import { NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
 import { aggregateOptionsChain, createOptionsSource, optionsSeries } from "./options.js";
 import { SourceError } from "./types.js";
 
@@ -121,49 +121,46 @@ test("narrative volume is averaged per completed hour", () => {
   assert.throws(() => hourlyNarrativeVolume({ timeline: [] }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
 });
 
-test("the narrative source spaces its requests and retries a refused topic", async () => {
-  const topics = NARRATIVE_TOPICS.slice(0, 3);
-  const sleeps: number[] = [];
-  let request = 0;
-  const fetchImpl = (async () => {
-    request += 1;
-    if (request === 2 || request === 3) return new Response("slow down", { status: 429 });
-    return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 });
-  }) as typeof fetch;
-  const failures: string[] = [];
-  const source = createNarrativeSource({ topics, fetchImpl, sleep: async (ms) => { sleeps.push(ms); }, onTopicFailure: (id) => failures.push(id) });
-  const observations = await source.collect(AT);
-  assert.equal(request, 5, "the refused topic is asked again until it answers");
-  assert.deepEqual(sleeps, [10_000, 30_000, 50_000, 10_000], "every request waits, and each retry waits longer");
-  assert.deepEqual(observations.map((o) => o.seriesKey), topics.map((t) => `narrative:${t.id}:news_volume_share`));
-  assert.deepEqual(failures, []);
-  assert.equal(narrativeSeries(topics).length, 3);
+test("a sweep asks for exactly one topic, and the rotation reaches every topic", async () => {
+  const seen = new Set<string>();
+  for (let turn = 0; turn < NARRATIVE_TOPICS.length; turn++) {
+    seen.add(narrativeTopicFor(new Date(AT.getTime() + turn * NARRATIVE_ROTATION_MS)).id);
+  }
+  assert.equal(seen.size, NARRATIVE_TOPICS.length, "eight consecutive turns cover all eight topics");
+  assert.equal(narrativeTopicFor(AT).id, narrativeTopicFor(new Date(AT.getTime() + 1000)).id, "two replicas in the same turn agree");
+
+  const urls: string[] = [];
+  const fetchImpl = (async (url: unknown) => { urls.push(String(url)); return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 }); }) as typeof fetch;
+  const observations = await createNarrativeSource({ fetchImpl, sleep: async () => {} }).collect(AT);
+  const topic = narrativeTopicFor(AT);
+  assert.equal(urls.length, 1, "one request per sweep");
+  assert.ok(urls[0]!.includes(new URLSearchParams({ query: topic.query }).toString()) && urls[0]!.includes("timespan=3d"));
+  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topic.id}:news_volume_share`]);
+  assert.equal(narrativeSeries().length, NARRATIVE_TOPICS.length);
 });
 
-test("a topic that never answers is reported and left as a gap", async () => {
-  const topics = NARRATIVE_TOPICS.slice(0, 2);
-  const reported: Array<[string, string, number]> = [];
+test("a refused topic is asked again after a wait, then reported and left as a gap", async () => {
+  const sleeps: number[] = [];
   let request = 0;
-  const refused = new URLSearchParams({ query: topics[0]!.query }).toString();
-  const fetchImpl = (async (url: unknown) => {
-    request += 1;
-    if (String(url).includes(refused)) return new Response("slow down", { status: 429 });
-    return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 });
-  }) as typeof fetch;
-  const source = createNarrativeSource({ topics, fetchImpl, sleep: async () => {}, onTopicFailure: (id, code, attempts) => reported.push([id, code, attempts]) });
-  const observations = await source.collect(AT);
-  assert.deepEqual(reported, [[topics[0]!.id, "RATE_LIMIT", 5]]);
-  assert.equal(request, 6);
-  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topics[1]!.id}:news_volume_share`]);
+  const recovering = createNarrativeSource({ sleep: async (ms) => { sleeps.push(ms); },
+    fetchImpl: (async () => { request += 1; return request < 3 ? new Response("slow down", { status: 429 }) : new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 }); }) as typeof fetch });
+  assert.equal((await recovering.collect(AT)).length, 1);
+  assert.equal(request, 3);
+  assert.deepEqual(sleeps, [60_000, 120_000], "a minute, then two, between attempts");
+
+  const reported: Array<[string, string, number]> = [];
+  let refused = 0;
+  const down = createNarrativeSource({ sleep: async () => {}, onTopicFailure: (id, code, attempts) => reported.push([id, code, attempts]),
+    fetchImpl: (async () => { refused += 1; return new Response("slow down", { status: 429 }); }) as typeof fetch });
+  await assert.rejects(down.collect(AT), (e) => e instanceof SourceError && e.code === "RATE_LIMIT");
+  assert.equal(refused, 3, "three attempts and no more");
+  assert.deepEqual(reported, [[narrativeTopicFor(AT).id, "RATE_LIMIT", 3]]);
 
   let malformed = 0;
-  const broken = createNarrativeSource({ topics: topics.slice(0, 1), sleep: async () => {},
+  const broken = createNarrativeSource({ sleep: async () => {},
     fetchImpl: (async () => { malformed += 1; return new Response(JSON.stringify({ timeline: "no" }), { status: 200 }); }) as typeof fetch });
   await assert.rejects(broken.collect(AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
   assert.equal(malformed, 1, "a malformed answer is not asked for again");
-
-  const down = createNarrativeSource({ topics, sleep: async () => {}, fetchImpl: (async () => new Response("no", { status: 500 })) as typeof fetch });
-  await assert.rejects(down.collect(AT), (e) => e instanceof SourceError);
 });
 
 const chain = { timestamp: "2026-10-01 03:43:57", data: { options: [

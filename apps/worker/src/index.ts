@@ -9,7 +9,7 @@ import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
 import { captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
 import { createCoinPaprikaProvider } from "@aegix/markets";
-import { createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
+import { NARRATIVE_ROTATION_MS, createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -45,7 +45,7 @@ const BILLING_SWEEP_INTERVAL_MS = 300_000;
 let captureTimer: ReturnType<typeof setInterval> | null = null;
 let discoveryTimer: ReturnType<typeof setInterval> | null = null;
 const sourceTimers: Array<ReturnType<typeof setInterval>> = [];
-/** Narrative and options change slowly and have request limits; hourly is enough. */
+/** Options change slowly; hourly is enough. Narrative has its own rotation. */
 const SLOW_SOURCE_INTERVAL_MS = 3_600_000;
 /** An epoch is a UTC day; checking every 30 minutes finds the boundary soon enough. */
 const DISCOVERY_SWEEP_INTERVAL_MS = 1_800_000;
@@ -282,7 +282,7 @@ try {
     scheduleSource(createNarrativeSource({
       baseUrl: config.NARRATIVE_BASE_URL,
       onTopicFailure: (topic, code, attempts) => logger.warn("narrative topic not captured", { topic, code, attempts })
-    }), SLOW_SOURCE_INTERVAL_MS);
+    }), NARRATIVE_ROTATION_MS);
   }
   if (config.ENABLE_OPTIONS_CAPTURE) {
     scheduleSource(createOptionsSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
