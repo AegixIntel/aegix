@@ -1,4 +1,4 @@
-import { MARKETS_ENGINE_VERSION, type CanonicalAsset, type HistoryPoint, type MarketSignal } from "./types.js";
+import { MARKETS_ENGINE_VERSION, type HistoryPoint, type MarketSignal } from "./types.js";
 import { MIN_HISTORY_POINTS, normalizeHistory } from "./normalize.js";
 
 /**
@@ -39,7 +39,7 @@ function returns(points: HistoryPoint[]): number[] {
 
 function signal(
   type: MarketSignal["type"],
-  asset: CanonicalAsset,
+  asset: string,
   severity: number,
   confidence: number,
   title: string,
@@ -60,7 +60,7 @@ function signal(
 }
 
 export interface SignalInput {
-  asset: CanonicalAsset;
+  asset: string;
   currentPrice: number;
   currentVolume: number | null;
   history: HistoryPoint[];

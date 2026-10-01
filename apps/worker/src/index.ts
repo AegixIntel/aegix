@@ -7,6 +7,9 @@ import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
+import { captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
+import { createCoinPaprikaProvider } from "@aegix/markets";
+import { createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -39,6 +42,13 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let billingTimer: ReturnType<typeof setInterval> | null = null;
 /** Billing boundaries are hourly at finest; a 5-minute sweep is ample. */
 const BILLING_SWEEP_INTERVAL_MS = 300_000;
+let captureTimer: ReturnType<typeof setInterval> | null = null;
+let discoveryTimer: ReturnType<typeof setInterval> | null = null;
+const sourceTimers: Array<ReturnType<typeof setInterval>> = [];
+/** Narrative and options change slowly and have request limits; hourly is enough. */
+const SLOW_SOURCE_INTERVAL_MS = 3_600_000;
+/** An epoch is a UTC day; checking every 30 minutes finds the boundary soon enough. */
+const DISCOVERY_SWEEP_INTERVAL_MS = 1_800_000;
 let schedulerReady = !config.ENABLE_MONITOR_SCHEDULER || !config.ENABLE_MONITORING;
 
 async function writeHeartbeat(): Promise<boolean> {
@@ -61,6 +71,9 @@ async function shutdown(signal: string): Promise<void> {
   logger.info("received shutdown signal, draining workers", { signal });
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (billingTimer) clearInterval(billingTimer);
+  if (captureTimer) clearInterval(captureTimer);
+  if (discoveryTimer) clearInterval(discoveryTimer);
+  sourceTimers.forEach((timer) => clearInterval(timer));
   const close = async () => {
     await Promise.all(allWorkers.map((w) => w.close()));
     await queues.close();
@@ -222,6 +235,67 @@ try {
           logger.error("billing lifecycle sweep failed", { error: error instanceof Error ? error.message : "unknown" });
         });
     }, BILLING_SWEEP_INTERVAL_MS);
+  }
+  // D14: both sweeps follow the billing pattern — a plain interval, idempotent
+  // across replicas through unique keys, and never part of the heartbeat. A
+  // missed capture is a gap Rewind discloses, not an outage.
+  if (config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS) {
+    const marketProvider = createCoinPaprikaProvider({ baseUrl: config.MARKETS_BASE_URL, timeoutMs: config.MARKETS_TIMEOUT_MS });
+    const capture = () => {
+      void captureMarketSignals({ config, sql, logger }, marketProvider)
+        .then((result) => logger.info("market capture sweep", { ...result }))
+        .catch((error: unknown) => {
+          logger.error("market capture sweep failed", { error: error instanceof Error ? error.message : "unknown" });
+        });
+    };
+    capture();
+    captureTimer = setInterval(capture, config.REWIND_CAPTURE_INTERVAL_SECONDS * 1000);
+  }
+  // Series sources. Observations are stamped to the minute they were read,
+  // and a sweep that fails adds nothing: the ledger shows the gap.
+  const scheduleSource = (source: SeriesSource, intervalMs: number, after?: (at: Date) => Promise<unknown>) => {
+    const sweep = () => {
+      const at = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+      void captureSeriesSource({ config, sql, logger }, source, at)
+        .then(async (result) => {
+          logger.info("series capture sweep", { ...result });
+          if (after) await after(at);
+        })
+        .catch((error: unknown) => {
+          logger.warn("series capture sweep failed", { source: source.name, error: error instanceof Error ? error.message : "unknown" });
+        });
+    };
+    sweep();
+    sourceTimers.push(setInterval(sweep, intervalMs));
+  };
+  if (config.ENABLE_TOKENIZED_STOCK_CAPTURE) {
+    scheduleSource(
+      createTokenizedStockSource({ rpcUrl: config.RPC_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }),
+      config.REWIND_CAPTURE_INTERVAL_SECONDS * 1000,
+      async (at) => {
+        const result = await captureTokenizedStockSignals({ config, sql, logger }, at);
+        logger.info("tokenized stock capture sweep", { ...result });
+      }
+    );
+  }
+  if (config.ENABLE_NARRATIVE_CAPTURE) {
+    scheduleSource(createNarrativeSource({ baseUrl: config.NARRATIVE_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
+  }
+  if (config.ENABLE_OPTIONS_CAPTURE) {
+    scheduleSource(createOptionsSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
+  }
+  if (config.ENABLE_DISCOVERY) {
+    const discover = () => {
+      void runDiscoverySweep({ config, sql, logger })
+        .then((result) => {
+          if (result.ran) logger.info("discovery sweep", { ...result });
+        })
+        .catch((error: unknown) => {
+          logger.error("discovery sweep failed", { error: error instanceof Error ? error.message : "unknown" });
+        });
+    };
+    discover();
+    discoveryTimer = setInterval(discover, DISCOVERY_SWEEP_INTERVAL_MS);
   }
   logger.info("worker started", {
     queues: allWorkers.map((w) => w.name),

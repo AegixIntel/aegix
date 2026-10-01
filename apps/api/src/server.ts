@@ -51,6 +51,8 @@ import { registerAskAegix } from "./ask-aegix.js";
 import { claimDailyUsage } from "./metered-quota.js";
 import { createCoinPaprikaProvider, createMarketService, type MarketDataProvider } from "@aegix/markets";
 import { registerMarkets } from "./markets.js";
+import { registerRewind } from "./rewind.js";
+import { registerDiscovery } from "./discovery.js";
 import { loadContextSupporting } from "./context-supporting.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
@@ -1631,6 +1633,10 @@ export async function buildServer(deps: ApiDeps) {
         await entitlements.limit(userId, ai ? "ask.daily" : "markets.daily")
       )
   });
+
+  // ---- D14: Rewind and the Discovery Engine (stored captures only) ----
+  registerRewind({ app, config, sql, requireUser });
+  registerDiscovery({ app, config, sql, requireUser });
 
   // ---- D11: billing / entitlements (architecture.md §69) ----
   registerBilling({

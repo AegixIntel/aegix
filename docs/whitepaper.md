@@ -279,7 +279,7 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 |---|---|
 | SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
-| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence |
+| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence, AEGIX Rewind and AEGIX Discovery Engine (both built, default off; market assets, on-chain tokenized stocks, news volume, delayed options) |
 | LATER | AI Intelligence Copilot, Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
 
 ---

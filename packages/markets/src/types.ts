@@ -67,7 +67,8 @@ export type MarketSignalType =
 export interface MarketSignal {
   id: string;
   type: MarketSignalType;
-  asset: CanonicalAsset;
+  /** A canonical asset, or another priced subject such as a tokenized stock symbol. */
+  asset: string;
   severity: number;
   confidence: number;
   title: string;
