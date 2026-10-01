@@ -128,6 +128,8 @@ export function createDiscoveryRepo(sql: Sql): DiscoveryRepo {
 
         // One statement per chunk: a run over a few dozen series considers
         // tens of thousands of hypotheses, and every one of them is recorded.
+        // Every array is sent as text and cast by PostgreSQL: the driver infers
+        // an array type from its elements and has none for boolean.
         const numeric = (value: number | null) => (value === null ? null : String(value));
         for (let offset = 0; offset < run.tests.length; offset += 2000) {
           const chunk = run.tests.slice(offset, offset + 2000);
@@ -138,10 +140,10 @@ export function createDiscoveryRepo(sql: Sql): DiscoveryRepo {
             )
             select ${runRow.id}::bigint, * from unnest(
               ${chunk.map((t) => t.pairKey)}::text[], ${chunk.map((t) => t.seriesA)}::text[], ${chunk.map((t) => t.seriesB)}::text[],
-              ${chunk.map((t) => t.lagHours)}::int[], ${chunk.map((t) => t.status)}::text[], ${chunk.map((t) => t.role)}::text[],
-              ${chunk.map((t) => numeric(t.r))}::numeric[], ${chunk.map((t) => numeric(t.rBaseline))}::numeric[], ${chunk.map((t) => t.n)}::int[],
+              ${chunk.map((t) => String(t.lagHours))}::int[], ${chunk.map((t) => t.status)}::text[], ${chunk.map((t) => t.role)}::text[],
+              ${chunk.map((t) => numeric(t.r))}::numeric[], ${chunk.map((t) => numeric(t.rBaseline))}::numeric[], ${chunk.map((t) => String(t.n))}::int[],
               ${chunk.map((t) => numeric(t.nEffective))}::numeric[], ${chunk.map((t) => numeric(t.pValue))}::numeric[],
-              ${chunk.map((t) => numeric(t.qValue))}::numeric[], ${chunk.map((t) => t.rejected)}::boolean[]
+              ${chunk.map((t) => numeric(t.qValue))}::numeric[], ${chunk.map((t) => String(t.rejected))}::boolean[]
             )
           `;
         }
