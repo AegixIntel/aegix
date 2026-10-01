@@ -121,22 +121,46 @@ test("narrative volume is averaged per completed hour", () => {
   assert.throws(() => hourlyNarrativeVolume({ timeline: [] }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
 });
 
-test("the narrative source spaces its requests and survives one failing topic", async () => {
+test("the narrative source spaces its requests and retries a refused topic", async () => {
   const topics = NARRATIVE_TOPICS.slice(0, 3);
   const sleeps: number[] = [];
   let request = 0;
   const fetchImpl = (async () => {
     request += 1;
-    if (request === 2) return new Response("slow down", { status: 429 });
+    if (request === 2 || request === 3) return new Response("slow down", { status: 429 });
     return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 });
   }) as typeof fetch;
-  const source = createNarrativeSource({ topics, fetchImpl, sleep: async (ms) => { sleeps.push(ms); } });
+  const failures: string[] = [];
+  const source = createNarrativeSource({ topics, fetchImpl, sleep: async (ms) => { sleeps.push(ms); }, onTopicFailure: (id) => failures.push(id) });
   const observations = await source.collect(AT);
-  assert.equal(request, 3);
-  assert.equal(sleeps.length, 2);
-  assert.ok(sleeps.every((ms) => ms >= 5000), "GDELT's five-second spacing is respected");
-  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topics[0]!.id}:news_volume_share`, `narrative:${topics[2]!.id}:news_volume_share`]);
+  assert.equal(request, 5, "the refused topic is asked again until it answers");
+  assert.deepEqual(sleeps, [10_000, 30_000, 50_000, 10_000], "every request waits, and each retry waits longer");
+  assert.deepEqual(observations.map((o) => o.seriesKey), topics.map((t) => `narrative:${t.id}:news_volume_share`));
+  assert.deepEqual(failures, []);
   assert.equal(narrativeSeries(topics).length, 3);
+});
+
+test("a topic that never answers is reported and left as a gap", async () => {
+  const topics = NARRATIVE_TOPICS.slice(0, 2);
+  const reported: Array<[string, string, number]> = [];
+  let request = 0;
+  const refused = new URLSearchParams({ query: topics[0]!.query }).toString();
+  const fetchImpl = (async (url: unknown) => {
+    request += 1;
+    if (String(url).includes(refused)) return new Response("slow down", { status: 429 });
+    return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 });
+  }) as typeof fetch;
+  const source = createNarrativeSource({ topics, fetchImpl, sleep: async () => {}, onTopicFailure: (id, code, attempts) => reported.push([id, code, attempts]) });
+  const observations = await source.collect(AT);
+  assert.deepEqual(reported, [[topics[0]!.id, "RATE_LIMIT", 5]]);
+  assert.equal(request, 6);
+  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topics[1]!.id}:news_volume_share`]);
+
+  let malformed = 0;
+  const broken = createNarrativeSource({ topics: topics.slice(0, 1), sleep: async () => {},
+    fetchImpl: (async () => { malformed += 1; return new Response(JSON.stringify({ timeline: "no" }), { status: 200 }); }) as typeof fetch });
+  await assert.rejects(broken.collect(AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  assert.equal(malformed, 1, "a malformed answer is not asked for again");
 
   const down = createNarrativeSource({ topics, sleep: async () => {}, fetchImpl: (async () => new Response("no", { status: 500 })) as typeof fetch });
   await assert.rejects(down.collect(AT), (e) => e instanceof SourceError);

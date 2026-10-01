@@ -195,8 +195,13 @@ GOOGLx, MSTRx, COINx, CRCLx, HOODx, METAx, AMZNx, MSFTx, GLDx). Two
   price is read, so the volume signal can never fire for them.
 
 **Narrative.** GDELT's "volume intensity" for a fixed list of eight topics,
-averaged to completed hours. Requests are spaced 5.5 seconds apart, as GDELT
-asks. It measures how much is published, not sentiment and not social media.
+averaged to completed hours. GDELT asks for one request every five seconds
+but refuses far more often than that from the production host, so requests are
+ten seconds apart and a refused topic is retried up to five times with a
+longer wait each time. A topic that still fails is logged
+(`narrative topic not captured`) and left as a gap; each sweep re-reads two
+days, so the next successful one fills it. GDELT's data trails real time by
+about five hours. It measures how much is published, not sentiment and not social media.
 The topic list is part of the hypothesis set: a topic is not added because a
 story is already trending.
 

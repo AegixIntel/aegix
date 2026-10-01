@@ -279,7 +279,10 @@ try {
     );
   }
   if (config.ENABLE_NARRATIVE_CAPTURE) {
-    scheduleSource(createNarrativeSource({ baseUrl: config.NARRATIVE_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
+    scheduleSource(createNarrativeSource({
+      baseUrl: config.NARRATIVE_BASE_URL,
+      onTopicFailure: (topic, code, attempts) => logger.warn("narrative topic not captured", { topic, code, attempts })
+    }), SLOW_SOURCE_INTERVAL_MS);
   }
   if (config.ENABLE_OPTIONS_CAPTURE) {
     scheduleSource(createOptionsSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);

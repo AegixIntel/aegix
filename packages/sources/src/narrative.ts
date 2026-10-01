@@ -17,8 +17,18 @@ import type { SeriesDescriptor } from "@aegix/rewind";
 import { SourceError, fetchJson, type SeriesObservation, type SeriesSource } from "./types.js";
 
 export const NARRATIVE_SOURCE = "gdelt-doc-v2";
-/** GDELT asks for at most one request every five seconds. */
-export const GDELT_MIN_INTERVAL_MS = 5_500;
+/**
+ * GDELT asks for at most one request every five seconds, and in practice
+ * answers 429 well inside that: measured from the production host, requests
+ * fifteen seconds apart were still refused about two times in three. So the
+ * spacing is generous and a refused topic is retried, each time after a
+ * longer wait, before it is given up as a gap for this sweep.
+ */
+export const GDELT_MIN_INTERVAL_MS = 10_000;
+export const GDELT_MAX_ATTEMPTS = 5;
+export const GDELT_RETRY_BACKOFF_MS = 20_000;
+/** A timeline response routinely takes 10–30 seconds. */
+export const GDELT_TIMEOUT_MS = 45_000;
 
 export interface NarrativeTopic { id: string; label: string; query: string }
 
@@ -77,6 +87,8 @@ export function createNarrativeSource(options: {
   topics?: readonly NarrativeTopic[];
   /** Injected in tests; production waits out GDELT's request spacing. */
   sleep?: (ms: number) => Promise<void>;
+  /** Told about every topic that ended the sweep with no data, and why. */
+  onTopicFailure?: (topicId: string, code: string, attempts: number) => void;
 } = {}): SeriesSource {
   const topics = options.topics ?? NARRATIVE_TOPICS;
   const baseUrl = (options.baseUrl ?? "https://api.gdeltproject.org/api/v2").replace(/\/$/, "");
@@ -88,18 +100,36 @@ export function createNarrativeSource(options: {
     async collect(at) {
       const observations: SeriesObservation[] = [];
       let failures = 0;
-      for (const [index, topic] of topics.entries()) {
-        if (index > 0) await sleep(GDELT_MIN_INTERVAL_MS);
+      let requests = 0;
+      for (const topic of topics) {
         const query = new URLSearchParams({ query: topic.query, mode: "timelinevol", format: "json", timespan: "2d" });
-        try {
-          const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs });
-          for (const point of hourlyNarrativeVolume(payload, at)) {
-            observations.push({ seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE });
+        let lastError: unknown = null;
+        let attempts = 0;
+        let points: Array<{ eventTime: string; value: number }> | null = null;
+        while (attempts < GDELT_MAX_ATTEMPTS && points === null) {
+          // Every request after the first waits; a retry waits longer each time.
+          if (requests > 0) await sleep(GDELT_MIN_INTERVAL_MS + attempts * GDELT_RETRY_BACKOFF_MS);
+          requests += 1;
+          attempts += 1;
+          try {
+            const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
+            points = hourlyNarrativeVolume(payload, at);
+          } catch (error) {
+            lastError = error;
+            // Only a refusal or a timeout is worth asking again; a malformed
+            // answer will be malformed the second time too.
+            if (error instanceof SourceError && error.code === "MALFORMED_RESPONSE") break;
           }
-        } catch (error) {
+        }
+        if (points === null) {
           // One topic failing leaves a gap in that topic, not in all of them.
           failures += 1;
-          if (failures === topics.length) throw error;
+          options.onTopicFailure?.(topic.id, lastError instanceof SourceError ? lastError.code : "PROVIDER_ERROR", attempts);
+          if (failures === topics.length) throw lastError;
+          continue;
+        }
+        for (const point of points) {
+          observations.push({ seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE });
         }
       }
       return observations;
