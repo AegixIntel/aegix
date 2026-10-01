@@ -166,3 +166,19 @@ export {
   type UpgradeRequestStatus,
   type UsageTotal
 } from "./repositories/billing.js";
+export {
+  createObservationRepo,
+  type ObservationRepo,
+  type ObservationPointRow,
+  type SignalCaptureWrite,
+  type StoredCaptureRow,
+  type StoredSignalRow
+} from "./repositories/observations.js";
+export {
+  createDiscoveryRepo,
+  type DiscoveryRepo,
+  type DiscoveryEventRow,
+  type DiscoveryRow,
+  type DiscoveryRunRow,
+  type DiscoveryRunWrite
+} from "./repositories/discoveries.js";

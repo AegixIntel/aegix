@@ -41,7 +41,10 @@
     "bs58": "^6.0.0",
     "fastify": "^5.2.0",
     "jose": "^6.2.10",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@aegix/rewind": "workspace:*",
+    "@aegix/discovery": "workspace:*",
+    "@aegix/sources": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

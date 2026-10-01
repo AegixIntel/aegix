@@ -82,6 +82,14 @@ services:
       # The application performs the conditional fail-fast check: this may be
       # empty only when ENABLE_WEBHOOK_DELIVERY=false.
       WEBHOOK_ENCRYPTION_KEY: ${WEBHOOK_ENCRYPTION_KEY:-}
+      # D14: Rewind, Discovery and their series sources. All off unless the
+      # operator sets them; see docs/milestone-d14-rewind-discovery.md §6.
+      ENABLE_REWIND_CAPTURE: ${ENABLE_REWIND_CAPTURE:-false}
+      ENABLE_REWIND: ${ENABLE_REWIND:-false}
+      ENABLE_DISCOVERY: ${ENABLE_DISCOVERY:-false}
+      ENABLE_TOKENIZED_STOCK_CAPTURE: ${ENABLE_TOKENIZED_STOCK_CAPTURE:-false}
+      ENABLE_NARRATIVE_CAPTURE: ${ENABLE_NARRATIVE_CAPTURE:-false}
+      ENABLE_OPTIONS_CAPTURE: ${ENABLE_OPTIONS_CAPTURE:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }

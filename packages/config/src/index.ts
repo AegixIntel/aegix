@@ -188,6 +188,27 @@ const envSchema = z.object({
   MARKETS_DAILY_QUOTA: z.coerce.number().int().positive().default(200),
   MARKETS_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
 
+  // D14: Rewind and the Discovery Engine. All three default off, so an
+  // existing deployment changes nothing until an operator opts in. Capture is
+  // separate from the read API on purpose: a replay is only as old as the
+  // first capture, so capture can be started well before Rewind is exposed.
+  // See docs/milestone-d14-rewind-discovery.md.
+  ENABLE_REWIND_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_REWIND: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_DISCOVERY: z.preprocess(boolEnv, z.boolean()).default(false),
+  REWIND_CAPTURE_INTERVAL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
+  REWIND_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  // D14 series sources. Each one is a separate opt-in because each has a
+  // different cost and a different standing: tokenized stocks are read from
+  // RPC_URL, narrative volume from GDELT's public API, and options from
+  // Cboe's delayed website feed, which carries no redistribution licence.
+  ENABLE_TOKENIZED_STOCK_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_NARRATIVE_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_OPTIONS_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
+  OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
+  SERIES_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
+
   // D6 Block 2: wallet-only auth (D6-P), developer intelligence (D6-E),
   // population commonality (D6-G), correlation alerts (D6-F), webhooks (D6-H).
   // See docs/d6-block2.md.

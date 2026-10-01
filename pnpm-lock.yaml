@@ -35,12 +35,18 @@ importers:
       '@aegix/diff':
         specifier: workspace:*
         version: link:packages/diff
+      '@aegix/discovery':
+        specifier: workspace:*
+        version: link:packages/discovery
       '@aegix/graph':
         specifier: workspace:*
         version: link:packages/graph
       '@aegix/logging':
         specifier: workspace:*
         version: link:packages/logging
+      '@aegix/markets':
+        specifier: workspace:*
+        version: link:packages/markets
       '@aegix/monitor':
         specifier: workspace:*
         version: link:packages/monitor
@@ -50,6 +56,12 @@ importers:
       '@aegix/queue':
         specifier: workspace:*
         version: link:packages/queue
+      '@aegix/rewind':
+        specifier: workspace:*
+        version: link:packages/rewind
+      '@aegix/sources':
+        specifier: workspace:*
+        version: link:packages/sources
       '@aegix/types':
         specifier: workspace:*
         version: link:packages/types
@@ -101,6 +113,9 @@ importers:
       '@aegix/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@aegix/discovery':
+        specifier: workspace:*
+        version: link:../../packages/discovery
       '@aegix/explanation':
         specifier: workspace:^
         version: link:../../packages/explanation
@@ -122,6 +137,12 @@ importers:
       '@aegix/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@aegix/rewind':
+        specifier: workspace:*
+        version: link:../../packages/rewind
+      '@aegix/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       '@aegix/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -165,9 +186,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@aegix/discovery':
+        specifier: workspace:*
+        version: link:../../packages/discovery
       '@aegix/markets':
         specifier: workspace:*
         version: link:../../packages/markets
+      '@aegix/rewind':
+        specifier: workspace:*
+        version: link:../../packages/rewind
       '@solana/wallet-adapter-base':
         specifier: ^0.9.27
         version: 0.9.27(@solana/web3.js@1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))
@@ -238,6 +265,9 @@ importers:
       '@aegix/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@aegix/discovery':
+        specifier: workspace:*
+        version: link:../../packages/discovery
       '@aegix/explanation':
         specifier: workspace:^
         version: link:../../packages/explanation
@@ -250,6 +280,9 @@ importers:
       '@aegix/logging':
         specifier: workspace:*
         version: link:../../packages/logging
+      '@aegix/markets':
+        specifier: workspace:*
+        version: link:../../packages/markets
       '@aegix/monitor':
         specifier: workspace:*
         version: link:../../packages/monitor
@@ -262,9 +295,15 @@ importers:
       '@aegix/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@aegix/rewind':
+        specifier: workspace:*
+        version: link:../../packages/rewind
       '@aegix/scoring':
         specifier: workspace:*
         version: link:../../packages/scoring
+      '@aegix/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       '@aegix/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -465,6 +504,18 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  packages/discovery:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
   packages/explanation:
     dependencies:
       '@aegix/types':
@@ -633,11 +684,42 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
+  packages/rewind:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
   packages/scoring:
     dependencies:
       '@aegix/types':
         specifier: workspace:*
         version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/sources:
+    dependencies:
+      '@aegix/rewind':
+        specifier: workspace:*
+        version: link:../rewind
+      bs58:
+        specifier: ^6.0.0
+        version: 6.0.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

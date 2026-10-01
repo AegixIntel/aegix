@@ -33,7 +33,11 @@
     "@aegix/scoring": "workspace:*",
     "@aegix/types": "workspace:*",
     "@aegix/webhook-delivery": "workspace:^",
-    "bullmq": "^5.34.7"
+    "bullmq": "^5.34.7",
+    "@aegix/markets": "workspace:*",
+    "@aegix/rewind": "workspace:*",
+    "@aegix/discovery": "workspace:*",
+    "@aegix/sources": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

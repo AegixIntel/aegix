@@ -20,7 +20,9 @@
     "bs58": "^6.0.0",
     "next": "^15.5.24",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@aegix/rewind": "workspace:*",
+    "@aegix/discovery": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

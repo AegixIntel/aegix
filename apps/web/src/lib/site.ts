@@ -145,6 +145,22 @@ export const products: Product[] = [
   },
   { id: "signal-engine", name: "Signal Engine", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
   { id: "cross-market-intelligence", name: "Cross-Market Intelligence", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
+  // D14. Built and gated off: neither is LIVE until capture has run in
+  // production long enough for a replay or a scan to have something to read.
+  {
+    id: "aegix-rewind",
+    name: "AEGIX Rewind",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP"],
+    note: "Point-in-time replay of stored captures; nothing is recomputed. Covers BTC, ETH and SOL market signals, tokenized stocks priced on-chain, and completed wallet analyses, and only from the date capture was switched on."
+  },
+  {
+    id: "aegix-discovery-engine",
+    name: "AEGIX Discovery Engine",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP"],
+    note: "Scans BTC, ETH and SOL market series, tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price), news volume by topic, and delayed options activity. No sector rotation, and no commodity beyond tokenized gold."
+  },
 
   // Later.
   { id: "ai-intelligence-copilot", name: "AI Intelligence Copilot", status: "PLANNED", surfaces: ["ROADMAP", "CATEGORY"] },

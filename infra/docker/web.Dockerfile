@@ -30,6 +30,9 @@ COPY packages/billing/package.json packages/billing/package.json
 COPY packages/context/package.json packages/context/package.json
 COPY packages/markets/package.json packages/markets/package.json
 COPY packages/network/package.json packages/network/package.json
+COPY packages/rewind/package.json packages/rewind/package.json
+COPY packages/discovery/package.json packages/discovery/package.json
+COPY packages/sources/package.json packages/sources/package.json
 RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS build
@@ -43,6 +46,8 @@ COPY tsconfig.base.json ./
 COPY packages/types packages/types
 COPY packages/config packages/config
 COPY packages/markets packages/markets
+COPY packages/rewind packages/rewind
+COPY packages/discovery packages/discovery
 COPY apps/web apps/web
 RUN pnpm --filter @aegix/web... build
 

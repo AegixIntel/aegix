@@ -1114,3 +1114,66 @@ export function requestUpgrade(plan: PlanCode, contact: string): Promise<{ reque
     body: JSON.stringify(trimmed ? { plan, contact: trimmed } : { plan })
   });
 }
+
+export type RewindSubjectType = "asset" | "wallet";
+export type RewindResponse = import("@aegix/rewind").ReplayResult & { subjectType: RewindSubjectType };
+export async function rewind(input: { subjectType: RewindSubjectType; subject: string; eventTime: string; lookbackHours: number }): Promise<RewindResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/rewind`, {
+    method: "POST", headers: { "content-type": "application/json", ...authHeaders() }, body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+  }
+  return response.json() as Promise<RewindResponse>;
+}
+
+export interface RewindSubject { subject: string; label: string; kind: "MARKET_ASSET" | "TOKENIZED_STOCK" }
+export async function getRewindSubjects(): Promise<RewindSubject[]> {
+  const response = await fetch(`${API_BASE_URL}/v1/rewind/subjects`, { headers: authHeaders() });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+  }
+  return ((await response.json()) as { assets: RewindSubject[] }).assets;
+}
+
+export interface DiscoverySummary {
+  id: string;
+  status: "CANDIDATE" | "CONFIRMED" | "NOT_CONFIRMED";
+  firstDetectedAt: string;
+  seriesA: string;
+  seriesB: string;
+  lagHours: number;
+  direction: "POSITIVE" | "NEGATIVE";
+  engineVersion: string;
+  fingerprint: string;
+  prevChainHash: string | null;
+  chainHash: string;
+  card: import("@aegix/discovery").DiscoveryCard;
+}
+export interface DiscoveryRunSummary {
+  epochEnd: string; completedAt: string; engineVersion: string; method: string; fdrLevel: number;
+  seriesCount: number; hypothesesConsidered: number; hypothesesTested: number; rejections: number;
+}
+export interface DiscoveryListResponse { discoveries: DiscoverySummary[]; latestRun: DiscoveryRunSummary | null }
+export interface DiscoveryDetailResponse {
+  discovery: DiscoverySummary;
+  run: DiscoveryRunSummary | null;
+  events: Array<{ type: string; at: string; detail: Record<string, unknown> }>;
+  related: Array<{ id: string; status: string; seriesA: string; seriesB: string; lagHours: number; direction: string; firstDetectedAt: string }>;
+}
+async function getDiscoveryJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
+export function listDiscoveries(): Promise<DiscoveryListResponse> {
+  return getDiscoveryJson("/v1/discoveries");
+}
+export function getDiscovery(id: string): Promise<DiscoveryDetailResponse> {
+  return getDiscoveryJson(`/v1/discoveries/${encodeURIComponent(id)}`);
+}
