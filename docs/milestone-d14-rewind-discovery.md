@@ -196,8 +196,17 @@ GOOGLx, MSTRx, COINx, CRCLx, HOODx, METAx, AMZNx, MSFTx, GLDx). Two
   price is read, so the volume signal can never fire for them.
 
 **Narrative.** GDELT's "volume intensity" for a fixed list of eight topics,
-averaged to completed hours. Requests are spaced 5.5 seconds apart, as GDELT
-asks. It measures how much is published, not sentiment and not social media.
+averaged to completed hours. GDELT documents one request every five seconds,
+but that is not what decides whether a request is answered: measured on
+2 October 2026 from the production host and from an unrelated network, it
+answered HTTP 429 to about four requests in five, whether they were twenty
+seconds or an hour apart. So a sweep asks for one topic, in rotation, every ten
+minutes, and asks up to seven times, forty seconds apart, until it is answered.
+At one answer in five that gets a topic through about four turns in five. Each
+topic has a turn every eighty minutes and each answer covers three days. A
+topic still refused after seven attempts is logged
+(`narrative topic not captured`) and left for its next turn. GDELT's data
+trails real time by about five hours. It measures how much is published, not sentiment and not social media.
 The topic list is part of the hypothesis set: a topic is not added because a
 story is already trending.
 
@@ -251,10 +260,9 @@ rest partly on data AEGIX did not observe as it happened. A discovery whose
 window starts before 1 October 2026 was found in provider history, and the
 confirmation window is what tests it on observations AEGIX made itself.
 
-GDELT capture is switched off in production. From the production host GDELT
-answers HTTP 429 to a single request made after an hour of silence, while the
-same request from another network succeeds, so the limit is on the address,
-not the pace. Narrative series are out of the scan until that is resolved.
+Narrative series have no backfill. GDELT capture was switched off in
+production from 1 October 2026 21:15 UTC while its refusals were measured, and
+the scan of 2 October ran without the narrative series.
 
 ## 5. Discovery ID
 

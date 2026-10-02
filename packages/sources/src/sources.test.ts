@@ -5,7 +5,7 @@ import {
   RAYDIUM_CLMM_PROGRAM, TOKENIZED_STOCKS, TOKEN_2022_PROGRAM, USDC_MINT, XSTOCKS_MINT_AUTHORITY,
   createTokenizedStockSource, decodeClmmPoolPrice, isTokenizedStockSymbol, tokenizedStockSeries, type TokenizedStock
 } from "./tokenized-stocks.js";
-import { NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries } from "./narrative.js";
+import { GDELT_MAX_ATTEMPTS, GDELT_RETRY_WAIT_MS, GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
 import { aggregateOptionsChain, createOptionsSource, optionsSeries } from "./options.js";
 import { SourceError } from "./types.js";
 
@@ -121,25 +121,48 @@ test("narrative volume is averaged per completed hour", () => {
   assert.throws(() => hourlyNarrativeVolume({ timeline: [] }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
 });
 
-test("the narrative source spaces its requests and survives one failing topic", async () => {
-  const topics = NARRATIVE_TOPICS.slice(0, 3);
+test("a sweep asks for exactly one topic, and the rotation reaches every topic", async () => {
+  const seen = new Set<string>();
+  for (let turn = 0; turn < NARRATIVE_TOPICS.length; turn++) {
+    seen.add(narrativeTopicFor(new Date(AT.getTime() + turn * NARRATIVE_ROTATION_MS)).id);
+  }
+  assert.equal(seen.size, NARRATIVE_TOPICS.length, "eight consecutive turns cover all eight topics");
+  assert.equal(narrativeTopicFor(AT).id, narrativeTopicFor(new Date(AT.getTime() + 1000)).id, "two replicas in the same turn agree");
+
+  const urls: string[] = [];
+  const fetchImpl = (async (url: unknown) => { urls.push(String(url)); return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 }); }) as typeof fetch;
+  const observations = await createNarrativeSource({ fetchImpl, sleep: async () => {} }).collect(AT);
+  const topic = narrativeTopicFor(AT);
+  assert.equal(urls.length, 1, "one request per sweep");
+  assert.ok(urls[0]!.includes(new URLSearchParams({ query: topic.query }).toString()) && urls[0]!.includes("timespan=3d"));
+  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topic.id}:news_volume_share`]);
+  assert.equal(narrativeSeries().length, NARRATIVE_TOPICS.length);
+});
+
+test("a refused topic is asked again after a wait, then reported and left as a gap", async () => {
   const sleeps: number[] = [];
   let request = 0;
-  const fetchImpl = (async () => {
-    request += 1;
-    if (request === 2) return new Response("slow down", { status: 429 });
-    return new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 });
-  }) as typeof fetch;
-  const source = createNarrativeSource({ topics, fetchImpl, sleep: async (ms) => { sleeps.push(ms); } });
-  const observations = await source.collect(AT);
+  const recovering = createNarrativeSource({ sleep: async (ms) => { sleeps.push(ms); },
+    fetchImpl: (async () => { request += 1; return request < 3 ? new Response("slow down", { status: 429 }) : new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 }); }) as typeof fetch });
+  assert.equal((await recovering.collect(AT)).length, 1);
   assert.equal(request, 3);
-  assert.equal(sleeps.length, 2);
-  assert.ok(sleeps.every((ms) => ms >= 5000), "GDELT's five-second spacing is respected");
-  assert.deepEqual(observations.map((o) => o.seriesKey), [`narrative:${topics[0]!.id}:news_volume_share`, `narrative:${topics[2]!.id}:news_volume_share`]);
-  assert.equal(narrativeSeries(topics).length, 3);
+  assert.deepEqual(sleeps, [40_000, 40_000], "the same wait before every further attempt");
 
-  const down = createNarrativeSource({ topics, sleep: async () => {}, fetchImpl: (async () => new Response("no", { status: 500 })) as typeof fetch });
-  await assert.rejects(down.collect(AT), (e) => e instanceof SourceError);
+  const reported: Array<[string, string, number]> = [];
+  let refused = 0;
+  const down = createNarrativeSource({ sleep: async () => {}, onTopicFailure: (id, code, attempts) => reported.push([id, code, attempts]),
+    fetchImpl: (async () => { refused += 1; return new Response("slow down", { status: 429 }); }) as typeof fetch });
+  await assert.rejects(down.collect(AT), (e) => e instanceof SourceError && e.code === "RATE_LIMIT");
+  assert.equal(refused, GDELT_MAX_ATTEMPTS, "seven attempts and no more");
+  assert.deepEqual(reported, [[narrativeTopicFor(AT).id, "RATE_LIMIT", GDELT_MAX_ATTEMPTS]]);
+  assert.ok(GDELT_MAX_ATTEMPTS * GDELT_TIMEOUT_MS + (GDELT_MAX_ATTEMPTS - 1) * GDELT_RETRY_WAIT_MS < NARRATIVE_ROTATION_MS,
+    "a turn ends before the next one starts, even if every attempt times out");
+
+  let malformed = 0;
+  const broken = createNarrativeSource({ sleep: async () => {},
+    fetchImpl: (async () => { malformed += 1; return new Response(JSON.stringify({ timeline: "no" }), { status: 200 }); }) as typeof fetch });
+  await assert.rejects(broken.collect(AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  assert.equal(malformed, 1, "a malformed answer is not asked for again");
 });
 
 const chain = { timestamp: "2026-10-01 03:43:57", data: { options: [
