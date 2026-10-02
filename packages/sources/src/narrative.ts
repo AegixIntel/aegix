@@ -20,19 +20,26 @@ export const NARRATIVE_SOURCE = "gdelt-doc-v2";
 /**
  * How the source paces itself, and why.
  *
- * GDELT documents one request every five seconds. Measured from the
- * production host it is far stricter: eight topics in one sweep got one
- * answer, and retrying a refused topic five times with waits of up to ninety
- * seconds still lost three topics in four. A burst is what it refuses.
+ * GDELT documents one request every five seconds, but that is not what
+ * decides whether a request is answered. Measured on 2026-10-02 from the
+ * production host and from an unrelated network, it answered HTTP 429 to
+ * about four requests in five, each after ten seconds or more, whether they
+ * were twenty seconds or an hour apart and whether or not the query had been
+ * asked before. A refusal says nothing about the next request.
  *
- * So a sweep asks for exactly one topic, chosen by rotation, and the worker
- * sweeps every ten minutes. Each topic is refreshed every eighty minutes, and
- * each answer covers three days, so a topic can miss many turns in a row
- * before an hour of it is lost.
+ * So a sweep asks for exactly one topic, chosen by rotation, and keeps asking
+ * at a steady pace until it is answered or its turn is nearly over. At one
+ * answer in five, seven attempts get a topic through about four turns in
+ * five. The worker sweeps every ten minutes, so each topic has a turn every
+ * eighty minutes, and each answer covers three days: a topic can miss many
+ * turns in a row before an hour of it is lost.
+ *
+ * Seven attempts forty seconds apart end inside the turn even when every one
+ * of them runs to the timeout, so two sweeps never ask at once.
  */
 export const NARRATIVE_ROTATION_MS = 600_000;
-export const GDELT_MAX_ATTEMPTS = 3;
-export const GDELT_RETRY_WAIT_MS = 60_000;
+export const GDELT_MAX_ATTEMPTS = 7;
+export const GDELT_RETRY_WAIT_MS = 40_000;
 export const GDELT_TIMESPAN = "3d";
 /** A timeline response routinely takes 10–30 seconds. */
 export const GDELT_TIMEOUT_MS = 45_000;
@@ -115,7 +122,7 @@ export function createNarrativeSource(options: {
       const query = new URLSearchParams({ query: topic.query, mode: "timelinevol", format: "json", timespan: GDELT_TIMESPAN });
       let lastError: unknown = null;
       for (let attempt = 1; attempt <= GDELT_MAX_ATTEMPTS; attempt++) {
-        if (attempt > 1) await sleep(GDELT_RETRY_WAIT_MS * (attempt - 1));
+        if (attempt > 1) await sleep(GDELT_RETRY_WAIT_MS);
         try {
           const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
           return hourlyNarrativeVolume(payload, at).map((point): SeriesObservation => (

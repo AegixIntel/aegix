@@ -5,7 +5,7 @@ import {
   RAYDIUM_CLMM_PROGRAM, TOKENIZED_STOCKS, TOKEN_2022_PROGRAM, USDC_MINT, XSTOCKS_MINT_AUTHORITY,
   createTokenizedStockSource, decodeClmmPoolPrice, isTokenizedStockSymbol, tokenizedStockSeries, type TokenizedStock
 } from "./tokenized-stocks.js";
-import { NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
+import { GDELT_MAX_ATTEMPTS, GDELT_RETRY_WAIT_MS, GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
 import { aggregateOptionsChain, createOptionsSource, optionsSeries } from "./options.js";
 import { SourceError } from "./types.js";
 
@@ -146,15 +146,17 @@ test("a refused topic is asked again after a wait, then reported and left as a g
     fetchImpl: (async () => { request += 1; return request < 3 ? new Response("slow down", { status: 429 }) : new Response(JSON.stringify(gdelt([["20261001T020000Z", 0.5]])), { status: 200 }); }) as typeof fetch });
   assert.equal((await recovering.collect(AT)).length, 1);
   assert.equal(request, 3);
-  assert.deepEqual(sleeps, [60_000, 120_000], "a minute, then two, between attempts");
+  assert.deepEqual(sleeps, [40_000, 40_000], "the same wait before every further attempt");
 
   const reported: Array<[string, string, number]> = [];
   let refused = 0;
   const down = createNarrativeSource({ sleep: async () => {}, onTopicFailure: (id, code, attempts) => reported.push([id, code, attempts]),
     fetchImpl: (async () => { refused += 1; return new Response("slow down", { status: 429 }); }) as typeof fetch });
   await assert.rejects(down.collect(AT), (e) => e instanceof SourceError && e.code === "RATE_LIMIT");
-  assert.equal(refused, 3, "three attempts and no more");
-  assert.deepEqual(reported, [[narrativeTopicFor(AT).id, "RATE_LIMIT", 3]]);
+  assert.equal(refused, GDELT_MAX_ATTEMPTS, "seven attempts and no more");
+  assert.deepEqual(reported, [[narrativeTopicFor(AT).id, "RATE_LIMIT", GDELT_MAX_ATTEMPTS]]);
+  assert.ok(GDELT_MAX_ATTEMPTS * GDELT_TIMEOUT_MS + (GDELT_MAX_ATTEMPTS - 1) * GDELT_RETRY_WAIT_MS < NARRATIVE_ROTATION_MS,
+    "a turn ends before the next one starts, even if every attempt times out");
 
   let malformed = 0;
   const broken = createNarrativeSource({ sleep: async () => {},
