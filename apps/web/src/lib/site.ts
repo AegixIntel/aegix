@@ -145,21 +145,23 @@ export const products: Product[] = [
   },
   { id: "signal-engine", name: "Signal Engine", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
   { id: "cross-market-intelligence", name: "Cross-Market Intelligence", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
-  // D14. Built and gated off: neither is LIVE until capture has run in
-  // production long enough for a replay or a scan to have something to read.
+  // D14. Both read the observation ledger, so each note says how far back
+  // that ledger goes and where its history came from.
   {
     id: "aegix-rewind",
     name: "AEGIX Rewind",
-    status: "IN DEVELOPMENT",
+    href: "/app/rewind",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Point-in-time replay of stored captures; nothing is recomputed. Covers BTC, ETH and SOL market signals, tokenized stocks priced on-chain, and completed wallet analyses, and only from the date capture was switched on."
+    note: "Point-in-time replay of stored captures; nothing is recomputed. Covers BTC, ETH and SOL market signals, tokenized stocks priced on-chain, and completed wallet analyses. Market and tokenized stock captures begin on 1 October 2026; an earlier moment has no record to replay."
   },
   {
     id: "aegix-discovery-engine",
     name: "AEGIX Discovery Engine",
-    status: "IN DEVELOPMENT",
+    href: "/app/discoveries",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Scans BTC, ETH and SOL market series, tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price), news volume by topic, and delayed options activity. No sector rotation, and no commodity beyond tokenized gold."
+    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News volume capture is paused, options are not scanned, and there is no sector rotation and no commodity beyond tokenized gold."
   },
 
   // Later.
@@ -317,6 +319,8 @@ export const appNavGroups: AppNavGroup[] = [
       { label: "Monitors", href: "/app/monitors" },
       { label: "Wallet Context", href: "/app/context" },
       { label: "Markets", href: "/app/markets" },
+      { label: "Rewind", href: "/app/rewind" },
+      { label: "Discoveries", href: "/app/discoveries" },
       { label: "Network intelligence", href: "/app/network" }
     ]
   },

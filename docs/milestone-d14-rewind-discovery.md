@@ -52,7 +52,8 @@ commodities                 tokenized gold only; no copper, no uranium
 social / sentiment          narrative is news volume only
 daily-resolution scan       options series are captured but mostly untestable
                             by the hourly engine (§4a)
-backfilled history          deliberately impossible — see §2
+backfilled captures         deliberately impossible — see §2. The Discovery
+                            Engine's price history is a different matter (§4b)
 external timestamp anchor   the hash chain is internal to the database (§5)
 ```
 
@@ -62,9 +63,9 @@ the engine can actually read today is: NVDAx and other tokenized equities
 on-chain, options activity for XLU and five other underlyings, and news volume
 for "data center", "AI infrastructure", "power grid", "copper" and "uranium".
 Copper and uranium exist only as news topics, not as prices. Adding a series
-is adding a source and a descriptor; the statistics do not change. The public
-status of both products stays IN DEVELOPMENT until capture has run in
-production.
+is adding a source and a descriptor; the statistics do not change. Capture
+started in production on 1 October 2026, and both products are LIVE from that
+date with the limits §2 and §4b describe.
 
 ## 2. The no-hindsight rule
 
@@ -212,6 +213,48 @@ now because a ledger cannot be backfilled later.
 
 Observations from these sources are stamped with the minute they were read. A
 source that fails adds nothing, and the ledger shows the gap.
+
+## 4b. Provider history read back for the Discovery Engine
+
+The engine tests nothing until the ledger holds 14 days of hourly
+observations. Rather than wait for them, production read those days from
+providers that publish history, once, on 1 October 2026.
+
+```text
+series                              provider       source column
+BTC, ETH, SOL price, 24h volume     CoinGecko      coingecko
+14 tokenized stocks, pool price     GeckoTerminal  geckoterminal:raydium-clmm
+supply, narrative, options          none           not written
+```
+
+`scripts/backfill-discovery-history.ts` writes the rows to a CSV and
+`scripts/backfill-discovery-history.sql` loads it. What holds:
+
+- **Rewind is not touched.** A replay reads signal captures, and none is
+  written. Every backfilled tokenized stock hour is older than the 25 hours of
+  ledger a capture reads, so no stored signal was computed from one.
+- **No hourly change spans two providers.** Each series stops at least a whole
+  hour before its first live observation, and the load refuses to run
+  otherwise. This matters: on the hours both held, prices agreed within about
+  1%, but CoinGecko's rolling 24h volume sat 26–36% away from CoinPaprika's.
+  Within one provider that is a constant offset and vanishes in a log-change;
+  across the seam it would have been one large, simultaneous move in three
+  series.
+- **A backfilled row is recognisable.** `observed_at` is stamped at load time,
+  days after `event_time`, and the source column names the provider.
+- **GeckoTerminal's hourly close stands in for the pool price** at the end of
+  that hour. It is the last trade in the same Raydium CLMM pool, and the script
+  skips a pool whose two mints are not the registry's stock and USDC.
+
+What it costs: the scan's "first measurable in this window" statements now
+rest partly on data AEGIX did not observe as it happened. A discovery whose
+window starts before 1 October 2026 was found in provider history, and the
+confirmation window is what tests it on observations AEGIX made itself.
+
+GDELT capture is switched off in production. From the production host GDELT
+answers HTTP 429 to a single request made after an hour of silence, while the
+same request from another network succeeds, so the limit is on the address,
+not the pace. Narrative series are out of the scan until that is resolved.
 
 ## 5. Discovery ID
 
