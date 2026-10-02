@@ -20,12 +20,13 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
 - **Live:** Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor,
   Wallet Context, Ask AEGIX (requires a configured LLM provider), Developer Intelligence
   API, Signed Webhooks, Population Commonality (flag off by default, and additionally
-  gated on population sufficiency), Market Intelligence (BTC, ETH and SOL only).
+  gated on population sufficiency), Market Intelligence (BTC, ETH and SOL only),
+  AEGIX Rewind and the AEGIX Discovery Engine (both default off). Their series are
+  BTC, ETH and SOL market data and tokenized stocks read from Solana; news volume by
+  topic and delayed options activity are built but not captured in production
+  (`docs/milestone-d14-rewind-discovery.md`).
 - **In development:** Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market
-  Intelligence — no engine and no data source exists for any of them. AEGIX Rewind
-  and the AEGIX Discovery Engine are built but default off. Their series are BTC, ETH and
-  SOL market data, tokenized stocks read from Solana, news volume by topic and delayed
-  options activity (`docs/milestone-d14-rewind-discovery.md`).
+  Intelligence — no engine and no data source exists for any of them.
 - **Planned:** AI Intelligence Copilot, Wallet Reputation, $AEX economic layer,
   multi-chain. **Research:** Intelligence Network.
 
