@@ -233,7 +233,8 @@ providers that publish history, once, on 1 October 2026.
 series                              provider       source column
 BTC, ETH, SOL price, 24h volume     CoinGecko      coingecko
 14 tokenized stocks, pool price     GeckoTerminal  geckoterminal:raydium-clmm
-supply, narrative, options          none           not written
+8 narrative topics, news volume     GDELT          gdelt-doc-v2, from 20 September
+supply, options                     none           not written
 ```
 
 `scripts/backfill-discovery-history.ts` writes the rows to a CSV and
@@ -260,9 +261,30 @@ rest partly on data AEGIX did not observe as it happened. A discovery whose
 window starts before 1 October 2026 was found in provider history, and the
 confirmation window is what tests it on observations AEGIX made itself.
 
-Narrative series have no backfill. GDELT capture was switched off in
-production from 1 October 2026 21:15 UTC while its refusals were measured, and
-the scan of 2 October ran without the narrative series.
+GDELT capture was switched off in production from 1 October 2026 21:15 UTC
+while its refusals were measured, and the scan of 2 October ran without the
+narrative series.
+
+**Narrative history** comes from GDELT itself, through
+`scripts/backfill-narrative-history.ts`: the same endpoint and measure the
+live source reads, asked for explicit windows instead of the last three days,
+so its rows carry the live source's name and there is no seam between
+providers. A window must stay under 72 hours to be answered at 15-minute
+resolution; a 14-day window comes back daily. What GDELT holds limits it, and
+was measured on 2 October 2026:
+
+```text
+before 20 September 2026         nothing; GDELT answers an empty object
+25 September 09:00 – 27 September 00:00   no data for any topic
+other days                        21–24 of 24 hours, the same hours for every topic
+```
+
+So the narrative baseline is thinner than the market one. With the epoch of
+3 October, six topics have enough paired hours at short lags and none at
+±24h; `power-grid` falls one hour short of the 96-pair minimum and
+`stablecoin`, with many zero hours, far short. Each of those is recorded as
+`INSUFFICIENT_BASELINE` or `INSUFFICIENT_DATA`, not tested. The gap closes as
+the windows move past 27 September, around the epoch of 11 October.
 
 ## 5. Discovery ID
 
