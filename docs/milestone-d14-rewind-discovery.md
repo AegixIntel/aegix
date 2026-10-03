@@ -233,7 +233,8 @@ providers that publish history, once, on 1 October 2026.
 series                              provider       source column
 BTC, ETH, SOL price, 24h volume     CoinGecko      coingecko
 14 tokenized stocks, pool price     GeckoTerminal  geckoterminal:raydium-clmm
-supply, narrative, options          none           not written
+8 narrative topics, news volume     GDELT          gdelt-doc-v2, from 20 September
+supply, options                     none           not written
 ```
 
 `scripts/backfill-discovery-history.ts` writes the rows to a CSV and
@@ -260,9 +261,47 @@ rest partly on data AEGIX did not observe as it happened. A discovery whose
 window starts before 1 October 2026 was found in provider history, and the
 confirmation window is what tests it on observations AEGIX made itself.
 
-Narrative series have no backfill. GDELT capture was switched off in
-production from 1 October 2026 21:15 UTC while its refusals were measured, and
-the scan of 2 October ran without the narrative series.
+GDELT capture was switched off in production from 1 October 2026 21:15 UTC
+while its refusals were measured, and the scan of 2 October ran without the
+narrative series.
+
+**Narrative history** comes from GDELT itself, through
+`scripts/backfill-narrative-history.ts`: the same endpoint and measure the
+live source reads, asked for explicit windows instead of the last three days,
+so its rows carry the live source's name and there is no seam between
+providers. A window must stay under 72 hours to be answered at 15-minute
+resolution; a 14-day window comes back daily. What GDELT holds limits it, and
+was measured on 2 October 2026:
+
+```text
+before 20 September 2026         nothing; GDELT answers an empty object
+25 September 09:00 – 27 September 00:00   no data for any topic
+other days                        21–24 of 24 hours, the same hours for every topic
+```
+
+The history was loaded into production on 3 October 2026 at 18:40 UTC: 1,928
+rows read, 241 for each of the eight topics, from 20 September 00:00 to
+2 October 08:00. 1,427 were new; the other 501 were hours the live source had
+already captured, which keep their first observation. On those the two
+readings differ by 0.0008 on average, against a mean value of 0.30.
+
+That was after the scan of 3 October. It ran with the narrative series but
+only their live hours from 29 September, and recorded all 3,900 narrative
+pairs as `INSUFFICIENT_BASELINE`, none tested. The scan of 4 October is the
+first to read the history.
+
+The narrative baseline is still thinner than the market one. Counted on the
+history before it was loaded, six topics have enough paired hours at short
+lags and none at ±24h; `power-grid` falls one hour short of the 96-pair
+minimum and `stablecoin`, with many zero hours, far short. Each of those is
+recorded as `INSUFFICIENT_BASELINE` or `INSUFFICIENT_DATA`, not tested. The
+gap closes as the windows move past 27 September, around the epoch of
+11 October.
+
+GDELT itself has published nothing after 2 October 08:00 UTC, as read on
+3 October at 17:10 UTC: a request for the last three days ends at that hour.
+Capture is on and its sweeps add nothing until GDELT resumes, and each scan
+until then has that many fewer narrative hours in its window.
 
 ## 5. Discovery ID
 
