@@ -279,12 +279,29 @@ before 20 September 2026         nothing; GDELT answers an empty object
 other days                        21–24 of 24 hours, the same hours for every topic
 ```
 
-So the narrative baseline is thinner than the market one. With the epoch of
-3 October, six topics have enough paired hours at short lags and none at
-±24h; `power-grid` falls one hour short of the 96-pair minimum and
-`stablecoin`, with many zero hours, far short. Each of those is recorded as
-`INSUFFICIENT_BASELINE` or `INSUFFICIENT_DATA`, not tested. The gap closes as
-the windows move past 27 September, around the epoch of 11 October.
+The history was loaded into production on 3 October 2026 at 18:40 UTC: 1,928
+rows read, 241 for each of the eight topics, from 20 September 00:00 to
+2 October 08:00. 1,427 were new; the other 501 were hours the live source had
+already captured, which keep their first observation. On those the two
+readings differ by 0.0008 on average, against a mean value of 0.30.
+
+That was after the scan of 3 October. It ran with the narrative series but
+only their live hours from 29 September, and recorded all 3,900 narrative
+pairs as `INSUFFICIENT_BASELINE`, none tested. The scan of 4 October is the
+first to read the history.
+
+The narrative baseline is still thinner than the market one. Counted on the
+history before it was loaded, six topics have enough paired hours at short
+lags and none at ±24h; `power-grid` falls one hour short of the 96-pair
+minimum and `stablecoin`, with many zero hours, far short. Each of those is
+recorded as `INSUFFICIENT_BASELINE` or `INSUFFICIENT_DATA`, not tested. The
+gap closes as the windows move past 27 September, around the epoch of
+11 October.
+
+GDELT itself has published nothing after 2 October 08:00 UTC, as read on
+3 October at 17:10 UTC: a request for the last three days ends at that hour.
+Capture is on and its sweeps add nothing until GDELT resumes, and each scan
+until then has that many fewer narrative hours in its window.
 
 ## 5. Discovery ID
 
