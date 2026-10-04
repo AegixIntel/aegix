@@ -55,7 +55,7 @@ export default function Rewind() {
         </select>
       </label>
       {subjectType === "asset"
-        ? <select aria-label="Asset" value={asset} onChange={(e) => setAsset(e.target.value)} className="rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
+        ? <select aria-label="Asset" value={asset} onChange={(e) => setAsset(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
             {subjects.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
           </select>
         : <input aria-label="Solana wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder="Solana wallet address" spellCheck={false} className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink" />}
