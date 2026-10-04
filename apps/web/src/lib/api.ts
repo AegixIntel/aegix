@@ -1162,6 +1162,13 @@ export interface DiscoveryDetailResponse {
   run: DiscoveryRunSummary | null;
   events: Array<{ type: string; at: string; detail: Record<string, unknown> }>;
   related: Array<{ id: string; status: string; seriesA: string; seriesB: string; lagHours: number; direction: string; firstDetectedAt: string }>;
+  /** Calendar receipts for the earliest anchored chain head that includes this discovery. */
+  anchors: DiscoveryAnchor[];
+}
+export interface DiscoveryAnchor { id: string; covers: string; chainHash: string; calendar: string; submittedAt: string; proofPath: string }
+/** Where a proof file is downloaded from. Public: it needs no session. */
+export function discoveryProofUrl(anchor: DiscoveryAnchor): string {
+  return `${API_BASE_URL}${anchor.proofPath}`;
 }
 async function getDiscoveryJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });

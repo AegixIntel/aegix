@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  DISCOVERY_FDR_LEVEL, DISCOVERY_LAGS_HOURS, DISCOVERY_WINDOW_HOURS,
-  epochEndFor, hourlyLogChanges, pairKey, runScan, scanHorizonHours, type SeriesInput
+  DAILY_PROFILE, DISCOVERY_FDR_LEVEL, DISCOVERY_LAGS_HOURS, DISCOVERY_WINDOW_HOURS,
+  epochEndFor, hourlyLogChanges, logChanges, pairKey, runScan, scanHorizonHours, type SeriesInput
 } from "./scan.js";
 import { benjaminiYekutieli, correlationPValue, effectiveSampleSize, normalCdf, pearson } from "./stats.js";
 
@@ -156,4 +156,65 @@ test("epochs end on UTC day boundaries and the horizon covers both windows", () 
   assert.equal(epochEndFor(new Date("2026-09-29T13:45:00Z")).toISOString(), EPOCH_END);
   assert.ok(scanHorizonHours() >= 2 * DISCOVERY_WINDOW_HOURS + 24);
   assert.throws(() => runScan({ series: [], epochEnd: "2026-09-29T00:30:00Z", open: [] }));
+});
+
+/** A daily level series: `perDay` readings a day, the last of which carries the day's change. */
+function dailySeries(key: string, changes: number[], skipWeekends = false): SeriesInput {
+  const DAY = 24 * HOUR;
+  const endDay = Date.parse(EPOCH_END) / DAY;
+  let level = 100;
+  const points: SeriesInput["points"] = [];
+  changes.forEach((change, i) => {
+    const day = endDay - changes.length + i;
+    level *= Math.exp(change);
+    const weekday = new Date(day * DAY).getUTCDay();
+    if (skipWeekends && (weekday === 0 || weekday === 6)) return;
+    // An early reading that the day's last observation must supersede.
+    points.push({ eventTime: new Date(day * DAY + 14 * HOUR).toISOString(), value: level * 1.5 });
+    points.push({ eventTime: new Date(day * DAY + 20 * HOUR).toISOString(), value: level });
+  });
+  return { key, label: key, group: key.split(":")[0]!, points };
+}
+
+test("the daily scan finds a relationship planted in daily changes, at its lag in days", () => {
+  const days = 125;
+  const next = rng(11);
+  const a = Array.from({ length: days }, () => gaussian(next) * 0.02);
+  const own = Array.from({ length: days }, () => gaussian(next) * 0.02);
+  // b follows a by two days, in the last sixty days only.
+  const b = own.map((value, i) => (i >= days - 60 && i >= 2 ? a[i - 2]! + value * 0.3 : value));
+  const scan = runScan({ series: [dailySeries("a:x", a), dailySeries("b:x", b), dailySeries("c:x", own.map((v) => -v).reverse())], epochEnd: EPOCH_END, open: [] }, DAILY_PROFILE);
+
+  assert.equal(scan.engineVersion, DAILY_PROFILE.engineVersion);
+  assert.equal(scan.hypothesesConsidered, 3 * DAILY_PROFILE.lagsHours.length);
+  const found = scan.discoveries.find((d) => d.pairKey === pairKey("a:x", "b:x"));
+  assert.ok(found, "the planted pair is a discovery");
+  assert.equal(found.lagHours, 48, "the lag is stored in hours");
+  assert.equal(found.direction, "POSITIVE");
+  assert.match(found.card.summary, /^Daily changes .* leading b:x by 2d/);
+  assert.match(found.card.method, /daily log-change/);
+  assert.equal(found.card.window.start, new Date(Date.parse(EPOCH_END) - 60 * 24 * HOUR).toISOString());
+  assert.notEqual(found.fingerprint, runScan({ series: [], epochEnd: EPOCH_END, open: [] }).engineVersion);
+});
+
+test("a session series has no daily change across a weekend, and too few days is not tested", () => {
+  const days = 125;
+  const next = rng(5);
+  const a = Array.from({ length: days }, () => gaussian(next) * 0.02);
+  const b = Array.from({ length: days }, () => gaussian(next) * 0.02);
+  const weekdaysOnly = dailySeries("etf:x", a, true);
+  const changes = logChanges(weekdaysOnly.points, 24);
+  // Five readings a week give four consecutive-day changes.
+  assert.ok(changes.size > 60 && changes.size < days * 4 / 7 + 2);
+  for (const day of changes.keys()) assert.notEqual(new Date(day * 24 * HOUR).getUTCDay(), 1, "no Monday change: Sunday has no reading");
+
+  const scan = runScan({ series: [weekdaysOnly, dailySeries("b:x", b)], epochEnd: EPOCH_END, open: [] }, DAILY_PROFILE);
+  // Sixty days hold about 34 weekday-to-weekday changes, never the full sixty.
+  assert.ok(scan.tests.every((t) => t.n <= 36), "pairs are limited to days both series have a change");
+
+  const short = runScan({ series: [dailySeries("a:x", a.slice(-40)), dailySeries("b:x", b.slice(-40))], epochEnd: EPOCH_END, open: [] }, DAILY_PROFILE);
+  assert.ok(short.tests.every((t) => t.status === "INSUFFICIENT_BASELINE"));
+  assert.equal(short.hypothesesTested, 0);
+  assert.throws(() => runScan({ series: [], epochEnd: "2026-09-29T06:00:00Z", open: [] }, DAILY_PROFILE), /whole UTC day/);
+  assert.ok(scanHorizonHours(DAILY_PROFILE) >= 120 * 24 + 120);
 });

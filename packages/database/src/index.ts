@@ -177,6 +177,8 @@ export {
 export {
   createDiscoveryRepo,
   type DiscoveryRepo,
+  type DiscoveryAnchorRow,
+  type DiscoveryChainRow,
   type DiscoveryEventRow,
   type DiscoveryRow,
   type DiscoveryRunRow,

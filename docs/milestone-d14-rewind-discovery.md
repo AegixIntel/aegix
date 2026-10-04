@@ -33,13 +33,18 @@ capture sweep          worker interval, one capture per asset per time bucket
 Rewind                 POST /v1/rewind, /app/rewind — replay of stored captures
                        for BTC, ETH, SOL and for completed wallet analyses
 series sources         tokenized stocks over Solana RPC, GDELT news volume,
-                       Cboe delayed options — each behind its own flag (§4a)
-Discovery Engine       daily scan over every series being captured,
+                       Cboe delayed options, Cboe delayed sector and
+                       commodity fund prices — each behind its own flag (§4a)
+Discovery Engine       a scan each day over every series being captured,
                        FDR-controlled, with a baseline novelty test and
-                       out-of-sample confirmation
+                       out-of-sample confirmation; at hourly resolution, and
+                       at daily resolution behind its own flag (§4)
 Discovery ID           AEX-<n>, database-stamped time, hash-chained
+chain anchors          the chain head sent to public OpenTimestamps calendars,
+                       behind its own flag; the chain and its proof files are
+                       readable without a session (§5)
 read API and UI        GET /v1/discoveries, GET /v1/discoveries/:id,
-                       /app/discoveries
+                       /app/discoveries, with the signal graph drawn
 ```
 
 Not built, and not claimed:
@@ -47,14 +52,18 @@ Not built, and not claimed:
 ```text
 exchange equity prices      not read; tokenized stocks are the token's on-chain
                             price, which is a different thing (§4a)
-sector rotation             no sector ETFs exist among the verified tokens
-commodities                 tokenized gold only; no copper, no uranium
+sector rotation             eleven sector funds can be captured (§4a) and scanned
+                            daily; no rotation signal is derived from them
+commodities                 tokenized gold on-chain. Copper, uranium, gold and
+                            oil only as funds (CPER, URA, GLD, USO), which are
+                            not spot prices (§4a)
 social / sentiment          narrative is news volume only
-daily-resolution scan       options series are captured but mostly untestable
-                            by the hourly engine (§4a)
+a tested daily scan         the daily scan is built (§4) and has tested nothing:
+                            it needs about four months of daily observations
 backfilled captures         deliberately impossible — see §2. The Discovery
                             Engine's price history is a different matter (§4b)
-external timestamp anchor   the hash chain is internal to the database (§5)
+anchor upgrade              receipts are stored as the calendar returned them,
+                            pending; the standard client upgrades them (§5)
 ```
 
 The product concept describes a relationship between on-chain AI-infrastructure
@@ -143,6 +152,29 @@ The run scans the series whose capture is switched on, so the hypothesis count
 depends on the flags: 6 market series give 195 hypotheses; all 54 series give
 18,603. Benjamini–Yekutieli gets stricter as that count grows, which is the
 price of looking in more places, and the count is stored with every run.
+
+**The daily scan** (`ENABLE_DISCOVERY_DAILY`, engine `discovery-daily-v1.0.0`)
+is a second preregistered hypothesis set over the same series, for the ones
+that only move in market sessions. The controls are the same; the resolution
+is not:
+
+```text
+step        one UTC day: the day's last observation, differenced against the
+            day before. A day with no observation is a gap, so a session
+            series has no change across a weekend or a holiday
+windows     60 days tested, 60 days of baseline before them
+lags        0, ±1, ±2, ±3 and ±5 days (9)
+minimum     30 paired daily changes; a session series has about 34 in 60 days
+```
+
+It runs once per UTC day beside the hourly scan, as its own run with its own
+hypothesis count, and its discoveries join the same Discovery ID chain. A lag
+is stored in hours in both, so a daily lag of two days is `48`. Nothing can
+be tested until a series has about four months of daily observations: capture
+began on 1 October 2026 for market and tokenized stock series, and begins for
+options and funds when their flags are set. Until then every hypothesis is
+recorded as `INSUFFICIENT_BASELINE`. The scan loads 125 days of ledger for
+every series in one read.
 
 The card's "confidence" is `1 − q`. It is not the heuristic confidence used by
 the wallet correlation engine, and it is not a probability that the
@@ -247,10 +279,37 @@ from Cboe's delayed quotes, summed to put/call volume ratio and open interest.
 Two things to know before enabling it. First, this is the exchange's public
 website feed, delayed, with no redistribution licence; it is off by default
 for that reason and should be replaced by a licensed feed before it backs a
-public claim. Second, options trade about 6.5 hours a day and the engine needs
-consecutive hours, so these series will mostly be recorded as
-`INSUFFICIENT_DATA` until a daily-resolution scan exists. They are captured
-now because a ledger cannot be backfilled later.
+public claim. Second, options trade about 6.5 hours a day and the hourly scan
+needs consecutive hours, so it records these series as `INSUFFICIENT_DATA`;
+the daily scan (§4) is what reads them.
+
+**Sector and commodity funds.** The last traded price of sixteen
+exchange-traded funds, from the same Cboe feed and with the same standing:
+delayed, no redistribution licence, off by default.
+
+```text
+sectors       XLK XLF XLE XLU XLV XLI XLY XLP XLB XLRE XLC
+industry      SMH (semiconductor companies)
+commodities   CPER (copper futures), URA (uranium miners),
+              GLD (gold bullion), USO (oil futures)
+```
+
+- **A fund's price is not the commodity's price.** CPER and USO hold futures
+  and lose to the roll; URA is shares of miners, not uranium. Each series'
+  label names the fund and what it holds, and nothing calls it a spot price.
+- **A quote is kept only if it names the fund and traded today** in New York.
+  On an exchange holiday the feed answers with the day before, and that is
+  not written.
+- The list is part of the hypothesis set, like the narrative topics: a fund is
+  not added because its sector is already in the news.
+
+**Session sources ask only while the US market is open** — weekdays from 09:30
+to 17:00 New York time, which includes one read after the close. The feed
+keeps answering on a Saturday with Friday's values, and a source that stored
+them would write days on which nothing moved. A weekend is a gap in the
+ledger instead. This applies to options and to the funds. Options cannot tell
+a holiday from their own data, so a weekday holiday is still read and stores
+the totals of the day before.
 
 Observations from these sources are stamped with the minute they were read. A
 source that fails adds nothing, and the ledger shows the gap.
@@ -370,9 +429,48 @@ First detected: <detected_at>
   `discovery_events`.
 
 Limit: the chain is tamper-evident against edits made through SQL by a role
-that cannot drop triggers. A database superuser can still rewrite it. Proving a
-timestamp to a third party needs the chain head published somewhere AEGIX does
-not control; that is not built.
+that cannot drop triggers. A database superuser can still rewrite it, which is
+what the anchors are for.
+
+**Anchors** (`ENABLE_DISCOVERY_ANCHOR`). After each scan the worker sends the
+chain hash of the newest discovery to each calendar in
+`DISCOVERY_ANCHOR_CALENDARS` that does not hold it yet, and stores the
+calendar's receipt in `discovery_anchors`, which is append-only. The calendars
+are public OpenTimestamps servers; each commits what it receives to a Bitcoin
+block, usually within a few hours.
+
+```text
+what is sent      the 32 bytes of one chain hash, to each calendar
+what it proves    that the chain had reached that discovery by the time of
+                  the block. A chain hash commits to every earlier discovery,
+                  so one anchor covers the chain up to that row
+what it does not  that a discovery is true, or anything about a discovery
+                  made after the anchored head
+```
+
+A third party needs no account:
+
+```text
+GET /v1/discovery-chain?from=AEX-<n>         links: fingerprint, detectedAt,
+                                             prevChainHash, chainHash
+GET /v1/discovery-chain/anchors              which heads were sent where, when
+GET /v1/discovery-chain/anchors/<id>.ots     the proof file
+```
+
+They recompute each link as
+`sha256(prevChainHash + '|' + fingerprint + '|' + detectedAt)` from the
+discovery in question up to the anchored head, then run
+`ots verify -d <chain hash> <file>.ots` with the standard client. These
+endpoints return hashes and timestamps only, never which series a discovery
+relates.
+
+Limits. A receipt is stored as the calendar returned it and is pending until
+the block is mined; AEGIX does not upgrade it, the client does
+(`ots upgrade`), and that depends on the calendar still serving the
+commitment. A discovery is covered only from the first anchored head at or
+after it: with a scan a day, up to a day after it was detected, and never if
+anchoring was off and no later discovery was anchored. The detail view says
+which it is.
 
 ## 6. Operating it
 
@@ -385,6 +483,10 @@ ENABLE_TOKENIZED_STOCK_CAPTURE=true   # worker: Solana RPC, 2 calls per sweep
 ENABLE_NARRATIVE_CAPTURE=true         # worker: GDELT, hourly
 ENABLE_NARRATIVE_CONTEXT_CAPTURE=true # worker: GDELT Context, 3 requests per sweep
 ENABLE_OPTIONS_CAPTURE=true           # worker: Cboe delayed, hourly, unlicensed
+ENABLE_SECTOR_CAPTURE=true            # worker: Cboe delayed, 16 requests an hour
+                                      # in session, unlicensed
+ENABLE_DISCOVERY_DAILY=true           # worker: the daily-resolution scan
+ENABLE_DISCOVERY_ANCHOR=true          # worker: chain head to OpenTimestamps
 ```
 
 Order matters. Turn capture on first and leave it running: Rewind has nothing
@@ -419,7 +521,9 @@ packages/rewind      unit: lock, checkpoints, convergence, coverage verdicts
 packages/discovery   unit: BY q-values, effective sample size, no discovery on
                      independent series, planted relationship found at its lag,
                      known relationship rejected, no read past the epoch,
-                     confirmation flow
+                     confirmation flow; the daily profile finds a planted
+                     daily relationship and has no change across a weekend;
+                     proof file layout and calendar submission
 packages/sources     unit: pool price decode in both token orders, identity
                      checks that refuse a wrong account, GDELT hourly
                      aggregation and request spacing, options chain
@@ -427,7 +531,9 @@ packages/sources     unit: pool price decode in both token orders, identity
 tests/e2e-d14.ts     PostgreSQL: append-only triggers, backdating refused,
                      capture idempotency, Rewind lock through the API,
                      tokenized stock capture and replay, Discovery ID chain,
-                     read API, feature gates
+                     read API, feature gates; anchors stored once per
+                     calendar and append-only, a chain link recomputed from
+                     the public endpoint, the proof file download
 ```
 
 `pnpm test:e2e-d14` is part of `pnpm release:gate` and CI.

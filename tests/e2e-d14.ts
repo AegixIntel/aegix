@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
 import { createDb, createDiscoveryRepo, createObservationRepo } from "@aegix/database";
@@ -8,7 +8,7 @@ import { createLogger } from "@aegix/logging";
 import { assessFreshness, type MarketDataProvider } from "../packages/markets/src/index.js";
 import { DISCOVERY_WINDOW_HOURS, runScan } from "../packages/discovery/src/index.js";
 import { tokenizedStockSeriesKey, type SeriesSource } from "../packages/sources/src/index.js";
-import { captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, discoverySeries } from "../apps/worker/src/processors/intelligence.js";
+import { anchorDiscoveryChain, captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, discoverySeries } from "../apps/worker/src/processors/intelligence.js";
 import { buildServer } from "../apps/api/src/server.js";
 import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
@@ -143,6 +143,7 @@ async function main() {
     assert.equal(discoverySeries(config).length, 6, "only series whose capture is on are scanned");
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_TOKENIZED_STOCK_CAPTURE: "true", ENABLE_NARRATIVE_CAPTURE: "true" })).length, 28 + 8);
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_NARRATIVE_CONTEXT_CAPTURE: "true" })).length, 8, "the context reading is its own eight series");
+    assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_SECTOR_CAPTURE: "true" })).length, 16, "sector and commodity funds are sixteen series");
 
     // ---- Discovery: one ID per relationship, timestamped and chained ----
     const engineVersion = `e2e-d14-${run}`;
@@ -196,7 +197,53 @@ async function main() {
     assert.equal((await app.inject({ url: "/v1/discoveries" })).statusCode, 401);
     assert.equal((await disabled.inject({ url: "/v1/discoveries", headers })).statusCode, 403);
 
-    console.log("D14 append-only ledger, capture idempotency, Rewind lock, Discovery ID chain and API: PASS");
+    // ---- Anchors: the chain head goes to each calendar once ----
+    const calendars = ["https://one.calendar.test", "https://two.calendar.test"];
+    const anchorCtx = { config: loadConfig({ ...process.env, DISCOVERY_ANCHOR_CALENDARS: calendars.join(",") }), sql, logger };
+    const sent: Array<{ url: string; hash: string }> = [];
+    const submit = async (url: string, hash: string) => {
+      sent.push({ url, hash });
+      if (url === calendars[1] && sent.length === 2) throw new Error("calendar down");
+      return Uint8Array.from([0xf0, 0x01, sent.length]);
+    };
+    const firstSweep = await anchorDiscoveryChain(anchorCtx, submit);
+    assert.deepEqual(firstSweep, { head: discoveryId, submitted: 1, failed: 1 }, "the newest discovery is the head; a calendar that fails is not stored");
+    assert.deepEqual(await anchorDiscoveryChain(anchorCtx, submit), { head: discoveryId, submitted: 1, failed: 0 }, "only the calendar that failed is asked again");
+    assert.deepEqual(await anchorDiscoveryChain(anchorCtx, submit), { head: discoveryId, submitted: 0, failed: 0 }, "a head every calendar holds is not sent again");
+    assert.equal(sent.length, 3);
+    const [head] = await sql<Array<{ chain_hash: string }>>`select chain_hash from discoveries where id = ${discoveryId}`;
+    assert.ok(sent.every((s) => s.hash === head!.chain_hash), "what is sent is the chain hash and nothing else");
+    await assert.rejects(sql`update discovery_anchors set submitted_at = '2020-01-01' where discovery_id = ${discoveryId}`, APPEND_ONLY);
+    await assert.rejects(sql`delete from discovery_anchors where discovery_id = ${discoveryId}`, APPEND_ONLY);
+
+    const anchored = await app.inject({ url: `/v1/discoveries/AEX-${discoveryId}`, headers });
+    assert.equal(anchored.json().anchors.length, 2);
+    assert.equal(anchored.json().anchors[0].covers, `AEX-${discoveryId}`);
+
+    // The chain and its proofs need no session: a third party checks them.
+    const links = await app.inject({ url: `/v1/discovery-chain?from=AEX-${discoveryId}` });
+    assert.equal(links.statusCode, 200);
+    const link = links.json().links[0] as { id: string; fingerprint: string; detectedAt: string; prevChainHash: string | null; chainHash: string };
+    assert.equal(link.id, `AEX-${discoveryId}`);
+    assert.equal(createHash("sha256").update(`${link.prevChainHash ?? ""}|${link.fingerprint}|${link.detectedAt}`).digest("hex"), link.chainHash,
+      "a link can be recomputed from what the public endpoint returns");
+    assert.equal(links.json().head.chainHash, link.chainHash);
+    const anchorList = await app.inject({ url: "/v1/discovery-chain/anchors" });
+    assert.equal(anchorList.statusCode, 200);
+    const listed = (anchorList.json().anchors as Array<{ covers: string; chainHash: string; proofPath: string }>).find((x) => x.covers === `AEX-${discoveryId}`)!;
+    const proof = await app.inject({ url: listed.proofPath });
+    assert.equal(proof.statusCode, 200);
+    assert.equal(proof.headers["content-type"], "application/vnd.opentimestamps.v1");
+    assert.equal(proof.rawPayload.subarray(1, 15).toString("latin1"), "OpenTimestamps");
+    assert.equal(proof.rawPayload.subarray(33, 65).toString("hex"), link.chainHash, "the proof stamps this chain hash");
+    assert.equal(proof.rawPayload[65], 0xf0);
+    assert.equal((await app.inject({ url: "/v1/discovery-chain/anchors/nope.ots" })).statusCode, 400);
+    assert.equal((await app.inject({ url: "/v1/discovery-chain/anchors/999999999999.ots" })).statusCode, 404);
+    assert.equal((await app.inject({ url: "/v1/discovery-chain?from=x" })).statusCode, 400);
+    assert.equal((await disabled.inject({ url: "/v1/discovery-chain" })).statusCode, 403);
+    assert.equal((await disabled.inject({ url: "/v1/discovery-chain/anchors" })).statusCode, 403);
+
+    console.log("D14 append-only ledger, capture idempotency, Rewind lock, Discovery ID chain, anchors and API: PASS");
   } finally {
     await app.close();
     await disabled.close();

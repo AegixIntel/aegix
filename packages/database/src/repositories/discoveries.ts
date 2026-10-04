@@ -63,6 +63,24 @@ export interface DiscoveryRunRow {
   completed_at: string;
 }
 
+/** One link of the chain, with detected_at exactly as the chain hash was computed from it. */
+export interface DiscoveryChainRow {
+  id: string;
+  fingerprint: string;
+  detected_at_text: string;
+  prev_chain_hash: string | null;
+  chain_hash: string;
+}
+
+export interface DiscoveryAnchorRow {
+  id: string;
+  discovery_id: string;
+  chain_hash: string;
+  calendar_url: string;
+  receipt: Uint8Array;
+  submitted_at: string;
+}
+
 export interface DiscoveryRepo {
   runExists(engineVersion: string, epochEnd: string): Promise<boolean>;
   /** Discoveries on record for an engine version, for confirmation testing. */
@@ -79,6 +97,21 @@ export interface DiscoveryRepo {
   latestRun(): Promise<DiscoveryRunRow | null>;
   /** Other discoveries that share a series with this one. */
   related(discoveryId: string, seriesA: string, seriesB: string, limit: number): Promise<DiscoveryRow[]>;
+  /** The newest discovery: its chain hash commits to every one before it. */
+  chainHead(): Promise<DiscoveryChainRow | null>;
+  /** Links of the chain in order, for a third party to recompute. */
+  chainSegment(fromId: string, limit: number): Promise<DiscoveryChainRow[]>;
+  /** Calendars that already hold a receipt for this chain hash. */
+  anchoredCalendars(chainHash: string): Promise<string[]>;
+  /** Stores one calendar's receipt. False when that calendar's receipt is already held. */
+  recordAnchor(anchor: { discoveryId: string; chainHash: string; calendarUrl: string; receipt: Uint8Array }): Promise<boolean>;
+  listAnchors(limit: number): Promise<DiscoveryAnchorRow[]>;
+  findAnchor(id: string): Promise<DiscoveryAnchorRow | null>;
+  /**
+   * The anchors that cover a discovery: those of the earliest anchored chain
+   * head at or after it. Empty until a head that includes it is anchored.
+   */
+  anchorsCovering(discoveryId: string): Promise<DiscoveryAnchorRow[]>;
 }
 
 /**
@@ -92,6 +125,11 @@ export function createDiscoveryRepo(sql: Sql): DiscoveryRepo {
     d.run_id::text, d.fingerprint, d.card, d.detected_at, d.prev_chain_hash, d.chain_hash,
     (select e.event_type from discovery_events e where e.discovery_id = d.id order by e.id desc limit 1) as status
   `;
+  const chainColumns = sql`
+    d.id::text, d.fingerprint, d.prev_chain_hash, d.chain_hash,
+    to_char(d.detected_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as detected_at_text
+  `;
+  const anchorColumns = sql`a.id::text, a.discovery_id::text, a.chain_hash, a.calendar_url, a.receipt, a.submitted_at`;
   const runColumns = sql`
     id::text, engine_version, epoch_end, fdr_level::float8 as fdr_level, method, series_count,
     hypotheses_considered, hypotheses_tested, rejections, completed_at
@@ -213,6 +251,47 @@ export function createDiscoveryRepo(sql: Sql): DiscoveryRepo {
         where d.id <> ${discoveryId}
           and (d.series_a in (${seriesA}, ${seriesB}) or d.series_b in (${seriesA}, ${seriesB}))
         order by d.id desc limit ${limit}
+      `;
+    },
+
+    async chainHead() {
+      const [row] = await sql<DiscoveryChainRow[]>`select ${chainColumns} from discoveries d order by d.id desc limit 1`;
+      return row ?? null;
+    },
+
+    async chainSegment(fromId, limit) {
+      return sql<DiscoveryChainRow[]>`select ${chainColumns} from discoveries d where d.id >= ${fromId} order by d.id asc limit ${limit}`;
+    },
+
+    async anchoredCalendars(chainHash) {
+      const rows = await sql<Array<{ calendar_url: string }>>`select calendar_url from discovery_anchors where chain_hash = ${chainHash}`;
+      return rows.map((r) => r.calendar_url);
+    },
+
+    async recordAnchor(anchor) {
+      const rows = await sql<Array<{ id: string }>>`
+        insert into discovery_anchors (discovery_id, chain_hash, calendar_url, receipt)
+        values (${anchor.discoveryId}, ${anchor.chainHash}, ${anchor.calendarUrl}, ${Buffer.from(anchor.receipt)})
+        on conflict (chain_hash, calendar_url) do nothing
+        returning id::text
+      `;
+      return rows.length > 0;
+    },
+
+    async listAnchors(limit) {
+      return sql<DiscoveryAnchorRow[]>`select ${anchorColumns} from discovery_anchors a order by a.id desc limit ${limit}`;
+    },
+
+    async findAnchor(id) {
+      const [row] = await sql<DiscoveryAnchorRow[]>`select ${anchorColumns} from discovery_anchors a where a.id = ${id}`;
+      return row ?? null;
+    },
+
+    async anchorsCovering(discoveryId) {
+      return sql<DiscoveryAnchorRow[]>`
+        select ${anchorColumns} from discovery_anchors a
+        where a.discovery_id = (select min(discovery_id) from discovery_anchors where discovery_id >= ${discoveryId})
+        order by a.id asc
       `;
     }
   };
