@@ -290,13 +290,32 @@ only their live hours from 29 September, and recorded all 3,900 narrative
 pairs as `INSUFFICIENT_BASELINE`, none tested. The scan of 4 October is the
 first to read the history.
 
-The narrative baseline is still thinner than the market one. Counted on the
-history before it was loaded, six topics have enough paired hours at short
-lags and none at ±24h; `power-grid` falls one hour short of the 96-pair
-minimum and `stablecoin`, with many zero hours, far short. Each of those is
-recorded as `INSUFFICIENT_BASELINE` or `INSUFFICIENT_DATA`, not tested. The
-gap closes as the windows move past 27 September, around the epoch of
-11 October.
+The narrative baseline is still thinner than the market one, and the scan of
+4 October shows by how much. It tested 681 narrative pairs, at every lag from
+−24h to +24h, and rejected none. Five topics had pairs tested and three had
+none, counted in usable hourly changes against the 96-pair minimum:
+
+```text
+topic               window   baseline   tested
+copper                 111        110   yes
+semiconductor          111        110   yes
+data-center            110        109   yes
+ai-infrastructure      100        105   yes
+uranium                 99         98   yes
+bitcoin                 94        100   no, INSUFFICIENT_DATA: two short in the window
+power-grid              87         95   no, INSUFFICIENT_BASELINE: one short
+stablecoin              40         59   no, INSUFFICIENT_BASELINE
+```
+
+An hour whose share is zero has no log-change and takes the next hour's with
+it. `bitcoin` has 14 zero hours in the window, `stablecoin` 91 of its 241
+hours overall. The window also ends at 2 October 08:00, where GDELT stops, so
+39 of its 168 hours are missing for every topic.
+
+Neither the minimum nor a topic's query is changed to bring a topic in: both
+are part of the hypothesis set, and changing them after seeing which topics
+fall short would be choosing the hypothesis after seeing the data. A topic
+enters when its window holds 96 changes, which needs GDELT to resume.
 
 GDELT itself has published nothing after 2 October 08:00 UTC, as read on
 3 October at 17:10 UTC: a request for the last three days ends at that hour.
