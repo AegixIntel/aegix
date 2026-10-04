@@ -228,6 +228,11 @@ Neither reading stands in for the other and no series holds rows from both.
   the first reading; the three hours that have been over for at least an
   hour, six seconds apart. Every hour is asked for in two turns, so one missed
   turn loses nothing. 24 of 24 requests were answered when measured.
+- **Connecting is given the whole 45 seconds.** GDELT's TLS handshake took
+  just over ten seconds from the production host, and Node's fetch stops
+  connecting at ten: 4 of 24 requests failed that way and were reported as
+  `PROVIDER_ERROR`. Both GDELT sources now connect through an agent with a
+  45-second connect timeout, and the same run answered 24 of 24.
 - **A zero hour is not written.** The engine takes no change from one, and an
   index that has stopped answers zero as well.
 - **A full page of 200 is not written**: the count was cut off.
