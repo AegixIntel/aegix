@@ -80,9 +80,9 @@ const DOC_SECTIONS = [
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-ink-deep">
+    <div className="flex min-h-screen flex-col bg-paper">
       <div className="flex flex-1">
-        <aside className="hidden w-64 flex-none border-r border-white/10 bg-ink-deep lg:block">
+        <aside className="hidden w-64 flex-none border-r border-ink/10 bg-paper lg:block">
           <nav className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto px-4 py-6" aria-label="Documentation">
             {DOC_SECTIONS.map((section) => (
               <div key={section.title} className="mb-6">
@@ -94,7 +94,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                     <li key={link.href}>
                       <Link
                         href={link.href}
-                        className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-white/5 hover:text-marble"
+                        className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition hover:bg-ink/5 hover:text-ink"
                       >
                         {link.label}
                       </Link>

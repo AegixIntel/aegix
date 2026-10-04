@@ -13,7 +13,7 @@ import { cn } from "@/lib/cn";
 type Seg = { t: string; c?: string };
 
 const REQUEST: Seg[] = [
-  { t: "POST", c: "text-accent-bright" },
+  { t: "POST", c: "text-accent-ink" },
   { t: " /v1/developer/intelligence/wallet\n" },
   { t: "Authorization:", c: "text-muted-2" },
   { t: " Bearer aegix_live_…\n" },
@@ -84,20 +84,20 @@ export function TypedRequest() {
   const showCaret = armed && !responded;
 
   return (
-    <div ref={ref} className="border border-white/10 bg-black/40 font-mono text-[13px] leading-relaxed">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+    <div ref={ref} className="border border-ink/10 bg-ink/[0.05] font-mono text-[13px] leading-relaxed">
+      <div className="flex items-center justify-between border-b border-ink/10 px-4 py-2.5">
         <span className="mono-label text-muted-foreground">Request</span>
         {armed && (
           <button
             type="button"
             onClick={() => setRun((r) => r + 1)}
-            className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2 transition-colors hover:text-marble"
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2 transition-colors hover:text-ink"
           >
             Replay
           </button>
         )}
       </div>
-      <pre className="overflow-x-auto px-4 py-4 text-marble/90">
+      <pre className="overflow-x-auto px-4 py-4 text-ink/90">
         <code>
           {REQUEST.map((s, idx) => {
             const start = offset;
@@ -115,9 +115,9 @@ export function TypedRequest() {
         </code>
       </pre>
 
-      <div className="flex items-center justify-between border-y border-white/10 px-4 py-2.5">
+      <div className="flex items-center justify-between border-y border-ink/10 px-4 py-2.5">
         <span className="mono-label text-muted-foreground">Response</span>
-        <span className={cn("font-mono text-[11px]", responded ? "text-emerald-400" : "text-muted-2")}>
+        <span className={cn("font-mono text-[11px]", responded ? "text-emerald-800" : "text-muted-2")}>
           {responded ? "202 Accepted" : typed === TOTAL ? "sending…" : "—"}
         </span>
       </div>
@@ -130,7 +130,7 @@ export function TypedRequest() {
         <code>
           {RESPONSE.split(/("[^"]*")(?=\s*:)/).map((part, i) =>
             i % 2 === 1 ? (
-              <span key={i} className="text-marble">
+              <span key={i} className="text-ink">
                 {part}
               </span>
             ) : (

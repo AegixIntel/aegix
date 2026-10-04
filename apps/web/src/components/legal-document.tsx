@@ -36,20 +36,20 @@ export function LegalDocument({
         {sections.map((section) => (
           <section
             key={section.title}
-            className="border-t border-white/10 py-8 text-sm leading-relaxed text-muted-foreground [&_a]:text-marble [&_a]:underline [&_a]:underline-offset-4 [&_li]:mt-1.5 [&_p+p]:mt-3 [&_p+ul]:mt-3 [&_ul+p]:mt-3 [&_ul]:list-disc [&_ul]:pl-5"
+            className="border-t border-ink/10 py-8 text-sm leading-relaxed text-muted-foreground [&_a]:text-ink [&_a]:underline [&_a]:underline-offset-4 [&_li]:mt-1.5 [&_p+p]:mt-3 [&_p+ul]:mt-3 [&_ul+p]:mt-3 [&_ul]:list-disc [&_ul]:pl-5"
           >
-            <h2 className="mb-3 font-display text-lg font-semibold text-marble">{section.title}</h2>
+            <h2 className="mb-3 font-display text-lg font-semibold text-ink">{section.title}</h2>
             {section.body}
           </section>
         ))}
 
-        <section className="border-t border-white/10 py-8 text-sm leading-relaxed text-muted-foreground">
-          <h2 className="mb-3 font-display text-lg font-semibold text-marble">Contact</h2>
+        <section className="border-t border-ink/10 py-8 text-sm leading-relaxed text-muted-foreground">
+          <h2 className="mb-3 font-display text-lg font-semibold text-ink">Contact</h2>
           <p>
             {LEGAL_CONTACT_EMAIL ? (
               <>
                 Questions about this document can be sent to {LEGAL_ENTITY} at{" "}
-                <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-marble underline underline-offset-4">
+                <a href={`mailto:${LEGAL_CONTACT_EMAIL}`} className="text-ink underline underline-offset-4">
                   {LEGAL_CONTACT_EMAIL}
                 </a>
                 .

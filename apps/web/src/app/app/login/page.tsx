@@ -21,7 +21,7 @@ function LoginInner() {
     <div className="flex min-h-[60vh] items-center justify-center px-6">
       <div className="w-full max-w-md text-center">
         <p className="section-label-accent">Sign in</p>
-        <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-marble">
+        <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight text-ink">
           Connect your wallet.
         </h1>
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">

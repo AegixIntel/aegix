@@ -24,7 +24,7 @@ export default function RoadmapPage() {
 
       <div className="mt-14 space-y-0">
         {GROUPS.map((g) => (
-          <div key={g.label} className="grid gap-6 border-t border-white/10 py-10 md:grid-cols-[12rem_1fr]">
+          <div key={g.label} className="grid gap-6 border-t border-ink/10 py-10 md:grid-cols-[12rem_1fr]">
             <div>
               <StatusBadge label={g.label} />
             </div>
@@ -43,11 +43,11 @@ export default function RoadmapPage() {
         ))}
       </div>
 
-      <div className="mt-16 border-t border-white/10 pt-10">
+      <div className="mt-16 border-t border-ink/10 pt-10">
         <p className="max-w-2xl text-sm text-muted-2">
           Planned capabilities are shown for direction only and are not yet operational. See what&apos;s live
           today in privacy intelligence.{" "}
-          <Link href="/privacy" className="text-marble underline underline-offset-4">
+          <Link href="/privacy" className="text-ink underline underline-offset-4">
             View live products →
           </Link>
         </p>

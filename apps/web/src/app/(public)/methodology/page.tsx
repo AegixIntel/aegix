@@ -42,7 +42,7 @@ export default function MethodologyPage() {
               sample adequacy, and semantic coverage.
             </p>
           </div>
-          <div className="border border-white/10 p-8">
+          <div className="border border-ink/10 p-8">
             <PipelineDiagram
               steps={["Signal", "Evidence", "Relationship", "Correlation", "Confidence", "Exposure"]}
             />
@@ -51,10 +51,10 @@ export default function MethodologyPage() {
       </div>
 
       <div className="container-narrow py-16">
-        <div className="border-t border-white/10 pt-16 text-center">
+        <div className="border-t border-ink/10 pt-16 text-center">
           <h2 className="statement">
-            Correlation <span className="text-accent-bright">≠</span> Ownership{" "}
-            <span className="text-accent-bright">≠</span> Identity
+            Correlation <span className="text-accent-ink">≠</span> Ownership{" "}
+            <span className="text-accent-ink">≠</span> Identity
           </h2>
           <p className="mx-auto mt-8 max-w-md text-muted-foreground">
             AEGIX reports observable relationships. It does not identify the person behind a wallet, and
@@ -67,13 +67,13 @@ export default function MethodologyPage() {
         <div className="max-w-2xl">
           <SectionLabel>Strength vs Confidence</SectionLabel>
           <div className="mt-6 grid gap-8 md:grid-cols-2">
-            <div className="border-t border-white/10 pt-6">
+            <div className="border-t border-ink/10 pt-6">
               <StatusBadge label="Strength" />
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 How strong are the observed relationship signals.
               </p>
             </div>
-            <div className="border-t border-white/10 pt-6">
+            <div className="border-t border-ink/10 pt-6">
               <StatusBadge label="Confidence" />
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 How reliable the available evidence is.
@@ -86,8 +86,8 @@ export default function MethodologyPage() {
       <div className="container-page py-16">
         <div className="max-w-2xl">
           <SectionLabel>Commonality</SectionLabel>
-          <h2 className="mt-6 font-display text-2xl font-semibold text-marble">
-            AEGIX observed population <span className="text-accent-bright">≠</span> global Solana
+          <h2 className="mt-6 font-display text-2xl font-semibold text-ink">
+            AEGIX observed population <span className="text-accent-ink">≠</span> global Solana
           </h2>
           <p className="mt-4 text-muted-foreground">
             Population Commonality measures observations inside AEGIX&apos;s eligible dataset, subject to
@@ -102,8 +102,8 @@ export default function MethodologyPage() {
           <SectionLabel>Guarding against false positives</SectionLabel>
           <div className="mt-6 space-y-0">
             {CONTROLS.map((c) => (
-              <div key={c.name} className="border-t border-white/10 py-5">
-                <h3 className="font-display text-lg font-semibold text-marble">{c.name}</h3>
+              <div key={c.name} className="border-t border-ink/10 py-5">
+                <h3 className="font-display text-lg font-semibold text-ink">{c.name}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{c.detail}</p>
               </div>
             ))}

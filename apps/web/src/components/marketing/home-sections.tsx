@@ -1,10 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { InlineArrowLink, StatusBadge } from "@/components/ui/primitives";
-import LiveStatsPanel from "@/components/live-stats-panel";
 import { Reveal } from "@/components/motion/reveal";
 import { InteractiveSystemMap } from "@/components/marketing/system-map";
-import { HeroTrace } from "@/components/marketing/hero-trace";
 import { TypedRequest } from "@/components/marketing/typed-request";
 import { roadmapGroups, categoryProducts, productLineProducts } from "@/lib/site";
 
@@ -16,7 +13,7 @@ function at(i: number) {
 /* Category strip above hero — pillar names with their derived status. */
 export function CategoryStrip() {
   return (
-    <div className="flex items-center gap-x-8 overflow-x-auto whitespace-nowrap border-b border-white/10 px-4 py-3 [scrollbar-width:none] lg:flex-wrap lg:px-8">
+    <div className="flex items-center gap-x-8 overflow-x-auto whitespace-nowrap border-b border-ink/10 px-4 py-3 [scrollbar-width:none] lg:flex-wrap lg:px-8">
       {categoryProducts.map((it) => (
         <span key={it.id} className="flex flex-none items-center gap-2.5">
           <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">{it.name}</span>
@@ -24,53 +21,6 @@ export function CategoryStrip() {
         </span>
       ))}
     </div>
-  );
-}
-
-/* Hero — statement left, illustrative relationship trace right, live
-   system numbers underneath. Motion here is CSS-only and runs on load. */
-export function HeroStatement() {
-  return (
-    <section className="hero-ambient relative overflow-hidden border-b border-white/10">
-      <div className="relative z-10 grid gap-12 px-4 pb-16 pt-14 md:pt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-10 lg:px-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-        <div>
-          <p className="section-label-accent hero-fade" style={at(0)}>
-            Financial &amp; On-Chain Intelligence
-          </p>
-          <h1 className="statement-lg mt-7">
-            <span className="hero-line" style={at(0)}>
-              <span>See what</span>
-            </span>
-            <span className="hero-line" style={at(1)}>
-              <span>
-                others <span className="redact">don&apos;t.</span>
-              </span>
-            </span>
-          </h1>
-          <p className="hero-fade mt-8 max-w-lg text-lg leading-relaxed text-muted-foreground" style={at(2)}>
-            AEGIX transforms public on-chain and financial data into relationships, patterns, signals and
-            intelligence.
-          </p>
-          <p className="hero-fade mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2" style={at(3)}>
-            Starting with privacy intelligence on Solana
-          </p>
-          <div className="hero-fade mt-10 flex flex-col gap-3 sm:flex-row" style={at(4)}>
-            <Link href="/app/analyze" className="btn-primary">
-              Launch AEGIX <span className="btn-arrow text-inherit">→</span>
-            </Link>
-            <Link href="/methodology" className="btn-secondary">
-              Explore the intelligence layer
-            </Link>
-          </div>
-        </div>
-        <div className="hero-fade" style={at(3)}>
-          <HeroTrace />
-        </div>
-      </div>
-      <div className="relative z-10 border-t border-white/10">
-        <LiveStatsPanel />
-      </div>
-    </section>
   );
 }
 
@@ -117,7 +67,7 @@ export function HowItWorks() {
     }
   ];
   return (
-    <section className="border-b border-white/10">
+    <section className="border-b border-ink/10">
       <div className="px-4 py-20 md:py-28 lg:px-8">
         <SectionHeader
           label="How it works"
@@ -125,21 +75,21 @@ export function HowItWorks() {
           body="A wallet address goes in. A sourced exposure model comes out, and keeps being watched."
         />
         <Reveal fade={false} className="relative mt-16">
-          <div className="absolute inset-x-0 top-0 h-px bg-white/10" aria-hidden="true" />
-          <div className="rv-line absolute inset-x-0 top-0 h-px bg-accent-bright/70" style={at(1)} aria-hidden="true" />
+          <div className="absolute inset-x-0 top-0 h-px bg-ink/10" aria-hidden="true" />
+          <div className="rv-line absolute inset-x-0 top-0 h-px bg-accent/70" style={at(1)} aria-hidden="true" />
           <ol className="grid gap-12 md:grid-cols-3 md:gap-8">
             {steps.map((s, i) => (
               <li key={s.n} className="relative pt-9">
                 <span
-                  className="rv-pop absolute left-0 top-0 h-2 w-2 -translate-y-1/2 bg-accent-bright"
+                  className="rv-pop absolute left-0 top-0 h-2 w-2 -translate-y-1/2 bg-accent"
                   style={at(i * 4 + 2)}
                   aria-hidden="true"
                 />
                 <div className="rv" style={at(i * 4 + 3)}>
                   <span className="font-mono text-xs text-muted-2">{s.n}</span>
-                  <h3 className="mt-3 font-display text-xl font-semibold text-marble">{s.t}</h3>
+                  <h3 className="mt-3 font-display text-xl font-semibold text-ink">{s.t}</h3>
                   <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">{s.b}</p>
-                  <p className="mt-6 border-l border-white/15 pl-3 font-mono text-xs text-muted-foreground">{s.artifact}</p>
+                  <p className="mt-6 border-l border-ink/15 pl-3 font-mono text-xs text-muted-foreground">{s.artifact}</p>
                 </div>
               </li>
             ))}
@@ -154,36 +104,36 @@ export function HowItWorks() {
    Rows come from `products` (PRODUCT_LINE surface), status included. */
 export function ProductLine() {
   return (
-    <section className="border-b border-white/10">
+    <section className="border-b border-ink/10">
       <div className="px-4 py-20 md:py-28 lg:px-8">
         <SectionHeader
           label="Product line"
           title="The rails, end to end."
           body="One loop: analyze on-chain activity, surface intelligence, monitor change."
         />
-        <ul className="mt-14 border-t border-white/10">
+        <ul className="mt-14 border-t border-ink/10">
           {productLineProducts.map((p, i) => (
             <Reveal key={p.name} as="li" delay={i * 70}>
               <Link
                 href={p.href}
-                className="group relative block overflow-hidden border-b border-white/10 transition-colors duration-300 hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-bright"
+                className="group relative block overflow-hidden border-b border-ink/10 transition-colors duration-300 hover:bg-ink/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
               >
                 <span
-                  className="absolute inset-y-0 left-0 w-px origin-bottom scale-y-0 bg-accent-bright transition-transform duration-500 ease-out group-hover:scale-y-100"
+                  className="absolute inset-y-0 left-0 w-px origin-bottom scale-y-0 bg-accent transition-transform duration-500 ease-out group-hover:scale-y-100"
                   aria-hidden="true"
                 />
                 <div className="grid gap-3 py-6 pr-4 transition-transform duration-500 ease-out group-hover:translate-x-4 md:grid-cols-[3.5rem_minmax(0,1fr)_9.5rem_13rem] md:items-baseline md:gap-6">
                   <span className="font-mono text-xs tabular-nums text-muted-2">{String(i + 1).padStart(2, "0")}</span>
                   <div>
-                    <h3 className="font-display text-xl font-semibold text-marble">{p.name}</h3>
+                    <h3 className="font-display text-xl font-semibold text-ink">{p.name}</h3>
                     <p className="mt-1 text-sm text-muted-foreground">{p.body}</p>
                   </div>
                   <div>
                     <StatusBadge label={p.status} />
                   </div>
-                  <span className="flex items-center gap-3 font-mono text-xs text-muted-2 transition-colors duration-300 group-hover:text-marble md:justify-end">
+                  <span className="flex items-center gap-3 font-mono text-xs text-muted-2 transition-colors duration-300 group-hover:text-ink md:justify-end">
                     {p.href}
-                    <span className="text-accent-bright transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
+                    <span className="text-accent-ink transition-transform duration-300 group-hover:translate-x-1" aria-hidden="true">
                       →
                     </span>
                   </span>
@@ -201,7 +151,7 @@ export function ProductLine() {
 export function DeveloperInfra() {
   const facts = ["Scoped API keys", "Metered quota", "Usage reporting", "Signed webhooks"];
   return (
-    <section className="border-b border-white/10">
+    <section className="border-b border-ink/10">
       <div className="grid grid-cols-1 gap-14 px-4 py-20 md:py-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:px-8">
         <div className="min-w-0">
           <Reveal>
@@ -212,11 +162,11 @@ export function DeveloperInfra() {
             Applications can consume AEGIX intelligence programmatically. Submit a wallet, poll the analysis,
             or receive a signed webhook when it is ready.
           </Reveal>
-          <Reveal fade={false} as="ul" className="mt-10 grid max-w-lg grid-cols-2 border-t border-white/10">
+          <Reveal fade={false} as="ul" className="mt-10 grid max-w-lg grid-cols-2 border-t border-ink/10">
             {facts.map((f, i) => (
               <li
                 key={f}
-                className="rv border-b border-white/10 py-3 font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground odd:pr-4"
+                className="rv border-b border-ink/10 py-3 font-mono text-xs uppercase tracking-[0.12em] text-muted-foreground odd:pr-4"
                 style={at(i + 1)}
               >
                 {f}
@@ -243,35 +193,22 @@ export function DeveloperInfra() {
 /* Epistemic principle — two sets approach and stop short of each other. */
 export function Epistemic() {
   return (
-    <section className="overflow-hidden border-b border-white/10 bg-white/[0.015]">
-      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <div className="plate relative min-h-[20rem] border-b border-white/10 lg:border-b-0 lg:border-r">
-          <Image
-            src="/assets/aegix-columns.jpg"
-            alt="Classical stone columns of an institutional building against a morning sky"
-            fill
-            sizes="(min-width: 1024px) 35vw, 100vw"
-            className="plate-img object-cover object-[35%_50%]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#090909] via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#090909]/80" aria-hidden="true" />
-          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(8)}>
-            A core principle
-          </p>
-        </div>
+    <section className="overflow-hidden border-b border-ink/10 bg-paper-raised">
+      <Reveal fade={false}>
         <div className="px-4 py-24 text-center md:py-32 lg:px-10">
         <div className="relative mx-auto h-40 max-w-lg" aria-hidden="true">
           <div
-            className="gap-circle gap-a flex h-32 w-32 items-center justify-center rounded-full border border-accent-bright/60 bg-accent/[0.06]"
+            className="gap-circle gap-a flex h-32 w-32 items-center justify-center rounded-full border border-accent/60 bg-accent/[0.06]"
             style={{ transitionDelay: "120ms" }}
           >
-            <span className="font-mono text-[10px] uppercase leading-snug tracking-[0.14em] text-accent-bright">
+            <span className="font-mono text-[10px] uppercase leading-snug tracking-[0.14em] text-accent-ink">
               Observed
               <br />
               relationship
             </span>
           </div>
           <div
-            className="gap-circle gap-b flex h-32 w-32 items-center justify-center rounded-full border border-dashed border-white/25"
+            className="gap-circle gap-b flex h-32 w-32 items-center justify-center rounded-full border border-dashed border-ink/25"
             style={{ transitionDelay: "220ms" }}
           >
             <span className="font-mono text-[10px] uppercase leading-snug tracking-[0.14em] text-muted-foreground">
@@ -280,7 +217,7 @@ export function Epistemic() {
               owner
             </span>
           </div>
-          <span className="rv-pop absolute left-1/2 top-1/2 -ml-2 -mt-3 font-serif text-2xl text-marble" style={at(12)}>
+          <span className="rv-pop absolute left-1/2 top-1/2 -ml-2 -mt-3 font-serif text-2xl text-ink" style={at(12)}>
             ≠
           </span>
         </div>
@@ -305,16 +242,16 @@ export function Epistemic() {
 /* Network / Solana + roadmap by status. */
 export function NetworkAndRoadmap() {
   return (
-    <section id="network" className="border-b border-white/10">
+    <section id="network" className="border-b border-ink/10">
       <div className="px-4 py-20 md:py-28 lg:px-8">
         <SectionHeader
           label="Network · Roadmap"
           title="Built for the real-time on-chain economy."
           body="AEGIX starts on Solana. The roadmap is status-driven, not date-driven: what has shipped, what is being built, and what comes later."
         />
-        <Reveal fade={false} className="mt-14 grid gap-px border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal fade={false} className="mt-14 grid gap-px border border-ink/10 bg-ink/10 sm:grid-cols-2 lg:grid-cols-4">
           {roadmapGroups.map((g, gi) => (
-            <div key={g.label} className="bg-ink-deep p-6">
+            <div key={g.label} className="bg-paper p-6">
               <div className="rv flex items-center justify-between" style={at(gi)}>
                 <StatusBadge label={g.label} />
                 <span className="font-mono text-[11px] tabular-nums text-muted-2">{String(g.items.length).padStart(2, "0")}</span>
@@ -324,11 +261,11 @@ export function NetworkAndRoadmap() {
                   <li
                     key={item.name}
                     title={item.note}
-                    className={`rv flex items-center gap-2.5 text-sm ${g.label === "SHIPPED" ? "text-marble/90" : "text-muted-foreground"}`}
+                    className={`rv flex items-center gap-2.5 text-sm ${g.label === "SHIPPED" ? "text-ink/90" : "text-muted-foreground"}`}
                     style={at(gi + ii * 0.6 + 1)}
                   >
                     <span
-                      className={`h-1.5 w-1.5 flex-none ${g.label === "SHIPPED" ? "bg-accent-bright" : "border border-white/25"}`}
+                      className={`h-1.5 w-1.5 flex-none ${g.label === "SHIPPED" ? "bg-accent" : "border border-ink/25"}`}
                       aria-hidden="true"
                     />
                     {item.name}
@@ -346,46 +283,3 @@ export function NetworkAndRoadmap() {
   );
 }
 
-/* Final CTA. */
-export function FinalCta() {
-  return (
-    <section className="overflow-hidden">
-      <Reveal fade={false} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <div className="flex flex-col justify-center px-4 py-24 md:py-32 lg:px-8">
-          <h2 className="statement-lg">
-            <span className="rv-mask" style={at(0)}>
-              <span>Start with</span>
-            </span>
-            <span className="rv-mask" style={at(1)}>
-              <span>your own wallet.</span>
-            </span>
-          </h2>
-          <p className="rv mt-8 max-w-md text-lg text-muted-foreground" style={at(4)}>
-            One address. Every observable link, with evidence and confidence attached.
-          </p>
-          <div className="rv mt-10 flex flex-col gap-3 sm:flex-row" style={at(5)}>
-            <Link href="/app/analyze" className="btn-primary">
-              Launch AEGIX <span className="btn-arrow text-inherit">→</span>
-            </Link>
-            <Link href="/docs" className="btn-secondary">
-              Read the docs
-            </Link>
-          </div>
-        </div>
-        <div className="plate relative min-h-[26rem] border-t border-white/10 lg:border-l lg:border-t-0" style={{ transitionDelay: "150ms" }}>
-          <Image
-            src="/assets/aegix-observer.jpg"
-            alt="A person standing at a window, looking out over a city at night"
-            fill
-            sizes="(min-width: 1024px) 32vw, 100vw"
-            className="plate-img object-cover object-[50%_35%]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-ink-deep via-transparent to-transparent lg:bg-gradient-to-r lg:from-ink-deep/80 lg:via-transparent lg:to-transparent" aria-hidden="true" />
-          <p className="rv absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-marble/75" style={at(7)}>
-            See what others don&apos;t
-          </p>
-        </div>
-      </Reveal>
-    </section>
-  );
-}

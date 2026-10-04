@@ -35,7 +35,7 @@ export function NavDropdown({ group }: { group: NavGroup }) {
           else setOpen((v) => !v);
           lastPointer.current = "";
         }}
-        className="flex items-center gap-1 rounded px-1 py-1 text-sm text-muted-foreground transition hover:text-marble"
+        className="flex items-center gap-1 rounded px-1 py-1 text-sm text-muted-foreground transition hover:text-ink"
       >
         {group.label}
         <svg viewBox="0 0 12 12" className="h-2.5 w-2.5 transition-transform" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -44,13 +44,13 @@ export function NavDropdown({ group }: { group: NavGroup }) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 w-64 border border-white/10 bg-ink-deep p-1.5 pt-2">
+        <div className="absolute left-0 top-full z-50 w-64 border border-ink/10 bg-paper p-1.5 pt-2">
           {group.items.map((item) => (
             <Link
               key={`${item.label}-${item.href}`}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm text-muted-foreground transition hover:bg-white/5 hover:text-marble"
+              className="flex items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm text-muted-foreground transition hover:bg-ink/5 hover:text-ink"
             >
               <span>{item.label}</span>
               {item.status && <StatusBadge label={item.status} />}
@@ -72,7 +72,7 @@ export function MobileNavGroup({ group, onNavigate }: { group: NavGroup; onNavig
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded px-3 py-2 text-sm text-muted-foreground hover:text-marble"
+        className="flex w-full items-center justify-between rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink"
       >
         {group.label}
         <svg viewBox="0 0 12 12" className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -80,13 +80,13 @@ export function MobileNavGroup({ group, onNavigate }: { group: NavGroup; onNavig
         </svg>
       </button>
       {open && (
-        <div className="mb-1 space-y-0.5 border-l border-white/10 pl-3">
+        <div className="mb-1 space-y-0.5 border-l border-ink/10 pl-3">
           {group.items.map((item) => (
             <Link
               key={`${item.label}-${item.href}`}
               href={item.href}
               onClick={onNavigate}
-              className="flex items-center justify-between gap-2 rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-marble"
+              className="flex items-center justify-between gap-2 rounded px-3 py-1.5 text-sm text-muted-foreground hover:text-ink"
             >
               <span>{item.label}</span>
               {item.status && <StatusBadge label={item.status} />}

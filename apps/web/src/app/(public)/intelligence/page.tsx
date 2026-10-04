@@ -32,13 +32,13 @@ export default function IntelligencePage() {
 
         <div className="mt-12 grid gap-x-12 gap-y-0 md:grid-cols-2 lg:grid-cols-3">
           {PRIMITIVES.map((p) => (
-            <div key={p.key} id={p.key} className="scroll-mt-16 border-t border-white/10 py-6">
-              <h2 className="font-display text-xl font-semibold text-marble">{p.title}</h2>
+            <div key={p.key} id={p.key} className="scroll-mt-16 border-t border-ink/10 py-6">
+              <h2 className="font-display text-xl font-semibold text-ink">{p.title}</h2>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
             </div>
           ))}
-          <div className="border-t border-white/10 py-6">
-            <h2 className="font-display text-xl font-semibold text-marble">Relationships &amp; Correlation</h2>
+          <div className="border-t border-ink/10 py-6">
+            <h2 className="font-display text-xl font-semibold text-ink">Relationships &amp; Correlation</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Builds a bounded graph of observed and inferred edges, then rates correlation strength separately
               from confidence.
@@ -47,13 +47,13 @@ export default function IntelligencePage() {
         </div>
       </div>
 
-      <div className="container-page border-t border-white/10 pt-16">
+      <div className="container-page border-t border-ink/10 pt-16">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
             <SectionLabel>Pipeline</SectionLabel>
             <EditorialHeading className="mt-6">From activity to exposure.</EditorialHeading>
           </div>
-          <div className="border border-white/10 p-8">
+          <div className="border border-ink/10 p-8">
             <PipelineDiagram
               steps={["Public Activity", "Normalization", "Signals", "Relationships", "Correlation", "Confidence", "Exposure"]}
             />

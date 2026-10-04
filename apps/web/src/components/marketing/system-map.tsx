@@ -120,8 +120,8 @@ function SignalVisual() {
   return (
     <ul className="sm-in space-y-2" aria-hidden="true">
       {rows.map((r, i) => (
-        <li key={r.k} style={at(i)} className="flex items-baseline justify-between gap-3 border-b border-white/[0.06] pb-2 last:border-0 last:pb-0">
-          <span className="font-mono text-xs text-marble/90">{r.k}</span>
+        <li key={r.k} style={at(i)} className="flex items-baseline justify-between gap-3 border-b border-ink/[0.06] pb-2 last:border-0 last:pb-0">
+          <span className="font-mono text-xs text-ink/90">{r.k}</span>
           <span className="font-mono text-[10px] text-muted-2">{r.v}</span>
         </li>
       ))}
@@ -137,7 +137,7 @@ function EvidenceVisual() {
         <span
           key={f}
           style={at(i)}
-          className="flex items-center justify-between border border-white/10 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+          className="flex items-center justify-between border border-ink/10 px-2 py-1.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
         >
           {f}
           <span className="text-muted-2">{fmt(i)}</span>
@@ -157,7 +157,7 @@ function RelationshipVisual() {
   ];
   return (
     <div aria-hidden="true">
-      <div className="flex items-center justify-between font-mono text-[11px] text-marble/90">
+      <div className="flex items-center justify-between font-mono text-[11px] text-ink/90">
         <span>Wallet A</span>
         <span className="text-muted-2">⇄</span>
         <span>Wallet B</span>
@@ -165,10 +165,10 @@ function RelationshipVisual() {
       <div className="mt-3 space-y-2">
         {fams.map((r, i) => (
           <div key={r.f} className="grid grid-cols-[5.5rem_1fr] items-center gap-2 font-mono text-[10px]">
-            <span className={r.discounted ? "text-muted-2 line-through decoration-white/30" : "text-muted-foreground"}>{r.f}</span>
-            <span className="h-1 bg-white/[0.08]">
+            <span className={r.discounted ? "text-muted-2 line-through decoration-ink/30" : "text-muted-foreground"}>{r.f}</span>
+            <span className="h-1 bg-ink/[0.08]">
               <span
-                className={cn("sm-bar block h-full", r.discounted ? "bg-white/25" : "bg-accent-bright")}
+                className={cn("sm-bar block h-full", r.discounted ? "bg-ink/25" : "bg-accent")}
                 style={{ ...at(i), width: `${r.w}%` }}
               />
             </span>
@@ -185,27 +185,27 @@ function GraphVisual() {
     <div aria-hidden="true">
       <svg viewBox="0 0 220 128" className="block h-auto w-full">
         <g fill="none" strokeLinecap="round">
-          <path d="M24 64 L110 30" pathLength={100} className="sm-draw" style={at(0)} stroke="#8b7cff" strokeWidth="1.5" />
-          <path d="M110 30 L196 64" pathLength={100} className="sm-draw" style={at(1)} stroke="#8b7cff" strokeWidth="1.5" />
-          <path d="M24 64 L110 100" pathLength={100} className="sm-draw" style={at(2)} stroke="rgba(255,255,255,0.22)" />
-          <path d="M110 100 L196 64" pathLength={100} className="sm-draw" style={at(3)} stroke="rgba(255,255,255,0.22)" />
+          <path d="M24 64 L110 30" pathLength={100} className="sm-draw" style={at(0)} stroke="#f24011" strokeWidth="1.5" />
+          <path d="M110 30 L196 64" pathLength={100} className="sm-draw" style={at(1)} stroke="#f24011" strokeWidth="1.5" />
+          <path d="M24 64 L110 100" pathLength={100} className="sm-draw" style={at(2)} stroke="rgba(20,18,15,0.22)" />
+          <path d="M110 100 L196 64" pathLength={100} className="sm-draw" style={at(3)} stroke="rgba(20,18,15,0.22)" />
         </g>
         <g className="font-mono" fontSize="9">
           <g className="sm-pop" style={at(0)}>
-            <circle cx="24" cy="64" r="4.5" fill="#8b7cff" />
-            <text x="24" y="84" textAnchor="middle" fill="#f2f2f2">wallet A</text>
+            <circle cx="24" cy="64" r="4.5" fill="#f24011" />
+            <text x="24" y="84" textAnchor="middle" fill="#14120f">wallet A</text>
           </g>
           <g className="sm-pop" style={at(1)}>
-            <circle cx="110" cy="30" r="4.5" fill="#050505" stroke="#8b7cff" strokeWidth="1.25" />
-            <text x="110" y="16" textAnchor="middle" fill="#f2f2f2">wallet B</text>
+            <circle cx="110" cy="30" r="4.5" fill="#efe6d3" stroke="#f24011" strokeWidth="1.25" />
+            <text x="110" y="16" textAnchor="middle" fill="#14120f">wallet B</text>
           </g>
           <g className="sm-pop" style={at(2)}>
-            <rect x="191" y="59" width="10" height="10" fill="#8b7cff" />
-            <text x="196" y="84" textAnchor="middle" fill="#f2f2f2">entity</text>
+            <rect x="191" y="59" width="10" height="10" fill="#f24011" />
+            <text x="196" y="84" textAnchor="middle" fill="#14120f">entity</text>
           </g>
           <g className="sm-pop" style={at(3)}>
-            <circle cx="110" cy="100" r="4.5" fill="#050505" stroke="rgba(255,255,255,0.45)" strokeWidth="1.25" />
-            <text x="110" y="122" textAnchor="middle" fill="rgba(156,163,175,0.8)">wallet C</text>
+            <circle cx="110" cy="100" r="4.5" fill="#efe6d3" stroke="rgba(20,18,15,0.45)" strokeWidth="1.25" />
+            <text x="110" y="122" textAnchor="middle" fill="rgba(20,18,15,0.6)">wallet C</text>
           </g>
         </g>
       </svg>
@@ -230,8 +230,8 @@ function ExposureVisual() {
       {DIMENSIONS.map((d, i) => (
         <div key={d} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-3">
           <span className="truncate font-mono text-[10px] text-muted-foreground">{d}</span>
-          <span className="h-1 bg-white/[0.08]">
-            <span className="sm-bar block h-full bg-accent-bright" style={{ ...at(i), width: `${32 + i * 9}%` }} />
+          <span className="h-1 bg-ink/[0.08]">
+            <span className="sm-bar block h-full bg-accent" style={{ ...at(i), width: `${32 + i * 9}%` }} />
           </span>
         </div>
       ))}
@@ -250,9 +250,9 @@ function IntelligenceVisual() {
     <div aria-hidden="true">
       <ul className="sm-in space-y-2">
         {items.map((it, i) => (
-          <li key={it.k} style={at(i)} className="flex items-center justify-between border-b border-white/[0.06] pb-2 font-mono text-xs">
+          <li key={it.k} style={at(i)} className="flex items-center justify-between border-b border-ink/[0.06] pb-2 font-mono text-xs">
             <span className="text-muted-foreground">{it.k}</span>
-            <span className="text-marble/90">{it.v}</span>
+            <span className="text-ink/90">{it.v}</span>
           </li>
         ))}
       </ul>
@@ -277,7 +277,7 @@ const VISUALS: Record<StageId, () => React.ReactNode> = {
  */
 function VisualFrame({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn("border border-white/10 bg-black/30", className)}>
+    <div className={cn("border border-ink/10 bg-ink/[0.04]", className)}>
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-2">Illustrative · not live data</p>
       {children}
     </div>
@@ -342,7 +342,7 @@ export function InteractiveSystemMap() {
   return (
     <section
       ref={sectionRef}
-      className="border-b border-white/10"
+      className="border-b border-ink/10"
       aria-label="AEGIX system map"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -361,20 +361,20 @@ export function InteractiveSystemMap() {
         <div className="mt-14">
           {/* horizontal rail (desktop) */}
           <div className="hidden md:block">
-            <div className="relative mb-3 h-px bg-white/10" aria-hidden="true">
+            <div className="relative mb-3 h-px bg-ink/10" aria-hidden="true">
               {STAGES.map((s, i) => (
                 <span
                   key={s.id}
-                  className={cn("absolute top-0 h-2 w-px -translate-y-1/2", i <= active ? "bg-accent-bright" : "bg-white/25")}
+                  className={cn("absolute top-0 h-2 w-px -translate-y-1/2", i <= active ? "bg-accent" : "bg-ink/25")}
                   style={{ left: columnCentre(i) }}
                 />
               ))}
               <span
-                className="absolute left-0 top-0 h-px bg-accent-bright transition-[width] duration-700 ease-out"
+                className="absolute left-0 top-0 h-px bg-accent transition-[width] duration-700 ease-out"
                 style={{ width: columnCentre(active) }}
               />
               <span
-                className="absolute top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 bg-accent-bright transition-[left] duration-700 ease-out"
+                className="absolute top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 bg-accent transition-[left] duration-700 ease-out"
                 style={{ left: columnCentre(active) }}
               />
             </div>
@@ -390,29 +390,29 @@ export function InteractiveSystemMap() {
                     onFocus={() => setFocused(true)}
                     onBlur={() => setFocused(false)}
                     className={cn(
-                      "relative overflow-hidden border px-3 py-4 text-left transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright",
+                      "relative overflow-hidden border px-3 py-4 text-left transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                       isActive
-                        ? "border-accent-bright/50 bg-accent/[0.06]"
+                        ? "border-accent/50 bg-accent/[0.06]"
                         : isDone
-                          ? "border-white/[0.12] bg-white/[0.02] hover:border-white/25"
-                          : "border-white/[0.08] bg-transparent hover:border-white/20"
+                          ? "border-ink/[0.12] bg-ink/[0.02] hover:border-ink/25"
+                          : "border-ink/[0.08] bg-transparent hover:border-ink/20"
                     )}
                     aria-current={isActive ? "step" : undefined}
                   >
-                    <span className={cn("font-mono text-[10px] uppercase tracking-wide", isActive ? "text-accent-bright" : "text-muted-2")}>
+                    <span className={cn("font-mono text-[10px] uppercase tracking-wide", isActive ? "text-accent-ink" : "text-muted-2")}>
                       {fmt(i)}
                     </span>
-                    <span className={cn("mt-3 block font-display text-sm font-semibold leading-tight", isActive ? "text-marble" : "text-muted-foreground")}>
+                    <span className={cn("mt-3 block font-display text-sm font-semibold leading-tight", isActive ? "text-ink" : "text-muted-foreground")}>
                       {s.category}
                     </span>
                     <span className="mt-1 block font-mono text-[10px] leading-snug text-muted-2">{s.detail}</span>
-                    <span className={cn("mt-3 block font-mono text-[10px] uppercase tracking-[0.14em]", isActive ? "text-accent-bright" : "text-muted-2")}>
+                    <span className={cn("mt-3 block font-mono text-[10px] uppercase tracking-[0.14em]", isActive ? "text-accent-ink" : "text-muted-2")}>
                       {s.action}
                     </span>
                     {isActive && playing && (
                       <span
                         key={`p-${active}`}
-                        className="step-progress absolute inset-x-0 bottom-0 h-px bg-accent-bright"
+                        className="step-progress absolute inset-x-0 bottom-0 h-px bg-accent"
                         style={{ animationDuration: `${DWELL_MS}ms` }}
                         aria-hidden="true"
                       />
@@ -423,13 +423,13 @@ export function InteractiveSystemMap() {
             </div>
 
             {/* detail panel */}
-            <div className="system-map-detail mt-6 border border-white/10 p-6" aria-live={playing ? "off" : "polite"}>
+            <div className="system-map-detail mt-6 border border-ink/10 p-6" aria-live={playing ? "off" : "polite"}>
               <div key={stage.id} className="grid gap-8 md:grid-cols-[minmax(0,1fr)_20rem]">
                 <div>
-                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-bright">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-ink">
                     {fmt(active)} / {fmt(STAGES.length - 1)} · {stage.category}
                   </p>
-                  <h3 className="mt-3 font-serif text-3xl text-marble">{stage.title}</h3>
+                  <h3 className="mt-3 font-serif text-3xl text-ink">{stage.title}</h3>
                   <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">{stage.description}</p>
                   <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-2">Action · {stage.action}</p>
                 </div>
@@ -443,7 +443,7 @@ export function InteractiveSystemMap() {
           {/* vertical rail (mobile) */}
           <div className="md:hidden">
             <div className="relative">
-              <div className="absolute bottom-3 left-[1.05rem] top-3 w-px bg-white/10" aria-hidden="true" />
+              <div className="absolute bottom-3 left-[1.05rem] top-3 w-px bg-ink/10" aria-hidden="true" />
               <div className="space-y-1">
                 {STAGES.map((s, i) => {
                   const isActive = i === active;
@@ -459,17 +459,17 @@ export function InteractiveSystemMap() {
                       <span
                         className={cn(
                           "relative z-10 mt-1 h-2.5 w-2.5 flex-none border transition-colors duration-300",
-                          isActive ? "border-accent-bright bg-accent-bright" : isDone ? "border-muted-foreground bg-muted-foreground/40" : "border-white/30 bg-ink-deep"
+                          isActive ? "border-accent bg-accent" : isDone ? "border-muted-foreground bg-muted-foreground/40" : "border-ink/30 bg-paper"
                         )}
                         aria-hidden="true"
                       />
                       <span className="min-w-0">
-                        <span className={cn("flex items-center gap-2", isActive ? "text-marble" : "text-muted-foreground")}>
+                        <span className={cn("flex items-center gap-2", isActive ? "text-ink" : "text-muted-foreground")}>
                           <span className="font-mono text-[10px] text-muted-2">{fmt(i)}</span>
                           <span className="font-display text-sm font-semibold">{s.category}</span>
                         </span>
                         <span className="mt-0.5 block font-mono text-[10px] text-muted-2">{s.detail}</span>
-                        {isActive && <span className="mt-1 block font-mono text-[10px] uppercase tracking-wide text-accent-bright">{s.action}</span>}
+                        {isActive && <span className="mt-1 block font-mono text-[10px] uppercase tracking-wide text-accent-ink">{s.action}</span>}
                       </span>
                     </button>
                   );
@@ -478,12 +478,12 @@ export function InteractiveSystemMap() {
             </div>
 
             {/* active detail */}
-            <div className="system-map-detail mt-2 border border-white/10 p-5" aria-live={playing ? "off" : "polite"}>
+            <div className="system-map-detail mt-2 border border-ink/10 p-5" aria-live={playing ? "off" : "polite"}>
               <div key={stage.id}>
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-bright">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent-ink">
                   {fmt(active)} / {fmt(STAGES.length - 1)} · {stage.category}
                 </p>
-                <h3 className="mt-2 font-serif text-2xl text-marble">{stage.title}</h3>
+                <h3 className="mt-2 font-serif text-2xl text-ink">{stage.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{stage.description}</p>
                 <VisualFrame className="mt-4 p-3">
                   <Visual />

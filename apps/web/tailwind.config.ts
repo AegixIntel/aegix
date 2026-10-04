@@ -5,18 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Near-black neutral institutional base.
-        ink: "#0a0a0a",
-        "ink-deep": "#050505",
-        "ink-raised": "#111111",
-        // Foreground.
-        marble: "#f2f2f2",
-        "muted-foreground": "#9ca3af",
-        "muted-2": "#6b7280",
-        // AEGIX violet accent — used sparingly.
-        accent: "#6c5ce7",
-        "accent-bright": "#8b7cff",
-        "accent-dim": "rgba(108, 92, 231, 0.14)"
+        // Paper: the cream of the brand plates, sampled from them.
+        paper: "#efe6d3",
+        "paper-raised": "#f6efe0",
+        "paper-deep": "#e5dbc5",
+        // Ink: text, rules and solid controls.
+        ink: "#14120f",
+        "muted-foreground": "#544e45",
+        "muted-2": "#6d665a",
+        // Signal orange. `accent` fills and marks; `accent-ink` is the
+        // darker cut that stays legible as text on paper.
+        accent: "#f24011",
+        "accent-ink": "#c2320a",
+        "accent-dim": "rgba(242, 64, 17, 0.12)"
       },
       // Font variables are provided by next/font in app/layout.tsx.
       fontFamily: {

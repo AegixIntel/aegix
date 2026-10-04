@@ -53,31 +53,31 @@ export default function NetworkIntelligence() {
     } catch (failure) { if (current === generation.current) setError(failure instanceof Error ? failure.message : "Request failed"); }
     finally { if (current === generation.current) setLoading(false); }
   }
-  return <main className="mx-auto max-w-6xl space-y-8 p-6 text-marble">
+  return <main className="mx-auto max-w-6xl space-y-8 p-6 text-ink">
     <header><p className="section-label">Network intelligence</p><h1 className="mt-2 text-3xl">Explore indexed wallet activity</h1>
       <p className="mt-3 text-muted-foreground">Inspect observed activity and reviewed evidence across Solana, Ethereum and Base.</p></header>
     <form className="flex flex-wrap items-end gap-4" onSubmit={event => { event.preventDefault(); void load(); }}>
-      <label className="space-y-2">Chain<select className="block rounded border border-white/20 bg-ink-deep p-3" value={chain} onChange={event => setChain(event.target.value)}>
+      <label className="space-y-2">Chain<select className="block rounded border border-ink/20 bg-paper p-3" value={chain} onChange={event => setChain(event.target.value)}>
         <option value="solana:mainnet">Solana</option><option value="eip155:1">Ethereum</option><option value="eip155:8453">Base</option>
       </select></label>
-      <label className="min-w-64 flex-1 space-y-2">Wallet address<input required value={address} onChange={event => setAddress(event.target.value)} className="block w-full rounded border border-white/20 bg-ink-deep p-3" autoComplete="off" /></label>
-      <button disabled={loading} className="rounded bg-accent-bright px-5 py-3 text-black disabled:opacity-50">{loading ? "Loading…" : "Explore"}</button>
+      <label className="min-w-64 flex-1 space-y-2">Wallet address<input required value={address} onChange={event => setAddress(event.target.value)} className="block w-full rounded border border-ink/20 bg-paper p-3" autoComplete="off" /></label>
+      <button disabled={loading} className="rounded bg-accent px-5 py-3 text-ink disabled:opacity-50">{loading ? "Loading…" : "Explore"}</button>
     </form>
-    {error && <p role="alert" className="text-amber-300">{error}</p>}
-    {history && <section className="space-y-4 rounded border border-white/10 p-5">
+    {error && <p role="alert" className="text-amber-800">{error}</p>}
+    {history && <section className="space-y-4 rounded border border-ink/10 p-5">
       <h2 className="text-xl">Observed transactions</h2><p className="break-all text-sm">{history.wallet}</p>
       <p className="text-sm text-muted-foreground">{history.coverage ? `Indexed range: ${history.coverage.start_height} through ${BigInt(history.coverage.next_height) - 1n}.` : "This chain has no indexed coverage yet."}</p>
       {history.transactions.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Transaction</th><th className="p-2">Block / slot</th><th className="p-2">Execution</th></tr></thead><tbody>
-        {history.transactions.map(tx => <tr key={tx.tx_id} className="border-t border-white/10"><td className="max-w-96 break-all p-2 font-mono">{tx.tx_id}</td><td className="p-2">{tx.height}</td><td className="p-2">{tx.success === null ? "Unknown" : tx.success ? "Succeeded" : "Failed"}</td></tr>)}
+        {history.transactions.map(tx => <tr key={tx.tx_id} className="border-t border-ink/10"><td className="max-w-96 break-all p-2 font-mono">{tx.tx_id}</td><td className="p-2">{tx.height}</td><td className="p-2">{tx.success === null ? "Unknown" : tx.success ? "Succeeded" : "Failed"}</td></tr>)}
       </tbody></table></div> : <p>No activity was found in the indexed range. This does not establish that the wallet has never been used.</p>}
       <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{history.limitations.map(item => <li key={item}>{item}</li>)}</ul>
-      {history.nextCursor && <button disabled={loading} onClick={() => void load(true)} className="rounded border border-white/20 px-4 py-2">Load more</button>}
+      {history.nextCursor && <button disabled={loading} onClick={() => void load(true)} className="rounded border border-ink/20 px-4 py-2">Load more</button>}
     </section>}
-    {reputation && <section className="space-y-3 rounded border border-white/10 p-5"><h2 className="text-xl">Reviewed reputation evidence</h2>
+    {reputation && <section className="space-y-3 rounded border border-ink/10 p-5"><h2 className="text-xl">Reviewed reputation evidence</h2>
       <p>{reputation.status.replaceAll("_", " ").toLowerCase()}</p><p className="text-sm text-muted-foreground">{reputation.reason}</p>
       {reputation.accepted.map(({ claim, reviewers }) => <div key={claim.id}><a className="underline" href={claim.sourceUrl} target="_blank" rel="noreferrer">{claim.label.replaceAll("_", " ")}</a><p className="text-sm">Reviewed by {reviewers.length} trusted reviewers.</p></div>)}
     </section>}
-    {economics && <section className="space-y-3 rounded border border-white/10 p-5"><h2 className="text-xl">Your $AEX accounting</h2>
+    {economics && <section className="space-y-3 rounded border border-ink/10 p-5"><h2 className="text-xl">Your $AEX accounting</h2>
       <p className="text-2xl">{economics.balanceAtomic} internal units</p><p className="text-sm text-muted-foreground">{economics.explanation}</p>
       {economics.events.length ? <ul>{economics.events.map(event => <li key={event.event_key}>{event.direction === "CREDIT" ? "+" : "−"}{event.amount} · {event.purpose.replaceAll("_", " ")}</li>)}</ul> : <p>No accounting activity yet.</p>}
     </section>}

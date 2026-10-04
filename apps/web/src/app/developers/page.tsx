@@ -10,14 +10,14 @@ export default function DevelopersIndexPage() {
   return (
     <div className="container-page py-10">
       <header>
-        <h1 className="font-display text-2xl font-semibold text-marble">Developer API</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink">Developer API</h1>
         <p className="mt-1 text-sm text-muted-foreground">Manage API keys, usage, and webhooks for the AEGIX developer platform.</p>
       </header>
 
       <DeveloperTabs />
 
       {!user && (
-        <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
+        <div className="mt-6 rounded-xl border border-amber-600/40 bg-amber-500/10 p-4 text-sm text-amber-800">
           You are browsing anonymously. Connect a Solana wallet to create API keys and manage webhooks.
           Signing in is free — it does not create a transaction and does not cost SOL.
         </div>

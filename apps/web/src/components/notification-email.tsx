@@ -85,13 +85,13 @@ export default function NotificationEmailSettings() {
 
   return (
     <section className="card-surface p-5">
-      <h2 className="text-sm font-semibold text-marble">Notification Email</h2>
+      <h2 className="text-sm font-semibold text-ink">Notification Email</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Optional destination for alert emails. In-app alerts work without it — email is <span className="font-semibold text-marble/90">not authentication</span> and only receives alerts you opt into.
+        Optional destination for alert emails. In-app alerts work without it — email is <span className="font-semibold text-ink/90">not authentication</span> and only receives alerts you opt into.
       </p>
 
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-      {message && <p className="mt-3 text-sm text-emerald-400">{message}</p>}
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+      {message && <p className="mt-3 text-sm text-emerald-800">{message}</p>}
 
       <form onSubmit={(e) => void save(e)} className="mt-4 flex flex-col gap-3 sm:flex-row">
         <input
@@ -101,13 +101,13 @@ export default function NotificationEmailSettings() {
           maxLength={254}
           placeholder="you@example.com"
           aria-label="Notification email"
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+          className="flex-1 rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
         />
         <button type="submit" disabled={busy || !email.trim()} className="btn-primary px-4 py-2 text-xs">
           {busy ? "Sending…" : pending ? "Resend code" : "Save email"}
         </button>
         {verified && (
-          <button type="button" onClick={() => void remove()} disabled={busy} className="rounded-lg border border-red-500/40 px-4 py-2 text-xs text-red-400">
+          <button type="button" onClick={() => void remove()} disabled={busy} className="rounded-lg border border-red-600/40 px-4 py-2 text-xs text-red-700">
             Remove
           </button>
         )}
@@ -122,7 +122,7 @@ export default function NotificationEmailSettings() {
             inputMode="numeric"
             placeholder="6-digit code"
             aria-label="Verification code"
-            className="w-40 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+            className="w-40 rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
           />
           <button type="submit" disabled={busy || code.trim().length !== 6} className="btn-secondary px-4 py-2 text-xs">
             Verify

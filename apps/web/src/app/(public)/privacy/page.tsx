@@ -65,7 +65,7 @@ export default function PrivacyPage() {
         />
       </div>
 
-      <div className="container-page mt-20 border-t border-white/10 pt-16">
+      <div className="container-page mt-20 border-t border-ink/10 pt-16">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
             <TechnicalMetric label="Exposure Scale" value="0–100" />
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
         <p className="max-w-2xl text-sm text-muted-2">
           AEGIX reports observable linkability. Correlation is not proof of ownership, and the AEGIX observed
           population is not the global Solana population.{" "}
-          <Link href="/methodology" className="text-marble underline underline-offset-4">
+          <Link href="/methodology" className="text-ink underline underline-offset-4">
             Read the methodology →
           </Link>
         </p>

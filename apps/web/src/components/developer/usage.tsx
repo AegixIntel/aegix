@@ -23,8 +23,8 @@ export default function UsageSection() {
 
   return (
     <section className="mt-8">
-      <h2 className="text-lg font-semibold text-marble">Usage</h2>
-      {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+      <h2 className="text-lg font-semibold text-ink">Usage</h2>
+      {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
       {usage === null && !error ? (
         <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
       ) : usage ? (
@@ -32,25 +32,25 @@ export default function UsageSection() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Used</p>
-              <p className="mt-1 text-xl font-bold text-marble">{usage.used}</p>
+              <p className="mt-1 text-xl font-bold text-ink">{usage.used}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Limit</p>
-              <p className="mt-1 text-xl font-bold text-marble">{usage.limit}</p>
+              <p className="mt-1 text-xl font-bold text-ink">{usage.limit}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Remaining</p>
-              <p className="mt-1 text-xl font-bold text-emerald-300">{usage.remaining}</p>
+              <p className="mt-1 text-xl font-bold text-emerald-800">{usage.remaining}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Resets</p>
-              <p className="mt-1 text-sm font-semibold text-marble/90">{usage.resetAt ? new Date(usage.resetAt).toLocaleString() : "—"}</p>
+              <p className="mt-1 text-sm font-semibold text-ink/90">{usage.resetAt ? new Date(usage.resetAt).toLocaleString() : "—"}</p>
             </div>
           </div>
 
           {/* Usage bar */}
           {usage.limit > 0 && (
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-ink/[0.06]">
               <div
                 className="h-full bg-accent transition-all"
                 style={{ width: `${Math.min(100, Math.round((usage.used / usage.limit) * 100))}%` }}

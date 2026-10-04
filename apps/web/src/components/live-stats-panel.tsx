@@ -69,15 +69,15 @@ export default function LiveStatsPanel() {
   const live = stats !== null;
 
   return (
-    <div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-3 lg:grid-cols-[minmax(0,1.3fr)_repeat(5,minmax(0,1fr))]">
-      <div className="flex items-center gap-2.5 bg-ink-deep px-4 py-5 lg:px-8">
-        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "live-dot bg-accent-bright" : "bg-muted-2")} aria-hidden="true" />
+    <div className="grid grid-cols-2 gap-px bg-ink/10 sm:grid-cols-3 lg:grid-cols-[minmax(0,1.3fr)_repeat(5,minmax(0,1fr))]">
+      <div className="flex items-center gap-2.5 bg-paper px-4 py-5 lg:px-8">
+        <span className={cn("h-1.5 w-1.5 rounded-full", live ? "live-dot bg-accent" : "bg-muted-2")} aria-hidden="true" />
         <span className="mono-label">{live ? "AEGIX system · live" : loading ? "Connecting…" : "Stats offline"}</span>
       </div>
       {STATS.map((s) => (
-        <div key={s.key} className="bg-ink-deep px-4 py-5">
+        <div key={s.key} className="bg-paper px-4 py-5">
           <p className="mono-label">{s.label}</p>
-          <p className="mt-1.5 font-mono text-2xl font-medium tabular-nums tracking-tight text-marble">
+          <p className="mt-1.5 font-mono text-2xl font-medium tabular-nums tracking-tight text-ink">
             {stats ? <CountUp value={stats[s.key] as number | null} /> : "—"}
           </p>
         </div>

@@ -30,7 +30,7 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <div className="mt-16 border-t border-white/10 pt-10">
+      <div className="mt-16 border-t border-ink/10 pt-10">
         <SectionLabel>Why public intelligence</SectionLabel>
         <p className="mt-4 text-muted-foreground">
           Public blockchains are a public record. AEGIX helps people understand what that record reveals about
@@ -39,12 +39,12 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <div className="mt-10 border-t border-white/10 pt-10">
+      <div className="mt-10 border-t border-ink/10 pt-10">
         <SectionLabel>Long-term direction</SectionLabel>
         <p className="mt-4 text-muted-foreground">
           Market intelligence, reputation infrastructure, and an intelligence network are on the horizon. They
           are labeled by status on the roadmap, never presented as live before they exist.{" "}
-          <Link href="/roadmap" className="text-marble underline underline-offset-4">
+          <Link href="/roadmap" className="text-ink underline underline-offset-4">
             View the roadmap →
           </Link>
         </p>
