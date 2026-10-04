@@ -14,6 +14,7 @@
  */
 
 import type { SeriesDescriptor } from "@aegix/rewind";
+import { Agent, fetch as undiciFetch } from "undici";
 import { SourceError, fetchJson, type SeriesObservation, type SeriesSource } from "./types.js";
 
 export const NARRATIVE_SOURCE = "gdelt-doc-v2";
@@ -43,6 +44,18 @@ export const GDELT_RETRY_WAIT_MS = 40_000;
 export const GDELT_TIMESPAN = "3d";
 /** A timeline response routinely takes 10–30 seconds. */
 export const GDELT_TIMEOUT_MS = 45_000;
+
+/**
+ * Node's fetch gives up on a connection after ten seconds. Measured on
+ * 2026-10-04 from the production host, GDELT's TLS handshake alone took 10.1
+ * to 10.6 seconds on every request, so a request was lost or kept by a few
+ * hundred milliseconds: 4 of 24 failed in one run, each as
+ * `UND_ERR_CONNECT_TIMEOUT`. Connecting is given the whole request
+ * timeout instead; the request's own timeout still ends it.
+ */
+const gdeltAgent = new Agent({ connect: { timeout: GDELT_TIMEOUT_MS } });
+export const gdeltFetch = ((input: string | URL, init?: RequestInit) =>
+  undiciFetch(input, { ...(init as object), dispatcher: gdeltAgent })) as unknown as typeof fetch;
 
 /** The topic whose turn it is at `at`. Stateless, so every replica agrees. */
 export function narrativeTopicFor(at: Date, topics: readonly NarrativeTopic[] = NARRATIVE_TOPICS, rotationMs = NARRATIVE_ROTATION_MS): NarrativeTopic {
@@ -124,7 +137,7 @@ export function createNarrativeSource(options: {
       for (let attempt = 1; attempt <= GDELT_MAX_ATTEMPTS; attempt++) {
         if (attempt > 1) await sleep(GDELT_RETRY_WAIT_MS);
         try {
-          const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
+          const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl ?? gdeltFetch, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
           return hourlyNarrativeVolume(payload, at).map((point): SeriesObservation => (
             { seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE }));
         } catch (error) {

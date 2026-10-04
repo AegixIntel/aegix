@@ -21,7 +21,7 @@
  */
 
 import type { SeriesDescriptor } from "@aegix/rewind";
-import { GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, narrativeTopicFor, parseGdeltDate, type NarrativeTopic } from "./narrative.js";
+import { GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, gdeltFetch, narrativeTopicFor, parseGdeltDate, type NarrativeTopic } from "./narrative.js";
 import { SourceError, fetchJson, type SeriesObservation, type SeriesSource } from "./types.js";
 
 export const NARRATIVE_CONTEXT_SOURCE = "gdelt-context-v2";
@@ -107,7 +107,7 @@ export function createNarrativeContextSource(options: {
           startdatetime: stamp(fromMs), enddatetime: stamp(toMs)
         });
         try {
-          const payload = await fetchJson(`${baseUrl}/context/context?${query}`, { fetchImpl: options.fetchImpl, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
+          const payload = await fetchJson(`${baseUrl}/context/context?${query}`, { fetchImpl: options.fetchImpl ?? gdeltFetch, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
           answered += 1;
           const count = contextMentionCount(payload, fromMs, toMs);
           // Zero is not written. The engine takes no change from a zero hour,

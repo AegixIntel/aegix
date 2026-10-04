@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@aegix/rewind": "workspace:*",
-    "bs58": "^6.0.0"
+    "bs58": "^6.0.0",
+    "undici": "^6.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
