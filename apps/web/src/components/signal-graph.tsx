@@ -3,8 +3,6 @@ import type { DiscoveryCard } from "@aegix/discovery";
 export interface RelatedDiscovery { id: string; status: string; seriesA: string; seriesB: string; lagHours: number; direction: string }
 
 const W = 680;
-const H = 320;
-const MAIN_Y = H / 2;
 const MAIN_X = { a: 230, b: 450 } as const;
 const MAX_NEIGHBOURS = 4;
 
@@ -17,7 +15,7 @@ function wrap(label: string, max = 24): string[] {
   return [label.slice(0, at), rest.length > max ? `${rest.slice(0, max - 1)}…` : rest];
 }
 
-const lagLabel = (lagHours: number) => (lagHours === 0 ? "same step" : lagHours % 24 === 0 && lagHours >= 24 ? `${lagHours / 24}d later` : `${lagHours}h later`);
+const lagLabel = (lagHours: number) => (lagHours === 0 ? "no lag" : lagHours % 24 === 0 && lagHours >= 24 ? `${lagHours / 24}d later` : `${lagHours}h later`);
 
 /**
  * The relationship as a drawing: the two series of this discovery in the
@@ -41,9 +39,13 @@ export function SignalGraph({ card, related }: { card: DiscoveryCard; related: R
     if (side.length < MAX_NEIGHBOURS) side.push(r);
   }
   const hidden = related.length - neighbours.a.length - neighbours.b.length;
+  // With nothing around the pair the drawing is one row, not an empty square.
+  const surrounded = neighbours.a.length + neighbours.b.length > 0;
+  const H = surrounded ? 320 : 150;
+  const MAIN_Y = surrounded ? H / 2 : 62;
 
   const place = (side: "a" | "b", index: number, count: number) => {
-    const x = side === "a" ? 70 : W - 70;
+    const x = side === "a" ? 24 : W - 24;
     const y = count === 1 ? MAIN_Y : 50 + (index * (H - 100)) / (count - 1);
     return { x, y };
   };
@@ -76,8 +78,8 @@ export function SignalGraph({ card, related }: { card: DiscoveryCard; related: R
             <g key={r.id}>
               <line x1={hub.x} y1={hub.y} x2={p.x} y2={p.y} stroke={stroke(r.direction)} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3 3" />
               <circle cx={p.x} cy={p.y} r="5" fill="#efe6d3" stroke="#14120f" strokeOpacity="0.5" />
-              <text x={p.x} y={p.y - 11} textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">{label.length > 30 ? `${label.slice(0, 29)}…` : label}</text>
-              <text x={p.x} y={p.y + 18} textAnchor="middle" className="fill-muted-2 font-mono text-[9px]">#{r.id}</text>
+              <text x={side === "a" ? p.x - 8 : p.x + 8} y={p.y - 11} textAnchor={side === "a" ? "start" : "end"} className="fill-muted-foreground font-mono text-[9px]">{label.length > 28 ? `${label.slice(0, 27)}…` : label}</text>
+              <text x={side === "a" ? p.x - 8 : p.x + 8} y={p.y + 18} textAnchor={side === "a" ? "start" : "end"} className="fill-muted-2 font-mono text-[9px]">#{r.id}</text>
             </g>
           );
         }))}
