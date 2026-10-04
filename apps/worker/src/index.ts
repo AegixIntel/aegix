@@ -9,7 +9,7 @@ import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
 import { captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
 import { createCoinPaprikaProvider } from "@aegix/markets";
-import { NARRATIVE_ROTATION_MS, createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
+import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -282,6 +282,12 @@ try {
     scheduleSource(createNarrativeSource({
       baseUrl: config.NARRATIVE_BASE_URL,
       onTopicFailure: (topic, code, attempts) => logger.warn("narrative topic not captured", { topic, code, attempts })
+    }), NARRATIVE_ROTATION_MS);
+  }
+  if (config.ENABLE_NARRATIVE_CONTEXT_CAPTURE) {
+    scheduleSource(createNarrativeContextSource({
+      baseUrl: config.NARRATIVE_BASE_URL,
+      onHourFailure: (topic, eventTime, code) => logger.warn("narrative context hour not captured", { topic, eventTime, code })
     }), NARRATIVE_ROTATION_MS);
   }
   if (config.ENABLE_OPTIONS_CAPTURE) {

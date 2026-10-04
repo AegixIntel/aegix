@@ -170,6 +170,7 @@ flag                             source                      series
 ENABLE_REWIND_CAPTURE            CoinPaprika                 BTC, ETH, SOL price and rolling 24h volume
 ENABLE_TOKENIZED_STOCK_CAPTURE   Solana RPC (RPC_URL)        14 tokens: on-chain price (USDC) and supply
 ENABLE_NARRATIVE_CAPTURE         GDELT DOC 2.0               8 topics: share of global news volume, hourly
+ENABLE_NARRATIVE_CONTEXT_CAPTURE GDELT Context 2.0           the same 8 topics: articles mentioning it, per hour
 ENABLE_OPTIONS_CAPTURE           Cboe delayed quotes         6 underlyings: put/call ratio, open interest,
                                                              and call/put volume (stored, not scanned)
 ```
@@ -209,6 +210,37 @@ topic still refused after seven attempts is logged
 trails real time by about five hours. It measures how much is published, not sentiment and not social media.
 The topic list is part of the hypothesis set: a topic is not added because a
 story is already trending.
+
+**Narrative, second reading.** GDELT's DOC 2.0 index stopped taking articles
+on 2 October 2026 (§4b) while its Context 2.0 index stayed current, so the
+same eight topics are also read from there, under their own source name
+(`gdelt-context-v2`) and their own series (`narrative:<topic>:context_mentions`).
+Neither reading stands in for the other and no series holds rows from both.
+
+- **It is a count, not a share**: the distinct articles GDELT saw in one hour
+  with a sentence matching the topic's query. The Context API has no timeline
+  mode and searches a subset of what DOC 2.0 does. Measured on 4 October 2026
+  the counts were 1 to 32 an hour, and `stablecoin` 0 to 2.
+- **Each hour is asked for on its own.** A 24-hour window was answered with 50
+  articles reaching back 12 hours, cut off at a depth the API does not report;
+  four one-hour windows returned the same counts both times they were asked.
+- **A turn asks for three hours.** One topic per sweep, in the same rotation as
+  the first reading; the three hours that have been over for at least an
+  hour, six seconds apart. Every hour is asked for in two turns, so one missed
+  turn loses nothing. 24 of 24 requests were answered when measured.
+- **Connecting is given the whole 45 seconds.** GDELT's TLS handshake took
+  just over ten seconds from the production host, and Node's fetch stops
+  connecting at ten: 4 of 24 requests failed that way and were reported as
+  `PROVIDER_ERROR`. Both GDELT sources now connect through an agent with a
+  45-second connect timeout, and the same run answered 24 of 24.
+- **A zero hour is not written.** The engine takes no change from one, and an
+  index that has stopped answers zero as well.
+- **A full page of 200 is not written**: the count was cut off.
+- **The API keeps 72 hours.** There is no history to read back, so these
+  series have no baseline until the ledger has held them for 14 days, and an
+  hour not read within 72 hours is gone.
+- If the index stops partway through an hour, that hour is stored low. The
+  hour's delay before asking covers the usual fifteen minutes, not a stall.
 
 **Options.** The whole chain per underlying (SPY, QQQ, XLU, XLE, NVDA, TSLA)
 from Cboe's delayed quotes, summed to put/call volume ratio and open interest.
@@ -351,6 +383,7 @@ ENABLE_DISCOVERY=true          # worker scan + API
 REWIND_CAPTURE_INTERVAL_SECONDS=900
 ENABLE_TOKENIZED_STOCK_CAPTURE=true   # worker: Solana RPC, 2 calls per sweep
 ENABLE_NARRATIVE_CAPTURE=true         # worker: GDELT, hourly
+ENABLE_NARRATIVE_CONTEXT_CAPTURE=true # worker: GDELT Context, 3 requests per sweep
 ENABLE_OPTIONS_CAPTURE=true           # worker: Cboe delayed, hourly, unlicensed
 ```
 

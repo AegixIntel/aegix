@@ -18,7 +18,7 @@ import { createDiscoveryRepo, createObservationRepo, type Sql } from "@aegix/dat
 import { CANONICAL_ASSETS, MARKETS_ENGINE_VERSION, computeMarketSignals, createMarketService, type MarketDataProvider } from "@aegix/markets";
 import { marketSeries, marketSeriesKey, type SeriesDescriptor } from "@aegix/rewind";
 import {
-  TOKENIZED_STOCKS, narrativeSeries, optionsSeries, tokenizedStockSeries, tokenizedStockSeriesKey,
+  TOKENIZED_STOCKS, narrativeContextSeries, narrativeSeries, optionsSeries, tokenizedStockSeries, tokenizedStockSeriesKey,
   type SeriesSource, type TokenizedStock
 } from "@aegix/sources";
 import {
@@ -164,6 +164,7 @@ export function discoverySeries(config: AppConfig): SeriesDescriptor[] {
     ...(config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS ? marketSeries(CANONICAL_ASSETS) : []),
     ...(config.ENABLE_TOKENIZED_STOCK_CAPTURE ? tokenizedStockSeries() : []),
     ...(config.ENABLE_NARRATIVE_CAPTURE ? narrativeSeries() : []),
+    ...(config.ENABLE_NARRATIVE_CONTEXT_CAPTURE ? narrativeContextSeries() : []),
     ...(config.ENABLE_OPTIONS_CAPTURE ? optionsSeries() : [])
   ];
 }

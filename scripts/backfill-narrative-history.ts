@@ -20,7 +20,7 @@
 
 import { writeFileSync } from "node:fs";
 import {
-  GDELT_TIMEOUT_MS, NARRATIVE_SOURCE, NARRATIVE_TOPICS, SourceError, fetchJson, hourlyNarrativeVolume, narrativeSeriesKey
+  GDELT_TIMEOUT_MS, NARRATIVE_SOURCE, NARRATIVE_TOPICS, SourceError, fetchJson, gdeltFetch, hourlyNarrativeVolume, narrativeSeriesKey
 } from "../packages/sources/src/index.js";
 
 const HOUR_MS = 3_600_000;
@@ -50,7 +50,7 @@ async function windowRows(query: string, seriesKey: string, fromMs: number, toMs
   for (let attempt = 1; attempt <= ATTEMPTS_PER_WINDOW; attempt++) {
     if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, WAIT_MS));
     try {
-      const payload = await fetchJson(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { timeoutMs: GDELT_TIMEOUT_MS });
+      const payload = await fetchJson(`https://api.gdeltproject.org/api/v2/doc/doc?${params}`, { fetchImpl: gdeltFetch, timeoutMs: GDELT_TIMEOUT_MS });
       if (payload && typeof payload === "object" && Object.keys(payload).length === 0) return [];
       return hourlyNarrativeVolume(payload, new Date(toMs))
         .filter((point) => Date.parse(point.eventTime) >= fromMs)

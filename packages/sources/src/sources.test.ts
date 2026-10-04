@@ -6,6 +6,10 @@ import {
   createTokenizedStockSource, decodeClmmPoolPrice, isTokenizedStockSymbol, tokenizedStockSeries, type TokenizedStock
 } from "./tokenized-stocks.js";
 import { GDELT_MAX_ATTEMPTS, GDELT_RETRY_WAIT_MS, GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
+import {
+  CONTEXT_HOURS_PER_SWEEP, CONTEXT_MAX_RECORDS, CONTEXT_REQUEST_GAP_MS, NARRATIVE_CONTEXT_SOURCE,
+  contextMentionCount, createNarrativeContextSource, narrativeContextSeries
+} from "./narrative-context.js";
 import { aggregateOptionsChain, createOptionsSource, optionsSeries } from "./options.js";
 import { SourceError } from "./types.js";
 
@@ -163,6 +167,65 @@ test("a refused topic is asked again after a wait, then reported and left as a g
     fetchImpl: (async () => { malformed += 1; return new Response(JSON.stringify({ timeline: "no" }), { status: 200 }); }) as typeof fetch });
   await assert.rejects(broken.collect(AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
   assert.equal(malformed, 1, "a malformed answer is not asked for again");
+});
+
+const context = (articles: Array<[string, string]>) => ({ articles: articles.map(([url, seendate]) => ({ url, seendate, sentence: "x" })) });
+const H02 = Date.parse("2026-10-01T02:00:00.000Z");
+const H03 = Date.parse("2026-10-01T03:00:00.000Z");
+
+test("context mentions are distinct articles seen in the hour", () => {
+  assert.equal(contextMentionCount(context([
+    ["https://a.test/1", "20261001T020108Z"], ["https://a.test/1", "20261001T021500Z"], ["https://a.test/2", "20261001T025959Z"],
+    ["https://a.test/3", "20261001T030000Z"], ["https://a.test/4", "bad"]
+  ]), H02, H03), 2, "one article quoted twice is one, and the next hour's article is not this hour's");
+  assert.equal(contextMentionCount({}, H02, H03), 0, "an hour with no match is answered without the list");
+  const full = context(Array.from({ length: CONTEXT_MAX_RECORDS }, (_, i): [string, string] => [`https://a.test/${i}`, "20261001T020108Z"]));
+  assert.equal(contextMentionCount(full, H02, H03), null, "a full page is a count that was cut off");
+  assert.throws(() => contextMentionCount({ articles: "no" }, H02, H03), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  assert.throws(() => contextMentionCount([], H02, H03), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+});
+
+test("a context sweep asks one topic for its last settled hours, one hour at a time", async () => {
+  const urls: string[] = [];
+  const sleeps: number[] = [];
+  const byStart: Record<string, unknown> = {
+    "20261001020000": context([["https://a.test/1", "20261001T020108Z"], ["https://a.test/2", "20261001T024500Z"]]),
+    "20261001010000": {},
+    "20261001000000": context([["https://a.test/3", "20261001T003000Z"]])
+  };
+  const fetchImpl = (async (url: unknown) => {
+    urls.push(String(url));
+    return new Response(JSON.stringify(byStart[new URL(String(url)).searchParams.get("startdatetime")!]), { status: 200 });
+  }) as typeof fetch;
+  const observations = await createNarrativeContextSource({ fetchImpl, sleep: async (ms) => { sleeps.push(ms); } }).collect(AT);
+  const topic = narrativeTopicFor(AT);
+
+  assert.equal(urls.length, CONTEXT_HOURS_PER_SWEEP);
+  assert.ok(urls.every((u) => u.includes("/context/context?") && u.includes(new URLSearchParams({ query: topic.query }).toString())), "every request is for the topic whose turn it is");
+  assert.deepEqual(urls.map((u) => [new URL(u).searchParams.get("startdatetime"), new URL(u).searchParams.get("enddatetime")]),
+    [["20261001020000", "20261001030000"], ["20261001010000", "20261001020000"], ["20261001000000", "20261001010000"]],
+    "the hour that ended fifteen minutes ago is not asked for yet");
+  assert.deepEqual(sleeps, [CONTEXT_REQUEST_GAP_MS, CONTEXT_REQUEST_GAP_MS]);
+  assert.deepEqual(observations, [
+    { seriesKey: `narrative:${topic.id}:context_mentions`, eventTime: "2026-10-01T02:00:00.000Z", value: 2, source: NARRATIVE_CONTEXT_SOURCE },
+    { seriesKey: `narrative:${topic.id}:context_mentions`, eventTime: "2026-10-01T00:00:00.000Z", value: 1, source: NARRATIVE_CONTEXT_SOURCE }
+  ], "an hour with no match is not written");
+  assert.equal(narrativeContextSeries().length, NARRATIVE_TOPICS.length);
+  assert.ok(narrativeContextSeries().every((s) => !narrativeSeries().some((d) => d.key === s.key)), "the two readings never share a series");
+});
+
+test("a context hour that fails is reported and the other hours are kept", async () => {
+  const reported: Array<[string, string, string]> = [];
+  let request = 0;
+  const partial = createNarrativeContextSource({ sleep: async () => {}, onHourFailure: (id, eventTime, code) => reported.push([id, eventTime, code]),
+    fetchImpl: (async () => { request += 1; return request === 2 ? new Response("slow down", { status: 429 }) : new Response(JSON.stringify(context([["https://a.test/1", request === 1 ? "20261001T020108Z" : "20261001T000108Z"]])), { status: 200 }); }) as typeof fetch });
+  assert.deepEqual((await partial.collect(AT)).map((o) => o.eventTime), ["2026-10-01T02:00:00.000Z", "2026-10-01T00:00:00.000Z"]);
+  assert.deepEqual(reported, [[narrativeTopicFor(AT).id, "2026-10-01T01:00:00.000Z", "RATE_LIMIT"]]);
+
+  const down = createNarrativeContextSource({ sleep: async () => {}, fetchImpl: (async () => new Response("slow down", { status: 429 })) as typeof fetch });
+  await assert.rejects(down.collect(AT), (e) => e instanceof SourceError && e.code === "RATE_LIMIT");
+  assert.ok(CONTEXT_HOURS_PER_SWEEP * GDELT_TIMEOUT_MS + (CONTEXT_HOURS_PER_SWEEP - 1) * CONTEXT_REQUEST_GAP_MS < NARRATIVE_ROTATION_MS,
+    "a turn ends before the next one starts, even if every request times out");
 });
 
 const chain = { timestamp: "2026-10-01 03:43:57", data: { options: [
