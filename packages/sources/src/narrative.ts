@@ -71,7 +71,7 @@ export function narrativeSeries(topics: readonly NarrativeTopic[] = NARRATIVE_TO
 }
 
 /** "20260928T090000Z" → epoch ms, or NaN. */
-function parseGdeltDate(value: unknown): number {
+export function parseGdeltDate(value: unknown): number {
   const m = typeof value === "string" ? /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(value) : null;
   return m ? Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!, +m[6]!) : Number.NaN;
 }

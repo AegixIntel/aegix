@@ -142,6 +142,7 @@ async function main() {
     assert.ok(subjects.json().assets.some((a: { subject: string; kind: string }) => a.subject === "NVDAx" && a.kind === "TOKENIZED_STOCK"));
     assert.equal(discoverySeries(config).length, 6, "only series whose capture is on are scanned");
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_TOKENIZED_STOCK_CAPTURE: "true", ENABLE_NARRATIVE_CAPTURE: "true" })).length, 28 + 8);
+    assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_NARRATIVE_CONTEXT_CAPTURE: "true" })).length, 8, "the context reading is its own eight series");
 
     // ---- Discovery: one ID per relationship, timestamped and chained ----
     const engineVersion = `e2e-d14-${run}`;

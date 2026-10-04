@@ -202,8 +202,11 @@ const envSchema = z.object({
   // different cost and a different standing: tokenized stocks are read from
   // RPC_URL, narrative volume from GDELT's public API, and options from
   // Cboe's delayed website feed, which carries no redistribution licence.
+  // Narrative has two readings from two GDELT indexes, each with its own
+  // flag: the DOC 2.0 volume share and the Context 2.0 hourly mention count.
   ENABLE_TOKENIZED_STOCK_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_NARRATIVE_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_NARRATIVE_CONTEXT_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_OPTIONS_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
   OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
