@@ -99,7 +99,7 @@ export function SignalGraph({ card, related }: { card: DiscoveryCard; related: R
             {wrap(node.label).map((line, i) => (
               <text key={line} x={MAIN_X[side]} y={MAIN_Y + 34 + i * 13} textAnchor="middle" className="fill-ink text-[11px] font-medium">{line}</text>
             ))}
-            <text x={MAIN_X[side]} y={MAIN_Y - 18} textAnchor="middle" className="fill-muted-2 font-mono text-[9px] uppercase tracking-[0.12em]">{node.group}</text>
+            <text x={MAIN_X[side]} y={MAIN_Y - 18} textAnchor="middle" className="fill-muted-2 font-mono text-[9px] uppercase tracking-[0.12em]">{node.group.length > 22 ? `${node.group.slice(0, 21)}…` : node.group}</text>
           </g>
         ))}
       </svg>
