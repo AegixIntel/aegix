@@ -188,9 +188,12 @@
     mask-image: linear-gradient(to right, transparent, #000 16%, #000 97%, transparent),
       linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
   }
+  /* A plate kept from its left carries the brand mark in its top-left
+     corner. The page already shows the mark, so that corner is faded out. */
   .plate-fade-right {
     mask-image: linear-gradient(to left, transparent, #000 16%, #000 97%, transparent),
-      linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
+      linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent),
+      radial-gradient(ellipse 15% 8% at 11% 7%, transparent 75%, #000 100%);
   }
   @media (prefers-reduced-motion: no-preference) {
     [data-reveal] .plate {
