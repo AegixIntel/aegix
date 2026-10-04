@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { discoveryProofUrl, getDiscovery, listDiscoveries, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
 import { SignalGraph } from "@/components/signal-graph";
 import { useRequireAuth } from "@/lib/auth-guard";
@@ -9,15 +9,29 @@ const day = (iso: string) => `${iso.slice(0, 10)} — ${iso.slice(11, 16)} UTC`;
 const daily = (d: DiscoverySummary) => d.engineVersion.startsWith("discovery-daily");
 const lagText = (d: DiscoverySummary) => d.lagHours === 0 ? (daily(d) ? "same day" : "same hour") : daily(d) ? `${Math.abs(d.lagHours) / 24}d lag` : `${Math.abs(d.lagHours)}h lag`;
 
-function Card({ discovery, onInvestigate }: { discovery: DiscoverySummary; onInvestigate: () => void }) {
+/** What a card is showing under its discovery: a request in flight, the detail, or why it could not be read. */
+type Investigation = { state: "loading" } | { state: "open"; detail: DiscoveryDetailResponse } | { state: "failed"; message: string };
+
+function Card({ discovery, investigation, onToggle }: { discovery: DiscoverySummary; investigation: Investigation | undefined; onToggle: () => void }) {
   const { card } = discovery;
-  return <li className="rounded-lg border border-ink/10 p-5">
+  const opened = useRef<HTMLDivElement>(null);
+  const open = investigation?.state === "open";
+  // The detail is long and opens under the card, so it is brought into view:
+  // a click that changes nothing on screen reads as a button that is broken.
+  useEffect(() => {
+    if (open) opened.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [open]);
+  return <li className={`rounded-lg border p-5 ${investigation ? "border-ink/30" : "border-ink/10"}`}>
     <p className="text-xs text-muted-2">Discovery #{discovery.id} · {discovery.status.replace("_", " ")}</p>
     <h2 className="mt-1 text-lg text-ink">{card.title}</h2>
     <p className="mt-2 text-sm text-ink/80">{card.summary}</p>
     <p className="mt-3 text-xs text-muted-foreground">Confidence (1 − q): {(card.confidence * 100).toFixed(1)}% · q = {card.qValue.toExponential(2)} across {card.hypothesesTested} hypotheses · r = {card.effect.r} · {lagText(discovery)}</p>
     <p className="mt-1 text-xs text-muted-foreground">First detected: {day(discovery.firstDetectedAt)}</p>
-    <button className="btn-primary mt-4 px-4 py-2 text-sm" onClick={onInvestigate}>Investigate →</button>
+    <button className="btn-primary mt-4 px-4 py-2 text-sm" onClick={onToggle} disabled={investigation?.state === "loading"} aria-expanded={open}>
+      {investigation?.state === "loading" ? "Opening…" : open ? "Close" : "Investigate →"}
+    </button>
+    {investigation?.state === "failed" ? <p role="alert" className="mt-3 text-sm text-amber-800">{investigation.message}</p> : null}
+    {open ? <div ref={opened} className="scroll-mt-20"><Detail detail={investigation.detail} /></div> : null}
   </li>;
 }
 
@@ -27,11 +41,7 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
   const section = (title: string, body: string | string[]) => <div><h3 className="text-sm font-semibold text-ink/80">{title}</h3>
     {Array.isArray(body) ? <ul className="mt-1 text-sm text-muted-foreground">{body.map((line) => <li key={line} className="mt-1">{line}</li>)}</ul> : <p className="mt-1 text-sm text-muted-foreground">{body}</p>}
   </div>;
-  return <section className="mt-8 space-y-5 rounded-lg border border-ink/10 p-5">
-    <div>
-      <p className="text-xs text-muted-2">Discovery #{discovery.id} · {discovery.status.replace("_", " ")} · first detected {day(discovery.firstDetectedAt)}</p>
-      <h2 className="mt-1 text-lg text-ink">{card.title}</h2>
-    </div>
+  return <section className="mt-6 space-y-5 border-t border-ink/10 pt-6">
     <div><h3 className="text-sm font-semibold text-ink/80">Signal graph</h3>
       <SignalGraph card={card} related={detail.related} />
       <ul className="mt-3 font-mono text-sm text-ink/80">{card.graph.edges.map((edge) => {
@@ -63,7 +73,8 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
 
 export default function Discoveries() {
   const [data, setData] = useState<DiscoveryListResponse | null>(null);
-  const [detail, setDetail] = useState<DiscoveryDetailResponse | null>(null);
+  const [investigations, setInvestigations] = useState<Record<string, Investigation>>({});
+  const inFlight = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const { user, requireAuth } = useRequireAuth();
 
@@ -78,10 +89,24 @@ export default function Discoveries() {
     return () => { cancelled = true; };
   }, [user]);
 
-  async function investigate(id: string) {
-    setError(null);
-    try { setDetail(await getDiscovery(id)); }
-    catch (err) { setError(err instanceof Error ? err.message : "Discovery unavailable"); }
+  /** Opens a discovery under its own card, or closes it if it is open. */
+  async function toggle(id: string) {
+    // Clicks can land faster than a render: the ref is what stops a second request.
+    if (inFlight.current.has(id)) return;
+    if (investigations[id]?.state === "open") {
+      setInvestigations(({ [id]: _closed, ...rest }) => rest);
+      return;
+    }
+    inFlight.current.add(id);
+    setInvestigations((all) => ({ ...all, [id]: { state: "loading" } }));
+    try {
+      const detail = await getDiscovery(id);
+      setInvestigations((all) => ({ ...all, [id]: { state: "open", detail } }));
+    } catch (err) {
+      setInvestigations((all) => ({ ...all, [id]: { state: "failed", message: err instanceof Error ? err.message : "Discovery unavailable" } }));
+    } finally {
+      inFlight.current.delete(id);
+    }
   }
 
   return <main className="mx-auto max-w-5xl px-4 py-8">
@@ -95,8 +120,7 @@ export default function Discoveries() {
         : "The engine has not completed a scan yet."}</p>
       {data.discoveries.length === 0
         ? <p className="mt-6 text-sm text-muted-foreground">No discovery on record. A scan that finds nothing is the expected result most days; it is not evidence that the series are unrelated.</p>
-        : <ul className="mt-6 space-y-4">{data.discoveries.map((discovery) => <Card key={discovery.id} discovery={discovery} onInvestigate={() => void investigate(discovery.id)} />)}</ul>}
+        : <ul className="mt-6 space-y-4">{data.discoveries.map((discovery) => <Card key={discovery.id} discovery={discovery} investigation={investigations[discovery.id]} onToggle={() => void toggle(discovery.id)} />)}</ul>}
     </> : null}
-    {detail ? <Detail detail={detail} /> : null}
   </main>;
 }
