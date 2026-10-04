@@ -53,22 +53,22 @@ export default function AnalysisTracker({ analysisId, onComplete }: { analysisId
   const stageLabel = STAGE_LABELS[status] ?? status;
 
   return (
-    <div className="mx-auto max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-6">
+    <div className="mx-auto max-w-lg rounded-lg border border-ink/15 bg-paper-raised p-6">
       <div className="flex items-center justify-between">
         <p className="font-semibold">{stageLabel}</p>
-        <p className="text-sm text-slate-400">{status}</p>
+        <p className="text-sm text-muted-foreground">{status}</p>
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-ink/[0.06]">
         <div
           className="h-full bg-accent transition-all"
           style={{ width: `${Math.max(progress, status === "READY" ? 100 : 5)}%` }}
         />
       </div>
       {status === "READY" && (
-        <p className="mt-4 text-sm text-emerald-400">Analysis complete.</p>
+        <p className="mt-4 text-sm text-emerald-800">Analysis complete.</p>
       )}
       {status === "FAILED" && (
-        <p className="mt-4 text-sm text-red-400">Analysis failed. Please try again.</p>
+        <p className="mt-4 text-sm text-red-700">Analysis failed. Please try again.</p>
       )}
     </div>
   );

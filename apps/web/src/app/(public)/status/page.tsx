@@ -42,7 +42,7 @@ export default function StatusPage() {
     void load();
   }, [load]);
 
-  const statusColor = health?.status === "ok" ? "text-emerald-400" : health?.status === "degraded" ? "text-amber-400" : "text-red-400";
+  const statusColor = health?.status === "ok" ? "text-emerald-800" : health?.status === "degraded" ? "text-amber-800" : "text-red-700";
 
   return (
     <div className="container-narrow py-20 md:py-28">
@@ -54,7 +54,7 @@ export default function StatusPage() {
 
       <div className="mt-12">
         {loading ? (
-          <div className="border border-white/10 p-8 text-center text-sm text-muted-foreground">Checking services…</div>
+          <div className="border border-ink/10 p-8 text-center text-sm text-muted-foreground">Checking services…</div>
         ) : error ? (
           <ErrorState
             title="Status Unavailable"
@@ -62,7 +62,7 @@ export default function StatusPage() {
             retry={() => void load()}
           />
         ) : health ? (
-          <div className="border border-white/10 p-6">
+          <div className="border border-ink/10 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className={`font-display text-2xl font-semibold ${statusColor}`}>
@@ -74,7 +74,7 @@ export default function StatusPage() {
                 Refresh
               </button>
             </div>
-            <dl className="mt-6 divide-y divide-white/10">
+            <dl className="mt-6 divide-y divide-ink/10">
               {Object.entries(CHECK_LABELS).map(([key, label]) => {
                 const ok = health.checks[key];
                 return (
@@ -82,10 +82,10 @@ export default function StatusPage() {
                     <dt className="text-sm text-muted-foreground">{label}</dt>
                     <dd className="flex items-center gap-2 text-sm">
                       <span
-                        className={`inline-flex h-2 w-2 rounded-full ${ok === true ? "bg-emerald-400" : ok === false ? "bg-red-400" : "bg-amber-400"}`}
+                        className={`inline-flex h-2 w-2 rounded-full ${ok === true ? "bg-emerald-600" : ok === false ? "bg-red-600" : "bg-amber-600"}`}
                         aria-hidden="true"
                       />
-                      <span className={ok === true ? "text-emerald-400" : ok === false ? "text-red-400" : "text-amber-300"}>
+                      <span className={ok === true ? "text-emerald-800" : ok === false ? "text-red-700" : "text-amber-800"}>
                         {ok === true ? "OK" : ok === false ? "Down" : "Unknown"}
                       </span>
                     </dd>

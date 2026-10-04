@@ -97,7 +97,7 @@ export default function WalletAuthButton({
             </button>
           </>
         )}
-        {auth.error && <span className="text-xs text-red-400">{auth.error}</span>}
+        {auth.error && <span className="text-xs text-red-700">{auth.error}</span>}
         {picker}
       </div>
     );
@@ -117,7 +117,7 @@ export default function WalletAuthButton({
           Signing does not create a transaction and costs no SOL.
         </span>
       )}
-      {(auth.error || error) && <span className="text-xs text-red-400">{auth.error ?? error}</span>}
+      {(auth.error || error) && <span className="text-xs text-red-700">{auth.error ?? error}</span>}
       {picker}
     </div>
   );
@@ -135,20 +135,20 @@ function WalletPickerPopover({
 }) {
   return (
     <div
-      className="absolute right-0 top-full z-[100] mt-2 w-72 rounded-lg border border-white/10 bg-ink-deep p-4 shadow-2xl shadow-black/60"
+      className="absolute right-0 top-full z-[100] mt-2 w-72 rounded-lg border border-ink/10 bg-paper p-4 shadow-2xl shadow-ink/20"
       role="dialog"
       aria-label="Select a wallet"
     >
       <div className="flex items-start justify-between">
         <div>
           <p className="section-label-accent">Connect to AEGIX</p>
-          <h2 className="mt-1.5 font-display text-base font-semibold text-marble">Select a wallet</h2>
+          <h2 className="mt-1.5 font-display text-base font-semibold text-ink">Select a wallet</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="rounded-sm p-1 text-muted-2 hover:text-marble"
+          className="rounded-sm p-1 text-muted-2 hover:text-ink"
         >
           <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
@@ -167,7 +167,7 @@ function WalletPickerPopover({
             type="button"
             onClick={() => onSelect(w.adapter.name)}
             disabled={!w.adapter.readyState || w.adapter.readyState === "Unsupported"}
-            className="flex w-full items-center justify-between rounded-md border border-white/10 px-3 py-2.5 text-left transition hover:border-accent disabled:opacity-40"
+            className="flex w-full items-center justify-between rounded-md border border-ink/10 px-3 py-2.5 text-left transition hover:border-accent disabled:opacity-40"
           >
             <span className="flex items-center gap-2.5">
               {w.adapter.icon ? (
@@ -179,16 +179,16 @@ function WalletPickerPopover({
                   height={24}
                 />
               ) : (
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-white/[0.04] font-display text-sm font-bold text-marble">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-ink/[0.04] font-display text-sm font-bold text-ink">
                   {w.adapter.name.slice(0, 1)}
                 </span>
               )}
-              <span className="text-sm font-medium text-marble">{w.adapter.name}</span>
+              <span className="text-sm font-medium text-ink">{w.adapter.name}</span>
             </span>
             {w.adapter.readyState === "Unsupported" ? (
               <span className="font-mono text-[10px] uppercase tracking-wide text-muted-2">Unsupported</span>
             ) : (
-              <span className="text-accent-bright">→</span>
+              <span className="text-accent-ink">→</span>
             )}
           </button>
         ))}
@@ -196,7 +196,7 @@ function WalletPickerPopover({
 
       <p className="mt-4 text-center text-xs text-muted-2">
         Don&apos;t have a wallet?{" "}
-        <a href="https://phantom.app/" target="_blank" rel="noreferrer" className="text-marble underline underline-offset-4">
+        <a href="https://phantom.app/" target="_blank" rel="noreferrer" className="text-ink underline underline-offset-4">
           Get Phantom
         </a>
       </p>

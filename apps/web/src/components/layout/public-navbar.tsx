@@ -11,7 +11,7 @@ export function PublicNavbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-ink-deep/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-ink/10 bg-paper/85 backdrop-blur-md">
       <nav className="container-page flex h-16 items-center justify-between gap-4" aria-label="Primary">
         <Link href="/" className="flex flex-none items-center gap-3" aria-label="AEGIX home">
           <AegixLogo />
@@ -24,10 +24,10 @@ export function PublicNavbar() {
           {primaryNav.map((group) => (
             <NavDropdown key={group.label} group={group} />
           ))}
-          <Link href={docsNavLink.href} className="text-sm text-muted-foreground transition hover:text-marble">
+          <Link href={docsNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
             {docsNavLink.label}
           </Link>
-          <Link href={roadmapNavLink.href} className="text-sm text-muted-foreground transition hover:text-marble">
+          <Link href={roadmapNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
             {roadmapNavLink.label}
           </Link>
         </div>
@@ -41,7 +41,7 @@ export function PublicNavbar() {
 
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-marble md:hidden"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ink/10 text-ink md:hidden"
           aria-expanded={open}
           aria-controls="mobile-nav"
           aria-label="Toggle navigation menu"
@@ -58,15 +58,15 @@ export function PublicNavbar() {
       </nav>
 
       {open && (
-        <div id="mobile-nav" className="border-t border-white/10 bg-ink-deep md:hidden">
+        <div id="mobile-nav" className="border-t border-ink/10 bg-paper md:hidden">
           <div className="container-page flex flex-col gap-1 py-4">
             {primaryNav.map((group) => (
               <MobileNavGroup key={group.label} group={group} onNavigate={() => setOpen(false)} />
             ))}
-            <Link href={docsNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-marble">
+            <Link href={docsNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
               {docsNavLink.label}
             </Link>
-            <Link href={roadmapNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-marble">
+            <Link href={roadmapNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
               {roadmapNavLink.label}
             </Link>
             <div className="mt-3">

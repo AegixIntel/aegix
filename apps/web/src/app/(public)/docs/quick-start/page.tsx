@@ -10,7 +10,7 @@ export default function QuickStartPage() {
       <DocHeading eyebrow="Getting Started" title="Quick Start" lead="Analyze a Solana wallet and see its privacy exposure in a few steps." />
       <DocSection title="1. Analyze a wallet">
         <p>Open the Wallet X-Ray page and paste a Solana address. AEGIX will classify the account, and if it is a personal wallet, start an analysis.</p>
-        <Link href="/app/analyze" className="inline-block text-sm text-accent underline">Open Wallet X-Ray →</Link>
+        <Link href="/app/analyze" className="inline-block text-sm text-accent-ink underline">Open Wallet X-Ray →</Link>
       </DocSection>
       <DocSection title="2. Wait for the analysis">
         <p>Analysis runs asynchronously. The UI polls the real backend status (queued → fetching → normalizing → analyzing → scoring → graphing → ready). AEGIX never fakes completion.</p>
@@ -29,7 +29,7 @@ export default function QuickStartPage() {
   -H "Content-Type: application/json" \\
   -d '{"wallet":"<SOLANA_ADDRESS>"}'`}</DocCode>
         <p className="mt-3">
-          <Link href="/docs/api/overview" className="text-accent underline">Read the Developer API →</Link>
+          <Link href="/docs/api/overview" className="text-accent-ink underline">Read the Developer API →</Link>
         </p>
       </DocSection>
 

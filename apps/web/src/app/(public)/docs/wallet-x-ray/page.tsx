@@ -37,7 +37,7 @@ export default function WalletXRayDocPage() {
       <DocSection title="Score vs confidence">
         <p>Exposure score and confidence are distinct. A high score built on sparse data is reported with low confidence — the UI keeps them separate so you are never misled.</p>
         <p className="mt-3">
-          <Link href="/docs/exposure-score" className="text-accent underline">Read about the exposure score →</Link>
+          <Link href="/docs/exposure-score" className="text-accent-ink underline">Read about the exposure score →</Link>
         </p>
       </DocSection>
     </div>

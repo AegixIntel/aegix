@@ -39,21 +39,21 @@ export function EditorialHeading({
 
 /** Status badge — neutral by default, single accent for LIVE / ACTIVE. */
 const STATUS_TONES: Record<string, string> = {
-  LIVE: "text-accent-bright border-accent/40",
-  ACTIVE: "text-accent-bright border-accent/40",
-  READY: "text-emerald-400 border-emerald-400/30",
-  VERIFIED: "text-emerald-400 border-emerald-400/30",
-  SHIPPED: "text-emerald-400 border-emerald-400/30",
-  "IN DEVELOPMENT": "text-amber-300 border-amber-400/30",
-  CURRENT: "text-amber-300 border-amber-400/30",
-  NEXT: "text-muted-foreground border-white/15",
-  PLANNED: "text-muted-foreground border-white/15",
-  LATER: "text-muted-2 border-white/10",
-  RESEARCH: "text-muted-foreground border-white/15"
+  LIVE: "text-accent-ink border-accent/40",
+  ACTIVE: "text-accent-ink border-accent/40",
+  READY: "text-emerald-800 border-emerald-600/30",
+  VERIFIED: "text-emerald-800 border-emerald-600/30",
+  SHIPPED: "text-emerald-800 border-emerald-600/30",
+  "IN DEVELOPMENT": "text-amber-800 border-amber-600/30",
+  CURRENT: "text-amber-800 border-amber-600/30",
+  NEXT: "text-muted-foreground border-ink/15",
+  PLANNED: "text-muted-foreground border-ink/15",
+  LATER: "text-muted-2 border-ink/10",
+  RESEARCH: "text-muted-foreground border-ink/15"
 };
 
 export function StatusBadge({ label, className }: { label: string; className?: string }) {
-  const tone = STATUS_TONES[label.toUpperCase()] ?? "text-muted-foreground border-white/15";
+  const tone = STATUS_TONES[label.toUpperCase()] ?? "text-muted-foreground border-ink/15";
   return (
     <span
       className={cn(
@@ -73,12 +73,12 @@ export function InlineArrowLink({ href, children, className }: { href: string; c
     <Link
       href={href}
       className={cn(
-        "group inline-flex items-center gap-1 text-sm font-medium text-marble decoration-white/20 underline-offset-4 transition hover:text-marble hover:decoration-accent-bright",
+        "group inline-flex items-center gap-1 text-sm font-medium text-ink decoration-ink/20 underline-offset-4 transition hover:text-ink hover:decoration-accent",
         className
       )}
     >
       <span className="underline decoration-transparent group-hover:underline">{children}</span>
-      <span className="text-accent-bright transition-transform group-hover:translate-x-0.5">→</span>
+      <span className="text-accent-ink transition-transform group-hover:translate-x-0.5">→</span>
     </Link>
   );
 }
@@ -102,10 +102,10 @@ export function FeatureRow({
   className?: string;
 }) {
   return (
-    <div className={cn("group grid gap-5 border-t border-white/10 py-8 md:grid-cols-[3rem_1fr_1.2fr_auto]", className)}>
+    <div className={cn("group grid gap-5 border-t border-ink/10 py-8 md:grid-cols-[3rem_1fr_1.2fr_auto]", className)}>
       <span className="font-mono text-sm text-muted-2">{index}</span>
       <div>
-        <h3 className="font-display text-xl font-semibold tracking-tight text-marble">{title}</h3>
+        <h3 className="font-display text-xl font-semibold tracking-tight text-ink">{title}</h3>
         <p className="mt-2 max-w-md editorial-p">{body}</p>
         {detail && (
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
@@ -139,7 +139,7 @@ export function TechnicalMetric({ label, value, unit, className }: { label: stri
 /** Code-like typography block — reads real routes only. */
 export function CodePreview({ children, className }: { children: string; className?: string }) {
   return (
-    <pre className={cn("overflow-x-auto rounded-md border border-white/10 bg-black/40 p-4 font-mono text-[13px] leading-relaxed text-marble/90", className)}>
+    <pre className={cn("overflow-x-auto rounded-md border border-ink/10 bg-ink/[0.05] p-4 font-mono text-[13px] leading-relaxed text-ink/90", className)}>
       <code>{children}</code>
     </pre>
   );
@@ -152,8 +152,8 @@ export function PipelineDiagram({ steps, className }: { steps: string[]; classNa
       {steps.map((step, i) => (
         <li key={step} className="flex items-center gap-4">
           <span className="section-label width-0 flex-none tabular-nums text-muted-2">{String(i + 1).padStart(2, "0")}</span>
-          <span className="border-t border-white/10 py-3 font-mono text-sm uppercase tracking-[0.14em] text-marble/80">{step}</span>
-          {i < steps.length - 1 && <span className="text-accent-bright">↓</span>}
+          <span className="border-t border-ink/10 py-3 font-mono text-sm uppercase tracking-[0.14em] text-ink/80">{step}</span>
+          {i < steps.length - 1 && <span className="text-accent-ink">↓</span>}
         </li>
       ))}
     </ol>
@@ -172,8 +172,8 @@ export function ProductStatus({ groups }: { groups: Array<{ label: string; items
             <StatusBadge label={group.label} className="mb-3" />
             <ul className="space-y-2">
               {group.items.map((item) => (
-                <li key={item} className={cn("flex items-center gap-2 text-sm", live ? "text-marble/90" : "text-muted-foreground")}>
-                  <span className={cn("h-1 w-1 rounded-full", live ? "bg-accent-bright" : "bg-muted-2")} aria-hidden="true" />
+                <li key={item} className={cn("flex items-center gap-2 text-sm", live ? "text-ink/90" : "text-muted-foreground")}>
+                  <span className={cn("h-1 w-1 rounded-full", live ? "bg-accent" : "bg-muted-2")} aria-hidden="true" />
                   {item}
                 </li>
               ))}
@@ -188,7 +188,7 @@ export function ProductStatus({ groups }: { groups: Array<{ label: string; items
 /** Editorial empty state. */
 export function EmptyState({ title, body, action }: { title: string; body: string; action?: { label: string; href: string } }) {
   return (
-    <div className="rounded-md border border-dashed border-white/15 p-8 text-center">
+    <div className="rounded-md border border-dashed border-ink/15 p-8 text-center">
       <p className="mono-label">{title}</p>
       <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">{body}</p>
       {action && (
@@ -203,8 +203,8 @@ export function EmptyState({ title, body, action }: { title: string; body: strin
 /** Editorial error state. */
 export function ErrorState({ title, message, retry }: { title: string; message: string; retry?: () => void }) {
   return (
-    <div className="rounded-md border border-red-500/20 p-8 text-center">
-      <p className="mono-label text-red-400">{title}</p>
+    <div className="rounded-md border border-red-600/20 p-8 text-center">
+      <p className="mono-label text-red-700">{title}</p>
       <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">{message}</p>
       {retry && (
         <button type="button" onClick={retry} className="btn-secondary mt-5">

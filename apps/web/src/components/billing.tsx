@@ -112,23 +112,23 @@ export default function Billing() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
-      <h1 className="font-display text-2xl font-semibold text-marble">Plan &amp; usage</h1>
+      <h1 className="font-display text-2xl font-semibold text-ink">Plan &amp; usage</h1>
       <p className="mt-2 text-sm text-muted-foreground">
         Your plan sets the limits AEGIX enforces. Usage is metered from the same records the product
         counts against your quotas — nothing here is estimated.
       </p>
 
       {error ? (
-        <p role="alert" className="mt-6 text-sm text-amber-300">
+        <p role="alert" className="mt-6 text-sm text-amber-800">
           {error}
         </p>
       ) : null}
-      {notice ? <p className="mt-6 text-sm text-emerald-300">{notice}</p> : null}
+      {notice ? <p className="mt-6 text-sm text-emerald-800">{notice}</p> : null}
 
       {subscription ? (
         <section className="card-surface mt-6 p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-lg font-semibold text-marble">
+            <h2 className="text-lg font-semibold text-ink">
               {enforced?.name ?? "Free"}{" "}
               <span className="text-sm font-normal text-muted-foreground">
                 {enforced && enforced.priceCents > 0
@@ -138,16 +138,16 @@ export default function Billing() {
             </h2>
             <span className="text-xs uppercase tracking-wide text-muted-foreground">{subscription.status}</span>
           </div>
-          <p className="mt-2 text-sm text-slate-300">{STATUS_NOTE[subscription.status]}</p>
+          <p className="mt-2 text-sm text-ink/80">{STATUS_NOTE[subscription.status]}</p>
 
           {subscription.degraded ? (
-            <p className="mt-2 text-sm text-amber-300">
+            <p className="mt-2 text-sm text-amber-800">
               You are subscribed to {subscription.subscribedPlan?.name}, but {enforced?.name ?? "free"} limits are
               being enforced right now. Your data and saved work are untouched.
             </p>
           ) : null}
 
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-muted-2">
             Current period {new Date(subscription.period.start).toLocaleDateString()} —{" "}
             {new Date(subscription.period.end).toLocaleDateString()}
             {subscription.cancelAtPeriodEnd ? " · cancels at period end" : ""}
@@ -156,9 +156,9 @@ export default function Billing() {
 
           <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
             {Object.entries(subscription.entitlements).map(([key, value]) => (
-              <div key={key} className="flex justify-between border-b border-white/5 py-1 text-sm">
+              <div key={key} className="flex justify-between border-b border-ink/5 py-1 text-sm">
                 <dt className="text-muted-foreground">{ENTITLEMENT_LABEL[key] ?? key}</dt>
-                <dd className="font-semibold text-marble">{value}</dd>
+                <dd className="font-semibold text-ink">{value}</dd>
               </div>
             ))}
           </dl>
@@ -175,7 +175,7 @@ export default function Billing() {
             ) : null}
             {["TRIALING", "ACTIVE", "PAST_DUE"].includes(subscription.status) ? (
               <button
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-200"
+                className="rounded-lg border border-ink/10 px-4 py-2 text-sm text-ink"
                 disabled={busy}
                 onClick={() =>
                   void requireAuth(() =>
@@ -189,7 +189,7 @@ export default function Billing() {
           </div>
 
           {subscription.upgradeRequest ? (
-            <p className="mt-4 text-sm text-slate-300">
+            <p className="mt-4 text-sm text-ink/80">
               Upgrade to {requestedPlan?.name ?? subscription.upgradeRequest.plan} requested on{" "}
               {new Date(subscription.upgradeRequest.requestedAt).toLocaleDateString()}. It is pending manual activation by
               the AEGIX team; your current limits apply until then.
@@ -197,15 +197,15 @@ export default function Billing() {
           ) : null}
 
           {plans && !plans.selfServe ? (
-            <p className="mt-4 text-xs text-slate-500">
+            <p className="mt-4 text-xs text-muted-2">
               Paid plans are provisioned manually for now. Request an upgrade on the plan you want and the AEGIX team
               will get in touch to arrange payment; the plan is activated once payment is confirmed. Cancelling never
               needs a request. Paid plans are covered by the{" "}
-              <Link href="/terms" className="underline underline-offset-4 hover:text-slate-300">
+              <Link href="/terms" className="underline underline-offset-4 hover:text-ink/80">
                 Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/refund" className="underline underline-offset-4 hover:text-slate-300">
+              <Link href="/refund" className="underline underline-offset-4 hover:text-ink/80">
                 Refund Policy
               </Link>
               .
@@ -216,31 +216,31 @@ export default function Billing() {
 
       {plans ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-marble">Plans</h2>
+          <h2 className="text-lg font-semibold text-ink">Plans</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {plans.plans.map((plan) => (
               <div
                 key={plan.code}
                 className={`card-surface p-5 ${plan.code === enforced?.code ? "border border-accent/40" : ""}`}
               >
-                <h3 className="text-base font-semibold text-marble">{plan.name}</h3>
+                <h3 className="text-base font-semibold text-ink">{plan.name}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {plan.priceCents > 0 ? `${money(plan.priceCents, plan.currency)} / ${plan.interval.toLowerCase()}` : "Free"}
                 </p>
-                <ul className="mt-3 space-y-1 text-xs text-slate-400">
+                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
                   {Object.entries(plan.entitlements).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-3">
                       <span>{ENTITLEMENT_LABEL[key] ?? key}</span>
-                      <span className="font-semibold text-slate-200">{value}</span>
+                      <span className="font-semibold text-ink">{value}</span>
                     </li>
                   ))}
                 </ul>
                 {plan.code === enforced?.code ? (
-                  <p className="mt-3 text-xs uppercase tracking-wide text-accent">Current</p>
+                  <p className="mt-3 text-xs uppercase tracking-wide text-accent-ink">Current</p>
                 ) : null}
                 {!plans.selfServe && plan.priceCents > 0 && plan.tier > liveTier ? (
                   subscription?.upgradeRequest?.plan === plan.code ? (
-                    <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">Upgrade requested</p>
+                    <p className="mt-4 text-xs uppercase tracking-wide text-muted-foreground">Upgrade requested</p>
                   ) : requesting === plan.code ? (
                     <form
                       className="mt-4 space-y-2"
@@ -260,7 +260,7 @@ export default function Billing() {
                       </label>
                       <input
                         id={`contact-${plan.code}`}
-                        className="w-full rounded-lg border border-white/10 bg-transparent px-3 py-2 text-sm text-marble"
+                        className="w-full rounded-lg border border-ink/10 bg-transparent px-3 py-2 text-sm text-ink"
                         maxLength={200}
                         value={contact}
                         onChange={(event) => setContact(event.target.value)}
@@ -271,7 +271,7 @@ export default function Billing() {
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300"
+                          className="rounded-lg border border-ink/10 px-3 py-2 text-sm text-ink/80"
                           onClick={() => setRequesting(null)}
                         >
                           Cancel
@@ -300,16 +300,16 @@ export default function Billing() {
 
       {usage ? (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-marble">Usage this period</h2>
+          <h2 className="text-lg font-semibold text-ink">Usage this period</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {usage.days} days · {new Date(usage.period.start).toLocaleDateString()} —{" "}
             {new Date(usage.period.end).toLocaleDateString()}
           </p>
-          <div className="card-surface mt-4 divide-y divide-white/5">
+          <div className="card-surface mt-4 divide-y divide-ink/5">
             {usage.dimensions.map((dimension) => (
               <div key={dimension.dimension} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
                 <span className="text-muted-foreground">{DIMENSION_LABEL[dimension.dimension] ?? dimension.dimension}</span>
-                <span className="text-marble">
+                <span className="text-ink">
                   {dimension.units}
                   {dimension.includedUnits !== null ? (
                     <span className="text-muted-foreground"> / {dimension.includedUnits} included</span>
@@ -320,27 +320,27 @@ export default function Billing() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-muted-2">
             Cached results are not counted: a report served from cache does no new work, so it consumes no quota.
           </p>
         </section>
       ) : null}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-marble">Invoices</h2>
+        <h2 className="text-lg font-semibold text-ink">Invoices</h2>
         {invoices.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">
             No invoices yet. One is raised for each billing period that closes on a paid plan.
           </p>
         ) : (
-          <div className="card-surface mt-4 divide-y divide-white/5">
+          <div className="card-surface mt-4 divide-y divide-ink/5">
             {invoices.map((invoice) => (
               <div key={invoice.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
                 <span className="text-muted-foreground">
                   {new Date(invoice.period_start).toLocaleDateString()} — {new Date(invoice.period_end).toLocaleDateString()}
                   <span className="ml-2 text-xs uppercase tracking-wide">{invoice.status}</span>
                 </span>
-                <span className="font-semibold text-marble">{money(invoice.total_cents, invoice.currency || currency)}</span>
+                <span className="font-semibold text-ink">{money(invoice.total_cents, invoice.currency || currency)}</span>
               </div>
             ))}
           </div>

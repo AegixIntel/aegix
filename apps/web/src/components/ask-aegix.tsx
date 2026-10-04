@@ -50,9 +50,9 @@ export default function AskAegix({ wallet, market }: { wallet: string; market?: 
   }
 
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Ask AEGIX</h2>
-      <p className="mt-2 text-xs text-slate-500">
+    <section className="rounded-xl border border-ink/10 bg-ink/[0.02] p-5">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ask AEGIX</h2>
+      <p className="mt-2 text-xs text-muted-2">
         Explains the evidence above. It cannot compute intelligence, reach the chain, or see anything the
         analysis did not already produce. Statements that cite evidence AEGIX never issued are removed before
         they reach this panel.
@@ -64,7 +64,7 @@ export default function AskAegix({ wallet, market }: { wallet: string; market?: 
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={market ? "What do the market observations show?" : "What does the funding evidence show?"}
           maxLength={500}
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-100"
+          className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink"
         />
         <button type="submit" className="btn-secondary px-4 py-2 text-sm" disabled={loading}>
           {loading ? "Asking…" : "Ask"}
@@ -72,39 +72,39 @@ export default function AskAegix({ wallet, market }: { wallet: string; market?: 
       </form>
 
       {unavailable ? (
-        <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <p className="mt-4 rounded-lg border border-amber-600/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
           {unavailable}
         </p>
       ) : null}
 
       {answer ? (
         <div className="mt-5 space-y-4">
-          <p className="text-sm text-slate-200">{answer.answer.summary}</p>
+          <p className="text-sm text-ink">{answer.answer.summary}</p>
 
           {answer.answer.findings.length > 0 ? (
             <ul className="space-y-2">
               {answer.answer.findings.map((f) => (
-                <li key={f.statement} className="rounded-lg border border-white/5 bg-black/20 px-4 py-3">
-                  <p className="text-sm text-slate-200">{f.statement}</p>
-                  <p className="mt-2 font-mono text-[11px] text-slate-500">{f.evidenceIds.join("  ")}</p>
+                <li key={f.statement} className="rounded-lg border border-ink/5 bg-ink/[0.03] px-4 py-3">
+                  <p className="text-sm text-ink">{f.statement}</p>
+                  <p className="mt-2 font-mono text-[11px] text-muted-2">{f.evidenceIds.join("  ")}</p>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               No statement survived citation checking, so nothing is shown rather than something unsupported.
             </p>
           )}
 
           {answer.answer.limitations.length > 0 ? (
-            <ul className="space-y-1 text-xs text-slate-500">
+            <ul className="space-y-1 text-xs text-muted-2">
               {answer.answer.limitations.map((l) => (
                 <li key={l}>{l}</li>
               ))}
             </ul>
           ) : null}
 
-          <p className="border-t border-white/5 pt-3 text-[11px] text-slate-600">
+          <p className="border-t border-ink/5 pt-3 text-[11px] text-muted-2">
             {answer.model} · {answer.evidenceOffered.length} evidence items offered
             {answer.contextTruncated ? ` · ${answer.contextDropped} omitted for length` : ""}
             {answer.citationsDropped > 0 ? ` · ${answer.citationsDropped} invalid citation(s) removed` : ""}

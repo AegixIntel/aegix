@@ -69,8 +69,8 @@ export default function SavedComparisonPage() {
     <div className="container-page py-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/app/dashboard" className="text-xs text-muted-foreground hover:text-accent">← Dashboard</Link>
-          <h1 className="mt-1 font-display text-2xl font-semibold text-marble">
+          <Link href="/app/dashboard" className="text-xs text-muted-foreground hover:text-accent-ink">← Dashboard</Link>
+          <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
             {saved?.label ? `${saved.label} · ` : ""}
             <span className="font-mono">{saved ? `${shortAddress(saved.wallet_a)} vs ${shortAddress(saved.wallet_b)}` : "Saved Comparison"}</span>
           </h1>
@@ -78,29 +78,29 @@ export default function SavedComparisonPage() {
         </div>
         <button
           onClick={() => void unsave()}
-          className="rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10"
+          className="rounded-lg border border-red-600/40 px-4 py-2 text-sm text-red-700 hover:bg-red-500/10"
         >
           Unsave
         </button>
       </header>
 
-      {error && <p className="mt-6 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-6 text-sm text-red-700">{error}</p>}
 
       {saved && (
         <div className="mt-6 space-y-6">
           {/* Snapshot state (D6-A §10): the user must always know whether they
               see the saved historical result or current intelligence. */}
-          <section className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-xs text-muted-foreground">
+          <section className="rounded-lg border border-ink/10 bg-ink/[0.02] p-4 text-xs text-muted-foreground">
             <p>
               Result:{" "}
-              <span className="font-semibold text-marble/90">
+              <span className="font-semibold text-ink/90">
                 {comparison ? (stale ? "Current intelligence (rebuilt from persisted data)" : "Saved historical result") : "No persisted result yet"}
               </span>
               {saved.engine_version && <span> · engine {saved.engine_version}</span>}
               {saved.result_created_at && <span> · computed {new Date(saved.result_created_at).toLocaleString()}</span>}
             </p>
             {stale && (
-              <p className="mt-1 text-amber-300">
+              <p className="mt-1 text-amber-800">
                 The underlying analysis data is no longer fresh. Run a new comparison from Compare to refresh — this page never triggers analysis automatically.
               </p>
             )}
@@ -109,14 +109,14 @@ export default function SavedComparisonPage() {
           {/* User-owned metadata only (D6-A §15): score/confidence/evidence
               are never editable from the client. */}
           <form onSubmit={(e) => void saveMeta(e)} className="card-surface p-5">
-            <h2 className="text-sm font-semibold text-marble">Label & Notes</h2>
+            <h2 className="text-sm font-semibold text-ink">Label & Notes</h2>
             <label className="mt-3 block text-xs text-muted-foreground">
               Label
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 maxLength={120}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+                className="mt-1 w-full rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
               />
             </label>
             <label className="mt-3 block text-xs text-muted-foreground">
@@ -126,7 +126,7 @@ export default function SavedComparisonPage() {
                 onChange={(e) => setNotes(e.target.value)}
                 maxLength={2000}
                 rows={3}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+                className="mt-1 w-full rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
               />
             </label>
             <div className="mt-3 flex items-center gap-3">
@@ -143,15 +143,15 @@ export default function SavedComparisonPage() {
 
           {comparison && (
             <section className="card-surface p-5 text-sm">
-              <h2 className="text-sm font-semibold text-marble">Correlation</h2>
+              <h2 className="text-sm font-semibold text-ink">Correlation</h2>
               <p className="mt-2">
-                Strength <span className="text-2xl font-bold text-marble">{comparison.correlation.correlationScore}</span>/100
+                Strength <span className="text-2xl font-bold text-ink">{comparison.correlation.correlationScore}</span>/100
                 {" · "}Confidence <span className="font-semibold">{Math.round(comparison.correlation.confidence * 100)}%</span>
                 {" · "}{comparison.correlation.classification.replace(/_/g, " ")}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">{comparison.correlation.evidenceFamilies.map((f) => f.family).join(" + ") || "No overlapping evidence families"}</p>
               <p className="mt-2 text-xs text-muted-foreground">Correlation indicates observable linkability — it never establishes common ownership.</p>
-              <Link href={`/app/compare?a=${saved.wallet_a}&b=${saved.wallet_b}`} className="mt-3 inline-block text-xs text-accent underline">
+              <Link href={`/app/compare?a=${saved.wallet_a}&b=${saved.wallet_b}`} className="mt-3 inline-block text-xs text-accent-ink underline">
                 Open in Compare
               </Link>
             </section>

@@ -19,10 +19,10 @@ function shortAddress(address: string): string {
 
 function PathCard({ path }: { path: XRayPath }) {
   return (
-    <div className="border-t border-white/10 py-6">
+    <div className="border-t border-ink/10 py-6">
       <div className="flex flex-wrap items-center gap-3">
         <span className="font-mono text-xs text-muted-2">#{path.rank}</span>
-        <span className="rounded-sm border border-white/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-marble/80">
+        <span className="rounded-sm border border-ink/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink/80">
           {path.pathType}
         </span>
         <span className="ml-auto font-mono text-xs text-muted-2">
@@ -33,12 +33,12 @@ function PathCard({ path }: { path: XRayPath }) {
       <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-sm">
         {path.nodes.map((node, i) => (
           <span key={`${node.label}-${i}`} className="flex items-center gap-2">
-            {i > 0 && <span className="text-accent-bright">→</span>}
+            {i > 0 && <span className="text-accent-ink">→</span>}
             <span
               className={
                 node.type === "ENTITY"
-                  ? "rounded-sm bg-accent-dim px-1.5 py-0.5 text-accent-bright"
-                  : "rounded-sm border border-white/10 px-1.5 py-0.5 text-marble/90"
+                  ? "rounded-sm bg-accent-dim px-1.5 py-0.5 text-accent-ink"
+                  : "rounded-sm border border-ink/10 px-1.5 py-0.5 text-ink/90"
               }
               title={node.type}
             >
@@ -53,9 +53,9 @@ function PathCard({ path }: { path: XRayPath }) {
         {path.edges.map((edge, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="font-mono text-muted-2">{shortAddress(edge.source)}</span>
-            <span className="text-accent-bright">—</span>
+            <span className="text-accent-ink">—</span>
             <span className="font-mono uppercase tracking-wide">{edge.type}</span>
-            <span className="text-accent-bright">—</span>
+            <span className="text-accent-ink">—</span>
             <span className="font-mono text-muted-2">{shortAddress(edge.target)}</span>
           </div>
         ))}
@@ -72,7 +72,7 @@ function AttackPathList({ paths }: { paths: XRayPath[] }) {
   if (paths.length === 0) return null;
   return (
     <div>
-      <div className="flex items-center justify-between border-b border-white/10 pb-4">
+      <div className="flex items-center justify-between border-b border-ink/10 pb-4">
         <p className="section-label">Attack Paths</p>
         <span className="font-mono text-xs text-muted-2">{paths.length} paths</span>
       </div>
@@ -146,15 +146,15 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
   return (
     <div className="premium-workspace min-h-screen px-5 py-8 md:px-10 md:py-12 lg:px-14 lg:py-16">
       <div className="mx-auto max-w-[86rem]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">
-        <span>Intelligence / <span className="text-accent-bright">Attack laboratory</span></span>
-        <span className="flex items-center gap-2"><span className="live-dot h-1.5 w-1.5 bg-accent-bright" />Path engine · live</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 pb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-2">
+        <span>Intelligence / <span className="text-accent-ink">Attack laboratory</span></span>
+        <span className="flex items-center gap-2"><span className="live-dot h-1.5 w-1.5 bg-accent" />Path engine · live</span>
       </div>
 
       <div className="mt-12 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="max-w-4xl">
         <p className="section-label-accent">Attack My Wallet</p>
-        <h1 className="mt-5 font-display text-5xl font-medium leading-[0.98] tracking-[-0.045em] text-marble md:text-7xl">
+        <h1 className="mt-5 font-display text-5xl font-medium leading-[0.98] tracking-[-0.045em] text-ink md:text-7xl">
           Trace what an observer<br className="hidden sm:block" /> could follow.
         </h1>
         <p className="mt-7 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
@@ -162,18 +162,18 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
           observed. This is not a real-world identification claim.
         </p>
         </div>
-        <div className="grid grid-cols-2 border border-white/10 bg-black/30 text-left lg:w-80">
-          <div className="border-r border-white/10 p-4"><p className="mono-label">Scope</p><p className="mt-2 text-sm font-semibold text-marble">Bounded graph</p></div>
-          <div className="p-4"><p className="mono-label">Claims</p><p className="mt-2 text-sm font-semibold text-marble">Evidence only</p></div>
+        <div className="grid grid-cols-2 border border-ink/10 bg-ink/[0.04] text-left lg:w-80">
+          <div className="border-r border-ink/10 p-4"><p className="mono-label">Scope</p><p className="mt-2 text-sm font-semibold text-ink">Bounded graph</p></div>
+          <div className="p-4"><p className="mono-label">Claims</p><p className="mt-2 text-sm font-semibold text-ink">Evidence only</p></div>
         </div>
       </div>
 
-      <form onSubmit={(e) => void submit(e)} className="analysis-command-panel mt-10 overflow-hidden border border-white/10 bg-black/40">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3"><span className="mono-label">Path analysis request</span><span className="font-mono text-[9px] uppercase tracking-wider text-accent-bright">Read only</span></div>
+      <form onSubmit={(e) => void submit(e)} className="analysis-command-panel mt-10 overflow-hidden border border-ink/10 bg-ink/[0.05]">
+        <div className="flex items-center justify-between border-b border-ink/10 px-5 py-3"><span className="mono-label">Path analysis request</span><span className="font-mono text-[9px] uppercase tracking-wider text-accent-ink">Read only</span></div>
         <div className="flex flex-col p-5 sm:flex-row sm:p-7">
-          <div className="analysis-input flex min-w-0 flex-1 items-center border border-white/15 bg-ink-deep/80">
-            <span className="pl-4 font-mono text-accent-bright">›</span>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter a Solana wallet address" className="min-w-0 flex-1 bg-transparent px-3 py-4 font-mono text-sm text-marble outline-none placeholder:text-muted-2" spellCheck={false} />
+          <div className="analysis-input flex min-w-0 flex-1 items-center border border-ink/15 bg-paper/80">
+            <span className="pl-4 font-mono text-accent-ink">›</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter a Solana wallet address" className="min-w-0 flex-1 bg-transparent px-3 py-4 font-mono text-sm text-ink outline-none placeholder:text-muted-2" spellCheck={false} />
           </div>
           <button type="submit" disabled={loading || address.trim().length < 32} className="btn-primary h-14 min-w-48 whitespace-nowrap">
             {loading ? "Tracing paths…" : <>Trace exposure <span className="btn-arrow">→</span></>}
@@ -214,14 +214,14 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
             />
           )}
 
-          <div className="mt-10 border-t border-white/10 pt-6 text-sm text-muted-foreground">
+          <div className="mt-10 border-t border-ink/10 pt-6 text-sm text-muted-foreground">
             <ul className="space-y-1">
               <li>• Observed edges are direct, verifiable relationships.</li>
               <li>• Inferred edges are correlation hypotheses, never ownership claims.</li>
               <li>• The graph is bounded by backend limits.</li>
             </ul>
             <div className="mt-4">
-              <Link href={`/app/analyze/${data.wallet.address}`} className="text-sm text-muted-foreground hover:text-marble">
+              <Link href={`/app/analyze/${data.wallet.address}`} className="text-sm text-muted-foreground hover:text-ink">
                 Open full Wallet X-Ray →
               </Link>
             </div>

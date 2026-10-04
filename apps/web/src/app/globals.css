@@ -7,20 +7,20 @@
     --ease-out: cubic-bezier(0.2, 0.75, 0.1, 1);
     --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
     scroll-behavior: smooth;
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
-    background-color: theme("colors.ink-deep");
-    color: theme("colors.marble");
+    background-color: theme("colors.paper");
+    color: theme("colors.ink");
     font-family: theme("fontFamily.sans");
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    background-color: theme("colors.accent-bright");
-    color: #000;
+    background-color: theme("colors.accent");
+    color: theme("colors.ink");
   }
 
   /* ------------------------------------------------------------------
@@ -168,59 +168,6 @@
     animation: aegix-fade-up 0.9s var(--ease-out) both;
     animation-delay: calc(var(--i, 0) * 90ms + 380ms);
   }
-  /* A redaction bar lifts off the last word of the headline. */
-  .redact {
-    position: relative;
-    display: inline-block;
-  }
-  .redact::after {
-    content: "";
-    position: absolute;
-    inset: 0.16em -0.04em 0.04em;
-    background: theme("colors.marble");
-    transform-origin: right;
-    animation: aegix-unredact 0.75s cubic-bezier(0.7, 0, 0.2, 1) 1.3s both;
-  }
-
-  /* Hero relationship trace (SVG). Paths use pathLength="100". */
-  .trace-ring {
-    animation: aegix-fade 1.2s ease 0.2s both;
-  }
-  .trace-edge {
-    stroke-dasharray: 100;
-    animation: aegix-draw 1.3s var(--ease-draw) both;
-    animation-delay: calc(var(--i, 0) * 110ms + 500ms);
-    transition: stroke 0.45s ease, stroke-width 0.45s ease;
-  }
-  .trace-edge.is-weak {
-    stroke-dasharray: 1.2 1.6;
-  }
-  .trace-node {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: aegix-pop 0.6s var(--ease-out) both;
-    animation-delay: calc(var(--i, 0) * 110ms + 900ms);
-  }
-  .trace-node circle,
-  .trace-node rect,
-  .trace-node path,
-  .trace-node text {
-    transition: fill 0.45s ease, stroke 0.45s ease;
-  }
-  .trace-ping {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: aegix-ping 2.6s ease-out 1.8s infinite both;
-  }
-  .trace-pulse {
-    stroke-dasharray: 5 95;
-    animation: aegix-travel 1.7s cubic-bezier(0.45, 0, 0.2, 1) infinite both;
-    animation-delay: calc(var(--i, 0) * 280ms);
-  }
-  .trace-caption {
-    animation: aegix-fade-up 0.45s var(--ease-out) both;
-  }
-
   /* Autoplay timers: a hairline that fills over the dwell time. */
   .step-progress {
     transform-origin: left;
@@ -229,10 +176,21 @@
     animation-fill-mode: both;
   }
 
-  /* Photo plates: toned down to sit in the palette; on reveal a curtain
-     lifts from the top while the image settles from a slight zoom. */
-  .plate-img {
-    filter: grayscale(0.3) brightness(0.8) contrast(1.05);
+  /* Brand plates: the cut edge fades into the paper, and the other three
+     edges are feathered because the plates' own cream varies by a shade.
+     On reveal a curtain lifts from the top while the image settles. */
+  .plate-fade-left,
+  .plate-fade-right {
+    mask-composite: intersect;
+    -webkit-mask-composite: source-in;
+  }
+  .plate-fade-left {
+    mask-image: linear-gradient(to right, transparent, #000 16%, #000 97%, transparent),
+      linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
+  }
+  .plate-fade-right {
+    mask-image: linear-gradient(to left, transparent, #000 16%, #000 97%, transparent),
+      linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
   }
   @media (prefers-reduced-motion: no-preference) {
     [data-reveal] .plate {
@@ -247,16 +205,6 @@
     }
     [data-reveal="waiting"] .plate-img {
       transform: scale(1.14);
-    }
-  }
-
-  /* Trace labels are in SVG user units; enlarge them where the SVG scales down. */
-  .trace-label {
-    font-size: 10.5px;
-  }
-  @media (max-width: 639px) {
-    .trace-label {
-      font-size: 14px;
     }
   }
 
@@ -297,7 +245,7 @@
     top: -0.95em;
     width: 0.55em;
     height: 1.15em;
-    background: theme("colors.accent-bright");
+    background: theme("colors.accent");
     animation: aegix-blink 1s steps(1) infinite;
   }
 
@@ -379,20 +327,20 @@
     @apply font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-muted-2;
   }
   .section-label-accent {
-    @apply font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-accent-bright;
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-accent-ink;
   }
 
   /* Editorial statement headings — set in the serif. */
   .statement {
-    @apply font-serif text-5xl font-normal leading-[1.02] text-marble md:text-6xl lg:text-7xl;
+    @apply font-serif text-5xl font-medium leading-[1.02] text-ink md:text-6xl lg:text-7xl;
     letter-spacing: -0.02em;
   }
   .statement-lg {
-    @apply font-serif text-[3.4rem] font-normal leading-[0.96] text-marble sm:text-7xl lg:text-[5.25rem] xl:text-[6.25rem];
+    @apply font-serif text-[3.4rem] font-medium leading-[0.96] text-ink sm:text-7xl lg:text-[5.25rem] xl:text-[6.25rem];
     letter-spacing: -0.028em;
   }
   .section-title {
-    @apply font-serif text-4xl font-normal leading-[1.04] text-marble md:text-5xl lg:text-[3.4rem];
+    @apply font-serif text-4xl font-medium leading-[1.04] text-ink md:text-5xl lg:text-[3.4rem];
     letter-spacing: -0.018em;
   }
 
@@ -410,32 +358,50 @@
      denser controls used throughout the authenticated app at their intended
      height. */
   .btn-primary {
-    @apply inline-flex h-12 items-center justify-center gap-2 border-0 px-[26px] py-0 font-display text-[15px] font-semibold leading-none tracking-[0.01em] text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40;
-    background-color: #8b7cff;
-    outline-color: #8b7cff;
+    @apply inline-flex h-12 items-center justify-center gap-2 border-0 px-[26px] py-0 font-display text-[15px] font-semibold leading-none tracking-[0.01em] text-paper focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-40;
+    background-color: theme("colors.ink");
+    outline-color: theme("colors.accent");
     border-radius: 0;
     clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
   }
   .btn-primary:hover {
-    background-color: #a397ff;
+    background-color: theme("colors.accent");
+    color: theme("colors.ink");
   }
   .btn-secondary {
-    @apply inline-flex h-12 items-center justify-center gap-2 border px-[26px] py-0 font-display text-[15px] font-medium leading-none tracking-[0.01em] text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2;
+    @apply inline-flex h-12 items-center justify-center gap-2 border px-[26px] py-0 font-display text-[15px] font-medium leading-none tracking-[0.01em] text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2;
     background: transparent;
-    border-color: rgba(255, 255, 255, 0.22);
-    outline-color: #8b7cff;
+    border-color: rgba(20, 18, 15, 0.22);
+    outline-color: theme("colors.accent");
     border-radius: 0;
   }
   .btn-secondary:hover {
-    border-color: rgba(255, 255, 255, 0.6);
-    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(20, 18, 15, 0.6);
+    background-color: rgba(20, 18, 15, 0.04);
   }
   .btn-ghost {
-    @apply inline-flex h-12 items-center justify-center gap-2 px-[26px] py-0 font-display text-[15px] font-medium leading-none tracking-[0.01em] text-muted-foreground hover:text-marble focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-bright;
+    @apply inline-flex h-12 items-center justify-center gap-2 px-[26px] py-0 font-display text-[15px] font-medium leading-none tracking-[0.01em] text-muted-foreground hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
     border-radius: 0;
   }
   .btn-ghost:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(20, 18, 15, 0.05);
+  }
+
+  /* The same controls on an ink ground. */
+  .btn-primary.btn-on-ink {
+    background-color: theme("colors.paper");
+    color: theme("colors.ink");
+  }
+  .btn-primary.btn-on-ink:hover {
+    background-color: theme("colors.accent");
+  }
+  .btn-secondary.btn-on-ink {
+    color: theme("colors.paper");
+    border-color: rgba(239, 230, 211, 0.3);
+  }
+  .btn-secondary.btn-on-ink:hover {
+    border-color: rgba(239, 230, 211, 0.7);
+    background-color: rgba(239, 230, 211, 0.06);
   }
 
   .btn-primary.text-sm,
@@ -452,11 +418,11 @@
 
   /* Flat surfaces + thin borders — hover sharpens the edge, nothing glows. */
   .surface {
-    @apply border border-white/10 bg-white/[0.02];
+    @apply border border-ink/10 bg-ink/[0.02];
     transition: border-color 0.2s ease;
   }
   .card-surface {
-    @apply rounded-md border border-white/10 bg-white/[0.02];
+    @apply rounded-md border border-ink/10 bg-ink/[0.02];
     transition: border-color 0.2s ease;
   }
   .data-panel {
@@ -465,7 +431,7 @@
   .surface:hover,
   .card-surface:hover,
   .data-panel:hover {
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(20, 18, 15, 0.2);
   }
 
   /* Hero backdrop: a faint measurement grid fading downward. */
@@ -476,8 +442,8 @@
     pointer-events: none;
     opacity: 0.5;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(20, 18, 15, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 18, 15, 0.03) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: linear-gradient(to bottom, black, transparent 85%);
   }
@@ -496,11 +462,11 @@
   }
 
   .analysis-workspace {
-    background: #050505;
+    background: theme("colors.paper");
   }
   .premium-workspace {
     position: relative;
-    background: #050505;
+    background: theme("colors.paper");
   }
   .premium-workspace::before {
     content: "";
@@ -509,8 +475,8 @@
     pointer-events: none;
     opacity: 0.4;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      linear-gradient(rgba(20, 18, 15, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 18, 15, 0.025) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: linear-gradient(to bottom, black, transparent 60%);
   }
@@ -526,14 +492,14 @@
   .premium-results > section,
   .premium-results details,
   .premium-results .card-surface {
-    border-color: rgba(255, 255, 255, 0.1);
-    background-color: rgba(255, 255, 255, 0.018);
+    border-color: rgba(20, 18, 15, 0.1);
+    background-color: rgba(20, 18, 15, 0.018);
     transition: border-color 0.2s ease;
   }
   .premium-results > section:hover,
   .premium-results details:hover,
   .premium-results .card-surface:hover {
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(20, 18, 15, 0.2);
   }
   .analysis-workspace::before {
     content: "";
@@ -542,8 +508,8 @@
     pointer-events: none;
     opacity: 0.4;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      linear-gradient(rgba(20, 18, 15, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 18, 15, 0.025) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: radial-gradient(circle at 35% 30%, black, transparent 68%);
   }
@@ -560,20 +526,20 @@
     height: 1px;
     width: 100%;
     pointer-events: none;
-    background: linear-gradient(90deg, transparent, #8b7cff, transparent);
+    background: linear-gradient(90deg, transparent, theme("colors.accent"), transparent);
   }
   .analysis-input {
     transition: border-color 0.2s ease, background-color 0.2s ease;
   }
   .analysis-input:focus-within {
-    border-color: rgba(139, 124, 255, 0.72);
-    background-color: rgba(10, 10, 10, 0.96);
+    border-color: rgba(242, 64, 17, 0.8);
+    background-color: theme("colors.paper-raised");
   }
   .luxury-panel {
     backdrop-filter: blur(12px);
   }
   .hairline {
-    @apply border-t border-white/10;
+    @apply border-t border-ink/10;
   }
   .mono-label {
     @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-muted-2;
@@ -582,6 +548,6 @@
     @apply font-mono text-xs tracking-tight text-muted-foreground;
   }
   .technical-value {
-    @apply font-mono text-3xl font-semibold tracking-tight text-marble;
+    @apply font-mono text-3xl font-semibold tracking-tight text-ink;
   }
 }

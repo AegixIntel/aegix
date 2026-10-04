@@ -16,11 +16,11 @@ function shortAddress(address: string): string {
 
 function severityColor(severity: string): string {
   switch (severity) {
-    case "CRITICAL": return "bg-red-500/15 text-red-400";
-    case "HIGH": return "bg-orange-500/15 text-orange-400";
-    case "MEDIUM": return "bg-amber-500/15 text-amber-400";
-    case "LOW": return "bg-sky-500/15 text-sky-400";
-    default: return "bg-slate-600/15 text-slate-400";
+    case "CRITICAL": return "bg-red-500/15 text-red-700";
+    case "HIGH": return "bg-orange-500/15 text-orange-700";
+    case "MEDIUM": return "bg-amber-500/15 text-amber-800";
+    case "LOW": return "bg-sky-500/15 text-sky-700";
+    default: return "bg-ink/[0.07] text-muted-foreground";
   }
 }
 
@@ -153,8 +153,8 @@ export default function NotificationsPage() {
     <div className="container-page max-w-3xl py-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link href="/app/dashboard" className="text-xs text-muted-foreground hover:text-accent">← Dashboard</Link>
-          <h1 className="mt-1 font-display text-2xl font-semibold text-marble">Notifications</h1>
+          <Link href="/app/dashboard" className="text-xs text-muted-foreground hover:text-accent-ink">← Dashboard</Link>
+          <h1 className="mt-1 font-display text-2xl font-semibold text-ink">Notifications</h1>
           <p className="text-sm text-muted-foreground" aria-live="polite">{unread} unread</p>
         </div>
         <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ export default function NotificationsPage() {
             <button
               onClick={() => void readAll()}
               disabled={markingAll}
-              className="rounded border border-white/10 px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+              className="rounded border border-ink/10 px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
               aria-label="Mark all notifications as read"
             >
               {markingAll ? "Marking…" : "Mark all read"}
@@ -171,7 +171,7 @@ export default function NotificationsPage() {
           <button
             onClick={() => void load()}
             disabled={loading}
-            className="rounded border border-white/10 px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+            className="rounded border border-ink/10 px-3 py-1.5 text-xs text-muted-foreground hover:border-accent hover:text-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             aria-label="Refresh notifications"
           >
             {loading ? "Loading…" : "Refresh"}
@@ -193,7 +193,7 @@ export default function NotificationsPage() {
         <select
           value={filterSeverity}
           onChange={(e) => setFilterSeverity(e.target.value as FilterSeverity)}
-          className="rounded border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="rounded border border-ink/10 bg-ink/[0.03] px-2 py-1 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-label="Filter by severity"
         >
           <option value="">All severities</option>
@@ -206,7 +206,7 @@ export default function NotificationsPage() {
         {hasFilters && (
           <button
             onClick={() => { setFilterUnread(false); setFilterSeverity(""); }}
-            className="text-xs text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="text-xs text-accent-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             Clear filters
           </button>
@@ -214,9 +214,9 @@ export default function NotificationsPage() {
       </div>
 
       {error && (
-        <div className="mt-4 flex items-center gap-2 rounded border border-red-500/20 bg-red-500/5 p-3" role="alert">
-          <p className="text-sm text-red-400">{error}</p>
-          <button onClick={() => { setError(null); void load(); }} className="ml-auto text-xs text-red-400 underline hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400">Retry</button>
+        <div className="mt-4 flex items-center gap-2 rounded border border-red-600/20 bg-red-500/5 p-3" role="alert">
+          <p className="text-sm text-red-700">{error}</p>
+          <button onClick={() => { setError(null); void load(); }} className="ml-auto text-xs text-red-700 underline hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600">Retry</button>
         </div>
       )}
 
@@ -224,13 +224,13 @@ export default function NotificationsPage() {
         <div className="mt-10 space-y-2" aria-label="Loading notifications">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="card-surface animate-pulse p-4 motion-reduce:animate-none">
-              <div className="h-4 w-2/3 rounded bg-white/5" />
-              <div className="mt-2 h-3 w-1/3 rounded bg-white/5" />
+              <div className="h-4 w-2/3 rounded bg-ink/5" />
+              <div className="mt-2 h-3 w-1/3 rounded bg-ink/5" />
             </div>
           ))}
         </div>
       ) : !loading && notifications.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-10 text-center">
+        <div className="mt-10 flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink/10 bg-ink/[0.02] p-10 text-center">
           <p className="text-sm text-muted-foreground">
             {hasFilters ? "No notifications match your filters." : "No notifications yet."}
           </p>
@@ -252,7 +252,7 @@ export default function NotificationsPage() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className={`text-sm font-semibold ${n.read_at ? "text-muted-foreground" : "text-marble"}`}>{n.title}</p>
+                  <p className={`text-sm font-semibold ${n.read_at ? "text-muted-foreground" : "text-ink"}`}>{n.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     <span className="font-mono text-[10px]">IN_APP</span>
                     <span className="mx-1.5 opacity-30">·</span>
@@ -266,7 +266,7 @@ export default function NotificationsPage() {
                     <button
                       onClick={() => void read(n.id)}
                       disabled={readingIds.has(n.id) || markingAll}
-                      className="rounded border border-slate-600 px-2 py-0.5 text-[10px] text-muted-foreground hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                      className="rounded border border-ink/20 px-2 py-0.5 text-[10px] text-muted-foreground hover:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       aria-label={`Mark "${n.title}" as read`}
                     >
                       Mark read
@@ -281,7 +281,7 @@ export default function NotificationsPage() {
             <button
               onClick={() => void load(nextCursor)}
               disabled={loading || loadingMore}
-              className="w-full rounded border border-white/10 py-2 text-xs text-muted-foreground hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+              className="w-full rounded border border-ink/10 py-2 text-xs text-muted-foreground hover:border-accent hover:text-accent-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
               {loadingMore ? "Loading…" : "Load more"}
             </button>

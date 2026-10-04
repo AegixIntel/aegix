@@ -15,11 +15,11 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#050505"
+          background: "#efe6d3"
         }}
       >
         <svg width="128" height="128" viewBox={AEGIX_MARK_VIEWBOX}>
-          <path d={AEGIX_MARK_PATH} fill="#f2f2f2" />
+          <path d={AEGIX_MARK_PATH} fill="#14120f" />
         </svg>
       </div>
     ),

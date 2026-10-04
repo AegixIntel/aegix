@@ -30,14 +30,14 @@ export default function SecurityPage() {
 
       <div className="mt-14 grid gap-x-12 gap-y-0 md:grid-cols-2">
         {ITEMS.map((i) => (
-          <div key={i.t} className="border-t border-white/10 py-6">
-            <h2 className="font-display text-lg font-semibold text-marble">{i.t}</h2>
+          <div key={i.t} className="border-t border-ink/10 py-6">
+            <h2 className="font-display text-lg font-semibold text-ink">{i.t}</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{i.b}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-16 border-t border-white/10 pt-10">
+      <div className="mt-16 border-t border-ink/10 pt-10">
         <SectionLabel>Practical guidance</SectionLabel>
         <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
           <li>• Treat signatures like passwords — never share a signed authentication message.</li>

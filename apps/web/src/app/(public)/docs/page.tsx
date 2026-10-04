@@ -21,8 +21,8 @@ export default function DocsIndexPage() {
           { href: "/docs/monitor", title: "Privacy Monitor", body: "Track exposure changes and receive alerts." },
           { href: "/docs/api/overview", title: "Developer API", body: "Scoped keys, metered quota, usage reporting, and signed webhooks." }
         ].map((c) => (
-          <Link key={c.href} href={c.href} className="border border-white/10 p-6 transition hover:border-white/25">
-            <h3 className="font-display text-lg font-semibold text-marble">{c.title}</h3>
+          <Link key={c.href} href={c.href} className="border border-ink/10 p-6 transition hover:border-ink/25">
+            <h3 className="font-display text-lg font-semibold text-ink">{c.title}</h3>
             <p className="mt-2 text-sm text-muted-foreground">{c.body}</p>
           </Link>
         ))}

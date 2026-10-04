@@ -60,11 +60,11 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
 
   return (
     <div>
-      <form onSubmit={onSubmit} className="analysis-command-panel relative overflow-hidden border border-white/10 bg-black/40">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+      <form onSubmit={onSubmit} className="analysis-command-panel relative overflow-hidden border border-ink/10 bg-ink/[0.05]">
+        <div className="flex items-center justify-between border-b border-ink/10 px-5 py-3">
           <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-2">New analysis request</span>
           <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-2">
-            <span className="h-1 w-1 bg-accent-bright" aria-hidden="true" />
+            <span className="h-1 w-1 bg-accent" aria-hidden="true" />
             Read only
           </span>
         </div>
@@ -73,15 +73,15 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
           <label htmlFor="wallet" className="font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Solana wallet address
           </label>
-          <div className="analysis-input mt-3 flex flex-col border border-white/15 bg-ink-deep/80 sm:flex-row sm:items-stretch">
+          <div className="analysis-input mt-3 flex flex-col border border-ink/15 bg-paper/80 sm:flex-row sm:items-stretch">
             <div className="flex min-w-0 flex-1 items-center">
-              <span className="pl-4 font-mono text-sm text-accent-bright" aria-hidden="true">›</span>
+              <span className="pl-4 font-mono text-sm text-accent-ink" aria-hidden="true">›</span>
               <input
                 id="wallet"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Enter a Solana address"
-                className="min-w-0 flex-1 bg-transparent px-3 py-4 font-mono text-sm text-marble outline-none placeholder:text-muted-2"
+                className="min-w-0 flex-1 bg-transparent px-3 py-4 font-mono text-sm text-ink outline-none placeholder:text-muted-2"
                 spellCheck={false}
                 autoComplete="off"
                 aria-describedby="wallet-hint"
@@ -94,7 +94,7 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">
-                  <span className="h-3 w-3 animate-spin border border-black/30 border-t-black" aria-hidden="true" />
+                  <span className="h-3 w-3 animate-spin border border-ink/20 border-t-ink" aria-hidden="true" />
                   Requesting…
                 </span>
               ) : (
@@ -110,21 +110,21 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
       </form>
 
       {error && (
-        <div role="alert" className="mt-4 border border-red-500/30 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-          <span className="mr-2 font-mono text-[10px] uppercase tracking-wider text-red-400">Request failed</span>
+        <div role="alert" className="mt-4 border border-red-600/30 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+          <span className="mr-2 font-mono text-[10px] uppercase tracking-wider text-red-700">Request failed</span>
           {error}
         </div>
       )}
 
       {accountInfo && (
-        <div className="mt-5 border border-white/10 bg-black/40 p-5 text-left">
+        <div className="mt-5 border border-ink/10 bg-ink/[0.05] p-5 text-left">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-2">Account information</p>
-          <p className="mt-3 font-display text-lg font-semibold capitalize text-marble">
+          <p className="mt-3 font-display text-lg font-semibold capitalize text-ink">
             {accountInfo.accountType.replaceAll("_", " ")}
           </p>
           {accountInfo.protocol && (
             <p className="mt-2 text-sm text-muted-foreground">
-              Protocol: <span className="font-semibold text-accent-bright">{accountInfo.protocol}</span>
+              Protocol: <span className="font-semibold text-accent-ink">{accountInfo.protocol}</span>
             </p>
           )}
           {accountInfo.verificationStatus && (
@@ -132,7 +132,7 @@ export default function AnalyzeForm({ initialAddress = "" }: { initialAddress?: 
               Verification: {accountInfo.verificationStatus}
             </p>
           )}
-          <p className="mt-4 border-t border-white/10 pt-4 text-sm text-muted-foreground">
+          <p className="mt-4 border-t border-ink/10 pt-4 text-sm text-muted-foreground">
             This address is not analyzed as a personal wallet.
           </p>
         </div>

@@ -19,7 +19,7 @@ export function AegixMark({ className = "h-8 w-8" }: { className?: string }) {
 
 export function AegixLogo({ className = "h-7" }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 text-marble ${className}`}>
+    <span className={`inline-flex items-center gap-2 text-ink ${className}`}>
       <AegixMark className="h-6 w-6" />
       <span className="font-display text-lg font-semibold tracking-tight">AEGIX</span>
     </span>

@@ -102,7 +102,7 @@ export default function ApiKeysSection() {
     <div className="space-y-8">
       {/* Create key */}
       <section>
-        <h2 className="text-lg font-semibold text-marble">Create API Key</h2>
+        <h2 className="text-lg font-semibold text-ink">Create API Key</h2>
         <form onSubmit={(e) => void create(e)} className="card-surface mt-4 p-5">
           <label className="block text-xs text-muted-foreground">
             Name
@@ -112,7 +112,7 @@ export default function ApiKeysSection() {
               maxLength={80}
               required
               placeholder="e.g. production integration"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
             />
           </label>
           <fieldset className="mt-4">
@@ -143,7 +143,7 @@ export default function ApiKeysSection() {
               value={expiresInDays ?? ""}
               onChange={(e) => setExpiresInDays(e.target.value ? Number(e.target.value) : null)}
               placeholder="no expiration"
-              className="mt-1 w-40 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-marble outline-none focus:border-accent"
+              className="mt-1 w-40 rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 text-sm text-ink outline-none focus:border-accent"
             />
           </label>
           <button
@@ -158,34 +158,34 @@ export default function ApiKeysSection() {
 
       {/* One-time secret display */}
       {created && (
-        <section className="card-surface border-emerald-500/40 bg-emerald-950/30 p-5">
-          <h2 className="text-sm font-semibold text-emerald-300">Key created — copy it now</h2>
-          <p className="mt-1 text-xs text-amber-300">This key will only be shown once. There is no way to retrieve it later.</p>
-          <code className="mt-3 block break-all rounded-lg bg-slate-950 p-3 font-mono text-sm text-emerald-200">{created.key}</code>
+        <section className="card-surface border-emerald-600/40 bg-emerald-500/10 p-5">
+          <h2 className="text-sm font-semibold text-emerald-800">Key created — copy it now</h2>
+          <p className="mt-1 text-xs text-amber-800">This key will only be shown once. There is no way to retrieve it later.</p>
+          <code className="mt-3 block break-all rounded-lg bg-paper-raised p-3 font-mono text-sm text-emerald-800">{created.key}</code>
           <button
             onClick={() => void navigator.clipboard?.writeText(created.key)}
-            className="mt-3 rounded-lg border border-emerald-500/40 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10"
+            className="mt-3 rounded-lg border border-emerald-600/40 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-500/10"
           >
             Copy
           </button>
-          <button onClick={() => setCreated(null)} className="ml-2 mt-3 rounded-lg border border-slate-600 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
+          <button onClick={() => setCreated(null)} className="ml-2 mt-3 rounded-lg border border-ink/20 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
             Done
           </button>
         </section>
       )}
 
       {rotated && (
-        <section className="card-surface border-emerald-500/40 bg-emerald-950/30 p-5">
-          <h2 className="text-sm font-semibold text-emerald-300">Key rotated — the old key stopped working</h2>
-          <p className="mt-1 text-xs text-amber-300">This new key will only be shown once.</p>
-          <code className="mt-3 block break-all rounded-lg bg-slate-950 p-3 font-mono text-sm text-emerald-200">{rotated.key}</code>
+        <section className="card-surface border-emerald-600/40 bg-emerald-500/10 p-5">
+          <h2 className="text-sm font-semibold text-emerald-800">Key rotated — the old key stopped working</h2>
+          <p className="mt-1 text-xs text-amber-800">This new key will only be shown once.</p>
+          <code className="mt-3 block break-all rounded-lg bg-paper-raised p-3 font-mono text-sm text-emerald-800">{rotated.key}</code>
           <button
             onClick={() => void navigator.clipboard?.writeText(rotated.key)}
-            className="mt-3 rounded-lg border border-emerald-500/40 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10"
+            className="mt-3 rounded-lg border border-emerald-600/40 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-500/10"
           >
             Copy
           </button>
-          <button onClick={() => setRotated(null)} className="ml-2 mt-3 rounded-lg border border-slate-600 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
+          <button onClick={() => setRotated(null)} className="ml-2 mt-3 rounded-lg border border-ink/20 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
             Done
           </button>
         </section>
@@ -193,11 +193,11 @@ export default function ApiKeysSection() {
 
       {/* Key list */}
       <section>
-        <h2 className="text-lg font-semibold text-marble">API Keys</h2>
+        <h2 className="text-lg font-semibold text-ink">API Keys</h2>
         {keys === null && !error ? (
           <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
         ) : keys?.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-sm text-muted-foreground">
+          <div className="mt-4 rounded-xl border border-dashed border-ink/10 bg-ink/[0.02] p-8 text-center text-sm text-muted-foreground">
             No API keys yet. Create one above.
           </div>
         ) : (
@@ -208,12 +208,12 @@ export default function ApiKeysSection() {
                 <div key={k.id} className="card-surface p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-marble">{k.name}</p>
+                      <p className="text-sm font-semibold text-ink">{k.name}</p>
                       <p className="mt-0.5 font-mono text-xs text-muted-foreground">{k.key_prefix}…</p>
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400" : status === "EXPIRED" ? "bg-amber-500/10 text-amber-400" : "bg-red-500/10 text-red-400"
+                        status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-800" : status === "EXPIRED" ? "bg-amber-500/10 text-amber-800" : "bg-red-500/10 text-red-700"
                       }`}
                     >
                       {status}
@@ -223,7 +223,7 @@ export default function ApiKeysSection() {
                     <span>
                       Scopes:{" "}
                       {k.scopes.map((s) => (
-                        <code key={s} className="text-slate-400">{s}</code>
+                        <code key={s} className="text-muted-foreground">{s}</code>
                       )).reduce<React.ReactNode[]>((acc, el, i) => (i === 0 ? [el] : [...acc, <span key={`sep-${i}`}>, </span>, el]), [])}
                     </span>
                     <span>Created {shortDate(k.created_at)}</span>
@@ -244,18 +244,18 @@ export default function ApiKeysSection() {
                           <button
                             onClick={() => void revoke(k.id)}
                             disabled={busy}
-                            className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/30"
+                            className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-500/30"
                           >
                             Confirm revoke
                           </button>
-                          <button onClick={() => setConfirmId(null)} className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs text-muted-foreground">
+                          <button onClick={() => setConfirmId(null)} className="rounded-lg border border-ink/20 px-3 py-1.5 text-xs text-muted-foreground">
                             Cancel
                           </button>
                         </span>
                       ) : (
                         <button
                           onClick={() => setConfirmId(k.id)}
-                          className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+                          className="rounded-lg border border-red-600/40 px-3 py-1.5 text-xs text-red-700 hover:bg-red-500/10"
                         >
                           Revoke
                         </button>

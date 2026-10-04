@@ -17,7 +17,7 @@ export default function ApiOverviewDocPage() {
         <p>Authenticate with a scoped API key in the <code className="font-mono">Authorization</code> header. Keys are shown once at creation and are never retrievable again.</p>
         <DocCode>{`Authorization: Bearer aegix_live_<base58>`}</DocCode>
         <p className="mt-3">
-          <Link href="/docs/api/authentication" className="text-accent underline">Read authentication →</Link>
+          <Link href="/docs/api/authentication" className="text-accent-ink underline">Read authentication →</Link>
         </p>
       </DocSection>
 

@@ -39,10 +39,10 @@ export const metadata: Metadata = {
       "Financial & on-chain intelligence on Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring. See what others don't.",
     images: [
       {
-        url: "/assets/aegix-wallet-intelligence.jpg",
+        url: "/assets/aegix-financial-onchain-intelligence.jpg",
         width: 1280,
         height: 720,
-        alt: "AEGIX Wallet Intelligence dashboard showing privacy exposure"
+        alt: "AEGIX — Financial & On-Chain Intelligence: a marble head among market, commodity, macro and on-chain plates"
       }
     ]
   },
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: "AEGIX — See What Others Don't.",
     description:
       "Financial & on-chain intelligence on Solana. Wallet X-Ray, correlation, attack-path analysis, and privacy monitoring.",
-    images: ["/assets/aegix-wallet-intelligence.jpg"]
+    images: ["/assets/aegix-financial-onchain-intelligence.jpg"]
   },
   robots: {
     index: true,
@@ -60,14 +60,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050505",
-  colorScheme: "dark"
+  themeColor: "#efe6d3",
+  colorScheme: "light"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable}`}>
-      <body className="min-h-screen bg-ink-deep text-marble antialiased">
+      <body className="min-h-screen bg-paper text-ink antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

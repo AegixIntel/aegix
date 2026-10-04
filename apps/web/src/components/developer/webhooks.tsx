@@ -128,7 +128,7 @@ export default function WebhooksSection() {
     <div className="mt-8 space-y-8">
       {/* Create */}
       <section>
-        <h2 className="text-lg font-semibold text-marble">Create Webhook</h2>
+        <h2 className="text-lg font-semibold text-ink">Create Webhook</h2>
         <form onSubmit={(e) => void create(e)} className="card-surface mt-4 p-5">
           <label className="block text-xs text-muted-foreground">
             Endpoint URL
@@ -138,7 +138,7 @@ export default function WebhooksSection() {
               maxLength={500}
               required
               placeholder="https://your-app.com/webhooks/aegix"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-marble outline-none focus:border-accent"
+              className="mt-1 w-full rounded-lg border border-ink/15 bg-paper-raised px-3 py-2 font-mono text-sm text-ink outline-none focus:border-accent"
             />
           </label>
           <fieldset className="mt-4">
@@ -167,17 +167,17 @@ export default function WebhooksSection() {
 
       {/* One-time secret */}
       {createdSecret && (
-        <section className="card-surface border-emerald-500/40 bg-emerald-950/30 p-5">
-          <h2 className="text-sm font-semibold text-emerald-300">Webhook created — signing secret (shown once)</h2>
-          <p className="mt-1 text-xs text-amber-300">Store this secret. AEGIX signs each delivery; verify it as documented. It cannot be retrieved again.</p>
-          <code className="mt-3 block break-all rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-200">{createdSecret}</code>
+        <section className="card-surface border-emerald-600/40 bg-emerald-500/10 p-5">
+          <h2 className="text-sm font-semibold text-emerald-800">Webhook created — signing secret (shown once)</h2>
+          <p className="mt-1 text-xs text-amber-800">Store this secret. AEGIX signs each delivery; verify it as documented. It cannot be retrieved again.</p>
+          <code className="mt-3 block break-all rounded-lg bg-paper-raised p-3 font-mono text-xs text-emerald-800">{createdSecret}</code>
           <button
             onClick={() => void navigator.clipboard?.writeText(createdSecret)}
-            className="mt-3 rounded-lg border border-emerald-500/40 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10"
+            className="mt-3 rounded-lg border border-emerald-600/40 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-500/10"
           >
             Copy
           </button>
-          <button onClick={() => setCreatedSecret(null)} className="ml-2 mt-3 rounded-lg border border-slate-600 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
+          <button onClick={() => setCreatedSecret(null)} className="ml-2 mt-3 rounded-lg border border-ink/20 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
             Done
           </button>
           <p className="mt-3 text-xs text-muted-foreground">
@@ -187,17 +187,17 @@ export default function WebhooksSection() {
       )}
 
       {rotatedSecret && (
-        <section className="card-surface border-emerald-500/40 bg-emerald-950/30 p-5">
-          <h2 className="text-sm font-semibold text-emerald-300">Secret rotated — old secret stopped working</h2>
-          <p className="mt-1 text-xs text-amber-300">This new secret will only be shown once.</p>
-          <code className="mt-3 block break-all rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-200">{rotatedSecret.secret}</code>
+        <section className="card-surface border-emerald-600/40 bg-emerald-500/10 p-5">
+          <h2 className="text-sm font-semibold text-emerald-800">Secret rotated — old secret stopped working</h2>
+          <p className="mt-1 text-xs text-amber-800">This new secret will only be shown once.</p>
+          <code className="mt-3 block break-all rounded-lg bg-paper-raised p-3 font-mono text-xs text-emerald-800">{rotatedSecret.secret}</code>
           <button
             onClick={() => void navigator.clipboard?.writeText(rotatedSecret.secret)}
-            className="mt-3 rounded-lg border border-emerald-500/40 px-4 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10"
+            className="mt-3 rounded-lg border border-emerald-600/40 px-4 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-500/10"
           >
             Copy
           </button>
-          <button onClick={() => setRotatedSecret(null)} className="ml-2 mt-3 rounded-lg border border-slate-600 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
+          <button onClick={() => setRotatedSecret(null)} className="ml-2 mt-3 rounded-lg border border-ink/20 px-4 py-2 text-xs text-muted-foreground hover:border-accent">
             Done
           </button>
         </section>
@@ -205,12 +205,12 @@ export default function WebhooksSection() {
 
       {/* List */}
       <section>
-        <h2 className="text-lg font-semibold text-marble">Webhooks</h2>
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+        <h2 className="text-lg font-semibold text-ink">Webhooks</h2>
+        {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
         {hooks === null && !error ? (
           <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
         ) : hooks?.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-sm text-muted-foreground">
+          <div className="mt-4 rounded-xl border border-dashed border-ink/10 bg-ink/[0.02] p-8 text-center text-sm text-muted-foreground">
             No webhooks yet. Create one above.
           </div>
         ) : (
@@ -219,18 +219,18 @@ export default function WebhooksSection() {
               <div key={hook.id} className="card-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-sm text-marble">{shortUrl(hook.url)}</p>
+                    <p className="truncate font-mono text-sm text-ink">{shortUrl(hook.url)}</p>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>Events: {hook.eventTypes.length ? hook.eventTypes.join(", ") : "none"}</span>
                       <span>Created {shortDate(hook.createdAt)}</span>
                     </div>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${hook.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-600/10 text-slate-400"}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${hook.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-800" : "bg-ink/[0.05] text-muted-foreground"}`}>
                     {hook.status}
                   </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-muted-foreground sm:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg border border-ink/5 bg-ink/[0.02] p-3 text-xs text-muted-foreground sm:grid-cols-4">
                   <div><p className="text-muted-foreground/60">Last success</p><p>{shortDate(hook.lastSuccessAt)}</p></div>
                   <div><p className="text-muted-foreground/60">Last failure</p><p>{shortDate(hook.lastFailureAt)}</p></div>
                   <div><p className="text-muted-foreground/60">Failures</p><p>{hook.failureCount}</p></div>
@@ -238,7 +238,7 @@ export default function WebhooksSection() {
                 </div>
 
                 {hook.disabledAt && (
-                  <p className="mt-2 text-xs text-amber-300">Disabled {shortDate(hook.disabledAt)} — {hook.disabledReason ?? "reason unknown"}</p>
+                  <p className="mt-2 text-xs text-amber-800">Disabled {shortDate(hook.disabledAt)} — {hook.disabledReason ?? "reason unknown"}</p>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -251,7 +251,7 @@ export default function WebhooksSection() {
                   <button onClick={() => void toggleStatus(hook)} disabled={busy} className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40">
                     {hook.status === "ACTIVE" ? "Disable" : "Re-enable"}
                   </button>
-                  <button onClick={() => void remove(hook.id)} disabled={busy} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40">
+                  <button onClick={() => void remove(hook.id)} disabled={busy} className="rounded-lg border border-red-600/40 px-3 py-1.5 text-xs text-red-700 hover:bg-red-500/10 disabled:opacity-40">
                     Delete
                   </button>
                 </div>

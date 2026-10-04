@@ -28,24 +28,24 @@ export default function PrivacyPolicyPage() {
             <>
               <ul>
                 <li>
-                  <strong className="text-marble">Account.</strong> The wallet address you sign in with, and your signed-in
+                  <strong className="text-ink">Account.</strong> The wallet address you sign in with, and your signed-in
                   session. The session token is kept in your browser&apos;s local storage and expires after seven days.
                 </li>
                 <li>
-                  <strong className="text-marble">What you save.</strong> Saved analyses, saved comparisons, privacy
+                  <strong className="text-ink">What you save.</strong> Saved analyses, saved comparisons, privacy
                   monitors and their alert settings, and the notifications they produce.
                 </li>
                 <li>
-                  <strong className="text-marble">Developer features.</strong> API keys, webhook endpoints you register,
+                  <strong className="text-ink">Developer features.</strong> API keys, webhook endpoints you register,
                   and records of your API usage. Webhook signing secrets are stored encrypted.
                 </li>
                 <li>
-                  <strong className="text-marble">Billing.</strong> Your plan, subscription history, invoices and usage
+                  <strong className="text-ink">Billing.</strong> Your plan, subscription history, invoices and usage
                   counts. If you request an upgrade, the plan you asked for and any contact detail you choose to give us,
                   such as an email address or Telegram handle.
                 </li>
                 <li>
-                  <strong className="text-marble">Technical data.</strong> The IP address of analysis requests, used to
+                  <strong className="text-ink">Technical data.</strong> The IP address of analysis requests, used to
                   apply rate limits and prevent abuse, and server logs with request metadata. Our logs are designed not
                   to record full wallet addresses, keys or secrets.
                 </li>
