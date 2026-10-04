@@ -18,12 +18,12 @@ import { createDiscoveryRepo, createObservationRepo, type Sql } from "@aegix/dat
 import { CANONICAL_ASSETS, MARKETS_ENGINE_VERSION, computeMarketSignals, createMarketService, type MarketDataProvider } from "@aegix/markets";
 import { marketSeries, marketSeriesKey, type SeriesDescriptor } from "@aegix/rewind";
 import {
-  TOKENIZED_STOCKS, narrativeContextSeries, narrativeSeries, optionsSeries, tokenizedStockSeries, tokenizedStockSeriesKey,
+  TOKENIZED_STOCKS, narrativeContextSeries, narrativeSeries, optionsSeries, sectorQuoteSeries, tokenizedStockSeries, tokenizedStockSeriesKey,
   type SeriesSource, type TokenizedStock
 } from "@aegix/sources";
 import {
-  DISCOVERY_BASELINE_HOURS, DISCOVERY_ENGINE_VERSION, DISCOVERY_FDR_LEVEL, DISCOVERY_METHOD, DISCOVERY_WINDOW_HOURS,
-  epochEndFor, runScan, scanHorizonHours, type Direction
+  DISCOVERY_FDR_LEVEL, HOURLY_PROFILE, epochEndFor, parseCalendars, runScan, scanHorizonHours, submitToCalendar,
+  type Direction, type DiscoveryProfile
 } from "@aegix/discovery";
 
 export interface IntelligenceContext {
@@ -165,7 +165,8 @@ export function discoverySeries(config: AppConfig): SeriesDescriptor[] {
     ...(config.ENABLE_TOKENIZED_STOCK_CAPTURE ? tokenizedStockSeries() : []),
     ...(config.ENABLE_NARRATIVE_CAPTURE ? narrativeSeries() : []),
     ...(config.ENABLE_NARRATIVE_CONTEXT_CAPTURE ? narrativeContextSeries() : []),
-    ...(config.ENABLE_OPTIONS_CAPTURE ? optionsSeries() : [])
+    ...(config.ENABLE_OPTIONS_CAPTURE ? optionsSeries() : []),
+    ...(config.ENABLE_SECTOR_CAPTURE ? sectorQuoteSeries() : [])
   ];
 }
 
@@ -178,34 +179,34 @@ export interface DiscoverySweepResult {
   confirmations?: number;
 }
 
-/** Runs the scan for the last completed epoch, once. */
-export async function runDiscoverySweep(ctx: IntelligenceContext, now: Date = new Date()): Promise<DiscoverySweepResult> {
+/** Runs one profile's scan for the last completed epoch, once. */
+export async function runDiscoverySweep(ctx: IntelligenceContext, now: Date = new Date(), profile: DiscoveryProfile = HOURLY_PROFILE): Promise<DiscoverySweepResult> {
   const { sql } = ctx;
   const discoveryRepo = createDiscoveryRepo(sql);
   const observationRepo = createObservationRepo(sql);
   const epochEnd = epochEndFor(now).toISOString();
-  if (await discoveryRepo.runExists(DISCOVERY_ENGINE_VERSION, epochEnd)) return { ran: false, epochEnd };
+  if (await discoveryRepo.runExists(profile.engineVersion, epochEnd)) return { ran: false, epochEnd };
 
   const descriptors = discoverySeries(ctx.config);
   if (descriptors.length < 2) return { ran: false, epochEnd };
-  const from = new Date(Date.parse(epochEnd) - scanHorizonHours() * 3_600_000).toISOString();
+  const from = new Date(Date.parse(epochEnd) - scanHorizonHours(profile) * 3_600_000).toISOString();
   const rows = await observationRepo.pointsBetween(descriptors.map((d) => d.key), from, epochEnd);
   const series = descriptors.map((d) => ({
     ...d,
     points: rows.filter((r) => r.series_key === d.key).map((r) => ({ eventTime: new Date(r.event_time).toISOString(), value: Number(r.value) }))
   }));
-  const open = (await discoveryRepo.listOpen(DISCOVERY_ENGINE_VERSION)).map((d) => ({
+  const open = (await discoveryRepo.listOpen(profile.engineVersion)).map((d) => ({
     pairKey: d.pair_key, lagHours: d.lag_hours, direction: d.direction as Direction, windowEnd: new Date(d.window_end).toISOString()
   }));
 
-  const scan = runScan({ series, epochEnd, open });
+  const scan = runScan({ series, epochEnd, open }, profile);
   const persisted = await discoveryRepo.persistRun({
     engineVersion: scan.engineVersion,
     epochEnd,
-    windowHours: DISCOVERY_WINDOW_HOURS,
-    baselineHours: DISCOVERY_BASELINE_HOURS,
+    windowHours: profile.windowHours,
+    baselineHours: profile.baselineHours,
     fdrLevel: DISCOVERY_FDR_LEVEL,
-    method: DISCOVERY_METHOD,
+    method: profile.method,
     seriesCount: scan.seriesCount,
     hypothesesConsidered: scan.hypothesesConsidered,
     hypothesesTested: scan.hypothesesTested,
@@ -219,4 +220,38 @@ export async function runDiscoverySweep(ctx: IntelligenceContext, now: Date = ne
     ran: true, epochEnd, hypothesesTested: scan.hypothesesTested, rejections: scan.rejections,
     discoveries: persisted.discoveryIds.length, confirmations: scan.confirmations.length
   };
+}
+
+export interface AnchorSweepResult {
+  /** The chain head that was looked at, as a Discovery row id; null when no discovery exists. */
+  head: string | null;
+  submitted: number;
+  failed: number;
+}
+
+/**
+ * Sends the head of the Discovery ID chain to each configured calendar that
+ * does not hold it yet, and stores the receipts. A calendar that fails is
+ * asked again on the next sweep; the others keep their receipts.
+ */
+export async function anchorDiscoveryChain(
+  ctx: IntelligenceContext,
+  submit: (calendarUrl: string, chainHash: string) => Promise<Uint8Array> = (url, hash) => submitToCalendar(url, hash, { timeoutMs: ctx.config.SERIES_SOURCE_TIMEOUT_MS })
+): Promise<AnchorSweepResult> {
+  const repo = createDiscoveryRepo(ctx.sql);
+  const head = await repo.chainHead();
+  if (!head) return { head: null, submitted: 0, failed: 0 };
+  const held = new Set(await repo.anchoredCalendars(head.chain_hash));
+  const result: AnchorSweepResult = { head: head.id, submitted: 0, failed: 0 };
+  for (const calendarUrl of parseCalendars(ctx.config.DISCOVERY_ANCHOR_CALENDARS)) {
+    if (held.has(calendarUrl)) continue;
+    try {
+      const receipt = await submit(calendarUrl, head.chain_hash);
+      if (await repo.recordAnchor({ discoveryId: head.id, chainHash: head.chain_hash, calendarUrl, receipt })) result.submitted += 1;
+    } catch (error) {
+      result.failed += 1;
+      ctx.logger.warn("discovery chain anchor not stored", { calendar: calendarUrl, error: error instanceof Error ? error.message : "unknown" });
+    }
+  }
+  return result;
 }

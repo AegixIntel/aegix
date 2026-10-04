@@ -7,9 +7,10 @@ import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
-import { captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
+import { anchorDiscoveryChain, captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
+import { DAILY_PROFILE, HOURLY_PROFILE } from "@aegix/discovery";
 import { createCoinPaprikaProvider } from "@aegix/markets";
-import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
+import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createSectorQuoteSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -293,18 +294,32 @@ try {
   if (config.ENABLE_OPTIONS_CAPTURE) {
     scheduleSource(createOptionsSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
   }
+  if (config.ENABLE_SECTOR_CAPTURE) {
+    scheduleSource(createSectorQuoteSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
+  }
   if (config.ENABLE_DISCOVERY) {
-    const discover = () => {
-      void runDiscoverySweep({ config, sql, logger })
-        .then((result) => {
-          if (result.ran) logger.info("discovery sweep", { ...result });
-        })
-        .catch((error: unknown) => {
-          logger.error("discovery sweep failed", { error: error instanceof Error ? error.message : "unknown" });
-        });
+    const profiles = config.ENABLE_DISCOVERY_DAILY ? [HOURLY_PROFILE, DAILY_PROFILE] : [HOURLY_PROFILE];
+    // One profile after the other, then the anchor: a discovery either scan
+    // just made is the chain head the anchor sends.
+    const discover = async () => {
+      for (const profile of profiles) {
+        try {
+          const result = await runDiscoverySweep({ config, sql, logger }, new Date(), profile);
+          if (result.ran) logger.info("discovery sweep", { engineVersion: profile.engineVersion, ...result });
+        } catch (error) {
+          logger.error("discovery sweep failed", { engineVersion: profile.engineVersion, error: error instanceof Error ? error.message : "unknown" });
+        }
+      }
+      if (!config.ENABLE_DISCOVERY_ANCHOR) return;
+      try {
+        const result = await anchorDiscoveryChain({ config, sql, logger });
+        if (result.submitted > 0 || result.failed > 0) logger.info("discovery chain anchor sweep", { ...result });
+      } catch (error) {
+        logger.error("discovery chain anchor sweep failed", { error: error instanceof Error ? error.message : "unknown" });
+      }
     };
-    discover();
-    discoveryTimer = setInterval(discover, DISCOVERY_SWEEP_INTERVAL_MS);
+    void discover();
+    discoveryTimer = setInterval(() => void discover(), DISCOVERY_SWEEP_INTERVAL_MS);
   }
   logger.info("worker started", {
     queues: allWorkers.map((w) => w.name),

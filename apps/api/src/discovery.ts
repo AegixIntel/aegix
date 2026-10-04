@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "@aegix/config";
-import { createDiscoveryRepo, type DiscoveryRow, type DiscoveryRunRow, type Sql } from "@aegix/database";
+import { createDiscoveryRepo, type DiscoveryAnchorRow, type DiscoveryRow, type DiscoveryRunRow, type Sql } from "@aegix/database";
+import { OTS_CONTENT_TYPE, otsFile } from "@aegix/discovery";
 
 export interface DiscoveryDeps {
   app: FastifyInstance;
@@ -33,6 +34,18 @@ function view(row: DiscoveryRow) {
     prevChainHash: row.prev_chain_hash,
     chainHash: row.chain_hash,
     card: row.card
+  };
+}
+
+/** One calendar's receipt for a chain head. The proof itself is the .ots file. */
+function anchorView(row: DiscoveryAnchorRow) {
+  return {
+    id: row.id,
+    covers: discoveryDisplayId(row.discovery_id),
+    chainHash: row.chain_hash,
+    calendar: row.calendar_url,
+    submittedAt: new Date(row.submitted_at).toISOString(),
+    proofPath: `/v1/discovery-chain/anchors/${row.id}.ots`
   };
 }
 
@@ -82,15 +95,57 @@ export function registerDiscovery(deps: DiscoveryDeps): void {
     if (!id) return reply.code(400).send({ code: "INVALID_DISCOVERY_ID" });
     const row = await repo.findById(id);
     if (!row) return reply.code(404).send({ code: "DISCOVERY_NOT_FOUND" });
-    const [events, run, related] = await Promise.all([
-      repo.eventsFor(row.id), repo.runById(row.run_id), repo.related(row.id, row.series_a, row.series_b, 10)
+    const [events, run, related, anchors] = await Promise.all([
+      repo.eventsFor(row.id), repo.runById(row.run_id), repo.related(row.id, row.series_a, row.series_b, 10), repo.anchorsCovering(row.id)
     ]);
     return {
       discovery: view(row),
       run: runView(run),
+      // Empty until a chain head at or after this discovery has been anchored.
+      anchors: anchors.map(anchorView),
       events: events.map((e) => ({ type: e.event_type, at: new Date(e.created_at).toISOString(), detail: e.detail })),
       related: related.map((r) => ({ id: discoveryDisplayId(r.id), status: r.status, seriesA: r.series_a, seriesB: r.series_b,
         lagHours: r.lag_hours, direction: r.direction, firstDetectedAt: new Date(r.detected_at).toISOString() }))
     };
+  });
+
+  // The chain and its anchors are public: they are what a third party needs
+  // to check a detection time without an AEGIX account. They carry hashes and
+  // timestamps only, never which series a discovery relates.
+  function open(reply: FastifyReply): boolean {
+    if (config.ENABLE_DISCOVERY) return true;
+    reply.code(403).send({ code: "FEATURE_DISABLED" });
+    return false;
+  }
+
+  app.get<{ Querystring: { from?: string; limit?: string } }>("/v1/discovery-chain", { config: rate }, async (req, reply) => {
+    if (!open(reply)) return;
+    const from = parseDiscoveryId(req.query.from ?? "1");
+    if (!from) return reply.code(400).send({ code: "INVALID_DISCOVERY_ID" });
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+    const [links, head] = await Promise.all([repo.chainSegment(from, limit), repo.chainHead()]);
+    return {
+      rule: "chainHash = sha256(prevChainHash + '|' + fingerprint + '|' + detectedAt), UTF-8, prevChainHash empty for the first link",
+      head: head ? { id: discoveryDisplayId(head.id), chainHash: head.chain_hash } : null,
+      links: links.map((l) => ({ id: discoveryDisplayId(l.id), fingerprint: l.fingerprint, detectedAt: l.detected_at_text, prevChainHash: l.prev_chain_hash, chainHash: l.chain_hash }))
+    };
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/v1/discovery-chain/anchors", { config: rate }, async (req, reply) => {
+    if (!open(reply)) return;
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+    return { anchors: (await repo.listAnchors(limit)).map(anchorView) };
+  });
+
+  app.get<{ Params: { file: string } }>("/v1/discovery-chain/anchors/:file", { config: rate }, async (req, reply) => {
+    if (!open(reply)) return;
+    const id = /^(\d{1,18})\.ots$/.exec(req.params.file)?.[1];
+    if (!id) return reply.code(400).send({ code: "INVALID_ANCHOR_ID" });
+    const anchor = await repo.findAnchor(id);
+    if (!anchor) return reply.code(404).send({ code: "ANCHOR_NOT_FOUND" });
+    return reply
+      .header("content-type", OTS_CONTENT_TYPE)
+      .header("content-disposition", `attachment; filename="aegix-${discoveryDisplayId(anchor.discovery_id)}-${anchor.id}.ots"`)
+      .send(Buffer.from(otsFile(anchor.chain_hash, anchor.receipt)));
   });
 }

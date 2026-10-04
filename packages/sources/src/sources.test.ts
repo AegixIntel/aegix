@@ -11,10 +11,14 @@ import {
   contextMentionCount, createNarrativeContextSource, narrativeContextSeries
 } from "./narrative-context.js";
 import { aggregateOptionsChain, createOptionsSource, optionsSeries } from "./options.js";
+import { QUOTED_FUNDS, SECTOR_QUOTES_SOURCE, createSectorQuoteSource, fundPrice, sectorQuoteSeries } from "./sector-quotes.js";
+import { usEasternClock, usEquitySessionOpen } from "./us-session.js";
 import { SourceError } from "./types.js";
 
 const NVDA = TOKENIZED_STOCKS.find((s) => s.symbol === "NVDAx")!;
 const AT = new Date("2026-10-01T04:15:00.000Z");
+/** A Thursday at 11:15 in New York: the US session is open. */
+const SESSION = new Date("2026-10-01T15:15:00.000Z");
 
 /** A Raydium CLMM pool account with only the fields the decoder reads. */
 function poolAccount(mint0: string, mint1: string, decimals0: number, decimals1: number, price1Per0: number): Uint8Array {
@@ -244,11 +248,65 @@ test("an options chain is summed only over this underlying's contracts", () => {
 
 test("the options source omits a ratio it cannot define", async () => {
   const respond = (body: unknown) => (async () => new Response(JSON.stringify(body), { status: 200 })) as typeof fetch;
-  const full = await createOptionsSource({ underlyings: ["XLU"], fetchImpl: respond(chain) }).collect(AT);
+  const full = await createOptionsSource({ underlyings: ["XLU"], fetchImpl: respond(chain) }).collect(SESSION);
   assert.deepEqual(Object.fromEntries(full.map((o) => [o.seriesKey, o.value])), {
     "options:XLU:call_volume": 5, "options:XLU:put_volume": 20, "options:XLU:open_interest": 23, "options:XLU:put_call_volume_ratio": 4 });
   const quiet = { data: { options: [{ option: "XLU261002C00025000", volume: 0, open_interest: 11 }] } };
-  const partial = await createOptionsSource({ underlyings: ["XLU"], fetchImpl: respond(quiet) }).collect(AT);
+  const partial = await createOptionsSource({ underlyings: ["XLU"], fetchImpl: respond(quiet) }).collect(SESSION);
   assert.deepEqual(partial.map((o) => o.seriesKey), ["options:XLU:open_interest"]);
   assert.equal(optionsSeries(["XLU"]).length, 2, "raw volume is stored but not scanned");
+});
+
+test("the US session is weekdays from the open to an hour after the close, in New York time", () => {
+  assert.deepEqual(usEasternClock(new Date("2026-10-01T15:15:00Z")), { date: "2026-10-01", weekday: 4, minutes: 11 * 60 + 15 });
+  // Daylight time until 1 November 2026: 09:30 in New York is 13:30 UTC.
+  assert.equal(usEquitySessionOpen(new Date("2026-10-01T13:29:00Z")), false);
+  assert.equal(usEquitySessionOpen(new Date("2026-10-01T13:30:00Z")), true);
+  assert.equal(usEquitySessionOpen(new Date("2026-10-01T20:59:00Z")), true);
+  assert.equal(usEquitySessionOpen(new Date("2026-10-01T21:00:00Z")), false);
+  // Standard time from 2 November: the same wall-clock hour is 14:30 UTC.
+  assert.equal(usEquitySessionOpen(new Date("2026-11-02T13:45:00Z")), false);
+  assert.equal(usEquitySessionOpen(new Date("2026-11-02T14:30:00Z")), true);
+  assert.equal(usEquitySessionOpen(new Date("2026-10-03T15:15:00Z")), false, "Saturday");
+  assert.equal(usEquitySessionOpen(new Date("2026-10-04T15:15:00Z")), false, "Sunday");
+});
+
+test("session sources ask nothing while the market is closed", async () => {
+  let calls = 0;
+  const counting = (async () => { calls += 1; return new Response("{}", { status: 200 }); }) as typeof fetch;
+  assert.deepEqual(await createOptionsSource({ fetchImpl: counting }).collect(AT), []);
+  assert.deepEqual(await createSectorQuoteSource({ fetchImpl: counting }).collect(new Date("2026-10-03T15:15:00Z")), []);
+  assert.equal(calls, 0);
+});
+
+const quote = (symbol: string, price: unknown, lastTrade: unknown) => ({ timestamp: "2026-10-01 15:20:00", data: { symbol, current_price: price, last_trade_time: lastTrade }, symbol });
+
+test("a fund's price is taken only from a quote that names it and traded today", () => {
+  assert.equal(fundPrice(quote("XLU", 39.83, "2026-10-01T11:14:59"), "XLU", SESSION), 39.83);
+  assert.equal(fundPrice(quote("XLU", 39.83, "2026-09-30T15:59:59"), "XLU", SESSION), null, "yesterday's last trade is not today's price");
+  for (const bad of [quote("XLE", 39.83, "2026-10-01T11:14:59"), quote("XLU", 0, "2026-10-01T11:14:59"), quote("XLU", "39.83", "2026-10-01T11:14:59"), quote("XLU", 39.83, null), { data: null }]) {
+    assert.throws(() => fundPrice(bad, "XLU", SESSION), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  }
+});
+
+test("the sector source writes one price per fund and leaves out a fund it could not read", async () => {
+  const funds = QUOTED_FUNDS.filter((f) => ["XLU", "CPER", "URA"].includes(f.symbol));
+  const asked: string[] = [];
+  const fetchImpl = (async (url: string | URL) => {
+    const symbol = /quotes\/(\w+)\.json$/.exec(String(url))![1]!;
+    asked.push(symbol);
+    if (symbol === "CPER") return new Response("upstream", { status: 502 });
+    return new Response(JSON.stringify(quote(symbol, symbol === "XLU" ? 39.83 : 31.2, symbol === "XLU" ? "2026-10-01T11:14:59" : "2026-09-30T15:59:59")), { status: 200 });
+  }) as typeof fetch;
+  const rows = await createSectorQuoteSource({ funds, fetchImpl }).collect(SESSION);
+  assert.deepEqual(asked, ["XLU", "CPER", "URA"]);
+  assert.deepEqual(rows, [{ seriesKey: "fund:XLU:price_usd", eventTime: SESSION.toISOString(), value: 39.83, source: SECTOR_QUOTES_SOURCE }]);
+
+  const failing = (async () => new Response("down", { status: 503 })) as typeof fetch;
+  await assert.rejects(createSectorQuoteSource({ funds, fetchImpl: failing }).collect(SESSION), (e) => e instanceof SourceError);
+
+  const series = sectorQuoteSeries();
+  assert.equal(series.length, 16);
+  assert.equal(new Set(series.map((s) => s.key)).size, 16);
+  assert.deepEqual(series.find((s) => s.key === "fund:CPER:price_usd"), { key: "fund:CPER:price_usd", label: "CPER fund price (copper futures)", group: "commodity:copper" });
 });

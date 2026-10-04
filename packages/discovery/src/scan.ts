@@ -45,6 +45,51 @@ export const DISCOVERY_BASELINE_MAX_ABS_R = 0.3;
 
 const HOUR_MS = 3_600_000;
 
+/**
+ * One preregistered hypothesis set. Everything is in hours, and `stepHours`
+ * is the resolution the series are differenced at: every window and lag is a
+ * whole number of steps.
+ */
+export interface DiscoveryProfile {
+  engineVersion: string;
+  method: string;
+  stepHours: number;
+  windowHours: number;
+  baselineHours: number;
+  lagsHours: readonly number[];
+  minPairs: number;
+}
+
+export const HOURLY_PROFILE: DiscoveryProfile = {
+  engineVersion: DISCOVERY_ENGINE_VERSION,
+  method: DISCOVERY_METHOD,
+  stepHours: 1,
+  windowHours: DISCOVERY_WINDOW_HOURS,
+  baselineHours: DISCOVERY_BASELINE_HOURS,
+  lagsHours: DISCOVERY_LAGS_HOURS,
+  minPairs: DISCOVERY_MIN_PAIRS
+};
+
+/**
+ * The daily scan. A series that only moves during a market session (listed
+ * options, exchange-traded funds) never has 96 consecutive hours, so the
+ * hourly scan cannot test it. Here each UTC day is one step: the day's last
+ * observation, differenced against the day before. A day with no observation
+ * is a gap, so a session series has no change across a weekend.
+ *
+ * Sixty days of test window after sixty of baseline: nothing can be tested
+ * until a series has been captured for about four months.
+ */
+export const DAILY_PROFILE: DiscoveryProfile = {
+  engineVersion: "discovery-daily-v1.0.0",
+  method: "pearson(daily log-change) · Bartlett n_eff · Fisher z · Benjamini–Yekutieli",
+  stepHours: 24,
+  windowHours: 60 * 24,
+  baselineHours: 60 * 24,
+  lagsHours: [-120, -72, -48, -24, 0, 24, 48, 72, 120],
+  minPairs: 30
+};
+
 export interface SeriesPoint { eventTime: string; value: number }
 export interface SeriesInput { key: string; label: string; group: string; points: SeriesPoint[] }
 
@@ -140,25 +185,26 @@ export function epochEndFor(now: Date): Date {
 }
 
 /** How far back a scan needs the ledger: both windows plus the longest lag. */
-export function scanHorizonHours(): number {
-  return DISCOVERY_WINDOW_HOURS + DISCOVERY_BASELINE_HOURS + Math.max(...DISCOVERY_LAGS_HOURS) + 1;
+export function scanHorizonHours(profile: DiscoveryProfile = HOURLY_PROFILE): number {
+  return profile.windowHours + profile.baselineHours + Math.max(...profile.lagsHours) + profile.stepHours;
 }
 
-export function discoveryFingerprint(key: string, lagHours: number, windowStart: string, windowEnd: string): string {
-  return createHash("sha256").update([DISCOVERY_ENGINE_VERSION, key, lagHours, windowStart, windowEnd].join("|")).digest("hex");
+export function discoveryFingerprint(key: string, lagHours: number, windowStart: string, windowEnd: string, engineVersion: string = DISCOVERY_ENGINE_VERSION): string {
+  return createHash("sha256").update([engineVersion, key, lagHours, windowStart, windowEnd].join("|")).digest("hex");
 }
 
 /**
- * Hourly log-changes, keyed by hour index. A change exists only between two
- * consecutive hours that both have a positive value: a gap is left as a gap,
- * never interpolated.
+ * Log-changes per step, keyed by step index. A change exists only between two
+ * consecutive steps that both have a positive value: a gap is left as a gap,
+ * never interpolated. A step's value is its last observation.
  */
-export function hourlyLogChanges(points: SeriesPoint[]): Map<number, number> {
+export function logChanges(points: SeriesPoint[], stepHours = 1): Map<number, number> {
+  const stepMs = stepHours * HOUR_MS;
   const latest = new Map<number, { at: number; value: number }>();
   for (const p of points) {
     const at = Date.parse(p.eventTime);
     if (!Number.isFinite(at) || !Number.isFinite(p.value) || p.value <= 0) continue;
-    const hour = Math.floor(at / HOUR_MS);
+    const hour = Math.floor(at / stepMs);
     const existing = latest.get(hour);
     if (!existing || at >= existing.at) latest.set(hour, { at, value: p.value });
   }
@@ -168,6 +214,10 @@ export function hourlyLogChanges(points: SeriesPoint[]): Map<number, number> {
     if (previous) changes.set(hour, Math.log(current.value / previous.value));
   }
   return changes;
+}
+
+export function hourlyLogChanges(points: SeriesPoint[]): Map<number, number> {
+  return logChanges(points, 1);
 }
 
 function paired(a: Map<number, number>, b: Map<number, number>, lag: number, fromHour: number, toHour: number): { x: number[]; y: number[] } {
@@ -185,19 +235,28 @@ function paired(a: Map<number, number>, b: Map<number, number>, lag: number, fro
 }
 
 const round = (value: number, digits = 4) => Number(value.toFixed(digits));
-const lagText = (lag: number, a: string, b: string) => lag === 0 ? "same hour" : lag > 0 ? `${a} leading ${b} by ${lag}h` : `${b} leading ${a} by ${-lag}h`;
 
-export function runScan(input: ScanInput): ScanResult {
+export function runScan(input: ScanInput, profile: DiscoveryProfile = HOURLY_PROFILE): ScanResult {
+  const stepMs = profile.stepHours * HOUR_MS;
+  const daily = profile.stepHours === 24;
   const epochEndMs = Date.parse(input.epochEnd);
-  if (!Number.isFinite(epochEndMs) || epochEndMs % HOUR_MS !== 0) throw new Error("epochEnd must be a whole UTC hour");
-  const toHour = epochEndMs / HOUR_MS;
-  const fromHour = toHour - DISCOVERY_WINDOW_HOURS;
-  const baseFromHour = fromHour - DISCOVERY_BASELINE_HOURS;
-  const iso = (hour: number) => new Date(hour * HOUR_MS).toISOString();
+  if (!Number.isFinite(epochEndMs) || epochEndMs % stepMs !== 0) throw new Error(daily ? "epochEnd must be a whole UTC day" : "epochEnd must be a whole UTC hour");
+  // Steps, not hours, from here on. At the hourly resolution they are the
+  // same, which is why the names below still say hour.
+  const lags = profile.lagsHours.map((lag) => lag / profile.stepHours);
+  const toHour = epochEndMs / stepMs;
+  const fromHour = toHour - profile.windowHours / profile.stepHours;
+  const baseFromHour = fromHour - profile.baselineHours / profile.stepHours;
+  const iso = (hour: number) => new Date(hour * stepMs).toISOString();
+  const span = (steps: number) => (daily ? `${steps}d` : `${steps}h`);
+  const lagText = (lagHours: number, a: string, b: string) => {
+    const lag = lagHours / profile.stepHours;
+    return lag === 0 ? (daily ? "same day" : "same hour") : lag > 0 ? `${a} leading ${b} by ${span(lag)}` : `${b} leading ${a} by ${span(-lag)}`;
+  };
 
   // Nothing at or after the epoch end is read, whatever the caller loaded.
   const series = [...input.series].sort((a, b) => a.key.localeCompare(b.key));
-  const changes = new Map(series.map((s) => [s.key, hourlyLogChanges(s.points.filter((p) => Date.parse(p.eventTime) < epochEndMs))]));
+  const changes = new Map(series.map((s) => [s.key, logChanges(s.points.filter((p) => Date.parse(p.eventTime) < epochEndMs), profile.stepHours)]));
   const openByPair = new Map(input.open.map((o) => [o.pairKey, o]));
 
   const tests: TestRecord[] = [];
@@ -213,9 +272,10 @@ export function runScan(input: ScanInput): ScanResult {
       const cb = changes.get(b.key)!;
       const base = { pairKey: key, seriesA: a.key, seriesB: b.key };
 
-      const evaluate = (lag: number, role: "NOVELTY" | "CONFIRMATION", rBaseline: number | null): TestRecord => {
-        const { x, y } = paired(ca, cb, lag, fromHour, toHour);
-        if (x.length < DISCOVERY_MIN_PAIRS) return { ...base, ...blank, lagHours: lag, status: "INSUFFICIENT_DATA", role: null, n: x.length, rBaseline };
+      const evaluate = (lagSteps: number, role: "NOVELTY" | "CONFIRMATION", rBaseline: number | null): TestRecord => {
+        const lag = lagSteps * profile.stepHours;
+        const { x, y } = paired(ca, cb, lagSteps, fromHour, toHour);
+        if (x.length < profile.minPairs) return { ...base, ...blank, lagHours: lag, status: "INSUFFICIENT_DATA", role: null, n: x.length, rBaseline };
         const r = pearson(x, y);
         // A series that did not move has no correlation to test. That is a
         // fact about the window, distinct from not having enough of it.
@@ -229,27 +289,28 @@ export function runScan(input: ScanInput): ScanResult {
       if (open) {
         // Confirmation is preregistered: the original lag only, and only once
         // the test window no longer overlaps the window it was found in.
-        if (fromHour * HOUR_MS < Date.parse(open.windowEnd)) {
+        if (fromHour * stepMs < Date.parse(open.windowEnd)) {
           tests.push({ ...base, ...blank, lagHours: open.lagHours, status: "AWAITING_CONFIRMATION_WINDOW", role: null });
         } else {
-          tests.push(evaluate(open.lagHours, "CONFIRMATION", null));
+          tests.push(evaluate(open.lagHours / profile.stepHours, "CONFIRMATION", null));
         }
         continue;
       }
 
       const baseline = new Map<number, number>();
-      for (const lag of DISCOVERY_LAGS_HOURS) {
+      for (const lag of lags) {
         const { x, y } = paired(ca, cb, lag, baseFromHour, fromHour);
-        const r = x.length >= DISCOVERY_MIN_PAIRS ? pearson(x, y) : null;
+        const r = x.length >= profile.minPairs ? pearson(x, y) : null;
         if (r !== null) baseline.set(lag, r);
       }
       const maxAbs = baseline.size > 0 ? Math.max(...[...baseline.values()].map(Math.abs)) : null;
       if (maxAbs !== null) baselineMax.set(key, maxAbs);
 
-      for (const lag of DISCOVERY_LAGS_HOURS) {
+      for (const lag of lags) {
         const rBaseline = baseline.get(lag) ?? null;
-        if (rBaseline === null) tests.push({ ...base, ...blank, lagHours: lag, status: "INSUFFICIENT_BASELINE", role: null });
-        else if (maxAbs! >= DISCOVERY_BASELINE_MAX_ABS_R) tests.push({ ...base, ...blank, lagHours: lag, status: "KNOWN_RELATIONSHIP", role: null, rBaseline });
+        const lagHours = lag * profile.stepHours;
+        if (rBaseline === null) tests.push({ ...base, ...blank, lagHours, status: "INSUFFICIENT_BASELINE", role: null });
+        else if (maxAbs! >= DISCOVERY_BASELINE_MAX_ABS_R) tests.push({ ...base, ...blank, lagHours, status: "KNOWN_RELATIONSHIP", role: null, rBaseline });
         else tests.push(evaluate(lag, "NOVELTY", rBaseline));
       }
     }
@@ -290,11 +351,11 @@ export function runScan(input: ScanInput): ScanResult {
     const b = byKey.get(best.seriesB)!;
     const direction: Direction = best.r! >= 0 ? "POSITIVE" : "NEGATIVE";
     const maxAbs = baselineMax.get(key)!;
-    const days = DISCOVERY_WINDOW_HOURS / 24;
-    const confirmAt = iso(toHour + DISCOVERY_WINDOW_HOURS);
+    const days = profile.windowHours / 24;
+    const confirmAt = iso(toHour + profile.windowHours / profile.stepHours);
     const card: DiscoveryCard = {
       title: `${a.label} and ${b.label} have developed an unusual relationship`,
-      summary: `Hourly changes in ${a.label} and ${b.label} moved ${direction === "POSITIVE" ? "together" : "in opposite directions"} over the ${days} days to ${windowEnd} (r = ${round(best.r!, 3)}, ${lagText(best.lagHours, a.label, b.label)}).`,
+      summary: `${daily ? "Daily" : "Hourly"} changes in ${a.label} and ${b.label} moved ${direction === "POSITIVE" ? "together" : "in opposite directions"} over the ${days} days to ${windowEnd} (r = ${round(best.r!, 3)}, ${lagText(best.lagHours, a.label, b.label)}).`,
       seriesA: { key: a.key, label: a.label, group: a.group },
       seriesB: { key: b.key, label: b.label, group: b.group },
       lagHours: best.lagHours,
@@ -305,10 +366,10 @@ export function runScan(input: ScanInput): ScanResult {
       confidence: round(1 - best.qValue!),
       hypothesesTested: tested.length,
       fdrLevel: DISCOVERY_FDR_LEVEL,
-      method: DISCOVERY_METHOD,
+      method: profile.method,
       window: { start: windowStart, end: windowEnd },
       baseline: { start: iso(baseFromHour), end: windowStart, maxAbsR: round(maxAbs) },
-      whyUnusual: `In the ${DISCOVERY_BASELINE_HOURS / 24} days before this window the strongest correlation between these series at any tested lag was |r| = ${round(maxAbs, 3)}, below the ${DISCOVERY_BASELINE_MAX_ABS_R} threshold for an existing relationship. In this window it is ${round(Math.abs(best.r!), 3)}, and it survives correction across ${tested.length} hypotheses.`,
+      whyUnusual: `In the ${profile.baselineHours / 24} days before this window the strongest correlation between these series at any tested lag was |r| = ${round(maxAbs, 3)}, below the ${DISCOVERY_BASELINE_MAX_ABS_R} threshold for an existing relationship. In this window it is ${round(Math.abs(best.r!), 3)}, and it survives correction across ${tested.length} hypotheses.`,
       whenItBegan: `It is first measurable in the window ${windowStart} to ${windowEnd}. The engine tests whole windows, so it cannot place the start more precisely than that.`,
       supporting: rejected.map((t) => `${lagText(t.lagHours, a.label, b.label)}: r = ${round(t.r!, 3)}, q = ${t.qValue!.toExponential(2)}, n = ${t.n} (effective ${round(t.nEffective!, 1)})`),
       contradicting: [
@@ -326,16 +387,18 @@ export function runScan(input: ScanInput): ScanResult {
       limitations: [
         "A statistical relationship between two series. It does not establish causation, and identifies no participant, owner or intent.",
         `The false discovery rate is controlled at ${DISCOVERY_FDR_LEVEL} within this run, across ${tested.length} hypotheses. Runs repeat daily over overlapping windows, so the rate over many runs is higher than within one; confirmation in a disjoint window is what addresses that.`,
-        "Series are differenced to hourly log-changes; hours with a missing observation are skipped, not interpolated.",
+        daily
+          ? "Series are differenced to daily log-changes of each UTC day's last observation. A day with no observation is skipped, not interpolated, so a series that trades in sessions has no change across a weekend or holiday."
+          : "Series are differenced to hourly log-changes; hours with a missing observation are skipped, not interpolated.",
         "Rolling 24h volume is an overlapping total, which the effective sample size corrects for only approximately."
       ]
     };
     discoveries.push({ pairKey: key, seriesA: a.key, seriesB: b.key, lagHours: best.lagHours, direction, windowEnd,
-      fingerprint: discoveryFingerprint(key, best.lagHours, windowStart, windowEnd), card });
+      fingerprint: discoveryFingerprint(key, best.lagHours, windowStart, windowEnd, profile.engineVersion), card });
   }
 
   return {
-    engineVersion: DISCOVERY_ENGINE_VERSION,
+    engineVersion: profile.engineVersion,
     epochEnd: windowEnd,
     seriesCount: series.length,
     hypothesesConsidered: tests.length,

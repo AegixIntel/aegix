@@ -196,6 +196,14 @@ const envSchema = z.object({
   ENABLE_REWIND_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_REWIND: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_DISCOVERY: z.preprocess(boolEnv, z.boolean()).default(false),
+  // The daily-resolution scan, for series that only move in market sessions.
+  // Its own flag because switching it on adds a second set of hypotheses.
+  ENABLE_DISCOVERY_DAILY: z.preprocess(boolEnv, z.boolean()).default(false),
+  // Publishes the head of the Discovery ID chain to public OpenTimestamps
+  // calendars, which commit it to the Bitcoin chain. Sends one 32-byte hash
+  // per calendar and nothing else.
+  ENABLE_DISCOVERY_ANCHOR: z.preprocess(boolEnv, z.boolean()).default(false),
+  DISCOVERY_ANCHOR_CALENDARS: z.string().default("https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org,https://finney.calendar.eternitywall.com"),
   REWIND_CAPTURE_INTERVAL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
   REWIND_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
   // D14 series sources. Each one is a separate opt-in because each has a
@@ -208,6 +216,9 @@ const envSchema = z.object({
   ENABLE_NARRATIVE_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_NARRATIVE_CONTEXT_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_OPTIONS_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  // Sector and commodity fund prices, from the same Cboe feed as options and
+  // with the same standing: delayed, and no redistribution licence.
+  ENABLE_SECTOR_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
   OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
   SERIES_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),

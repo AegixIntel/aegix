@@ -161,7 +161,7 @@ export const products: Product[] = [
     href: "/app/discoveries",
     status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News volume capture is paused, options are not scanned, and there is no sector rotation and no commodity beyond tokenized gold."
+    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News is read as hourly mention counts from 4 October 2026, which the scan can test once two weeks of them are stored. Options and sector funds are not captured, so there is no sector rotation and no commodity beyond tokenized gold."
   },
 
   // Later.

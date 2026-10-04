@@ -13,13 +13,17 @@
  *   raw volume series are stored but not scanned. The ratio and open
  *   interest are.
  * - Options trade about 6.5 hours a day. The hourly Discovery Engine needs
- *   consecutive hours, so these series will mostly be recorded as
- *   INSUFFICIENT_DATA until a daily-resolution scan exists. They are captured
- *   now because a ledger cannot be backfilled later.
+ *   consecutive hours and records these series as INSUFFICIENT_DATA; the
+ *   daily scan is what reads them.
+ * - The feed keeps answering outside the session with the last session's
+ *   totals. The chain is read only while the market is open, so a weekend is
+ *   a gap in the ledger and not two days on which nothing changed. An
+ *   exchange holiday on a weekday is still read, and stores the day before.
  */
 
 import type { SeriesDescriptor } from "@aegix/rewind";
 import { SourceError, fetchJson, type SeriesObservation, type SeriesSource } from "./types.js";
+import { usEquitySessionOpen } from "./us-session.js";
 
 export const OPTIONS_SOURCE = "cboe-delayed-quotes";
 
@@ -76,6 +80,7 @@ export function createOptionsSource(options: {
     name: OPTIONS_SOURCE,
     series: optionsSeries(underlyings),
     async collect(at) {
+      if (!usEquitySessionOpen(at)) return [];
       const eventTime = at.toISOString();
       const observations: SeriesObservation[] = [];
       let failures = 0;

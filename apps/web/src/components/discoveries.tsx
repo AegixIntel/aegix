@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDiscovery, listDiscoveries, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
+import { discoveryProofUrl, getDiscovery, listDiscoveries, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
+import { SignalGraph } from "@/components/signal-graph";
 import { useRequireAuth } from "@/lib/auth-guard";
 
 const day = (iso: string) => `${iso.slice(0, 10)} — ${iso.slice(11, 16)} UTC`;
-const lagText = (d: DiscoverySummary) => d.lagHours === 0 ? "same hour" : `${Math.abs(d.lagHours)}h lag`;
+const daily = (d: DiscoverySummary) => d.engineVersion.startsWith("discovery-daily");
+const lagText = (d: DiscoverySummary) => d.lagHours === 0 ? (daily(d) ? "same day" : "same hour") : daily(d) ? `${Math.abs(d.lagHours) / 24}d lag` : `${Math.abs(d.lagHours)}h lag`;
 
 function Card({ discovery, onInvestigate }: { discovery: DiscoverySummary; onInvestigate: () => void }) {
   const { card } = discovery;
@@ -31,10 +33,11 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
       <h2 className="mt-1 text-lg text-ink">{card.title}</h2>
     </div>
     <div><h3 className="text-sm font-semibold text-ink/80">Signal graph</h3>
-      <ul className="mt-2 font-mono text-sm text-ink/80">{card.graph.edges.map((edge) => {
+      <SignalGraph card={card} related={detail.related} />
+      <ul className="mt-3 font-mono text-sm text-ink/80">{card.graph.edges.map((edge) => {
         const from = card.graph.nodes.find((n) => n.id === edge.from)?.label ?? edge.from;
         const to = card.graph.nodes.find((n) => n.id === edge.to)?.label ?? edge.to;
-        return <li key={`${edge.from}:${edge.to}:${edge.lagHours}`} className="mt-1">{from} {edge.lagHours === 0 ? "↔" : "→"} {to} · r = {edge.r}{edge.lagHours ? ` · ${edge.lagHours}h later` : ""}</li>;
+        return <li key={`${edge.from}:${edge.to}:${edge.lagHours}`} className="mt-1">{from} {edge.lagHours === 0 ? "↔" : "→"} {to} · r = {edge.r}{edge.lagHours ? ` · ${daily(discovery) ? `${edge.lagHours / 24}d` : `${edge.lagHours}h`} later` : ""}</li>;
       })}</ul>
       {detail.related.length ? <p className="mt-2 text-xs text-muted-2">Shares a series with: {detail.related.map((r) => `#${r.id}`).join(", ")}</p> : null}
     </div>
@@ -47,6 +50,11 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
     <div><h3 className="text-sm font-semibold text-ink/80">Record</h3>
       <ul className="mt-1 text-sm text-muted-foreground">{detail.events.map((event) => <li key={`${event.type}:${event.at}`} className="mt-1">{event.at} · {event.type.replace("_", " ")}{typeof event.detail.reason === "string" ? ` — ${event.detail.reason}` : ""}</li>)}</ul>
       <p className="mt-2 break-all text-xs text-muted-2">Chain hash {discovery.chainHash} · previous {discovery.prevChainHash ?? "none (first discovery)"} · fingerprint {discovery.fingerprint}</p>
+      {detail.anchors.length ? <div className="mt-3 text-xs text-muted-foreground">
+        <p>Anchored outside AEGIX: the chain up to Discovery #{detail.anchors[0]!.covers} was sent to {detail.anchors.length} public OpenTimestamps calendar{detail.anchors.length === 1 ? "" : "s"} at {day(detail.anchors[0]!.submittedAt)}, which commit it to the Bitcoin chain.</p>
+        <ul className="mt-1">{detail.anchors.map((anchor) => <li key={anchor.id} className="mt-1"><a className="underline decoration-ink/30 underline-offset-2 hover:decoration-accent" href={discoveryProofUrl(anchor)}>Proof file (.ots)</a> · {anchor.calendar.replace(/^https:\/\//, "")}</li>)}</ul>
+        <p className="mt-1 text-muted-2">Check it with the OpenTimestamps client: <span className="font-mono">ots verify -d {detail.anchors[0]!.chainHash} &lt;file&gt;.ots</span>. A proof is pending until the calendar&apos;s Bitcoin block is mined, usually within a few hours.</p>
+      </div> : <p className="mt-3 text-xs text-muted-2">Not anchored outside AEGIX yet: until it is, this timestamp rests on AEGIX&apos;s own database.</p>}
       <p className="mt-1 text-xs text-muted-2">{card.method} · n = {card.effect.n} (effective {card.effect.nEffective}) · p = {card.pValue.toExponential(2)} · FDR level {card.fdrLevel} · {discovery.engineVersion}{run ? ` · run over ${run.seriesCount} series, ${run.hypothesesTested} tested of ${run.hypothesesConsidered} considered` : ""}</p>
     </div>
     <ul className="text-xs text-muted-2">{card.limitations.map((text) => <li key={text} className="mt-1">{text}</li>)}</ul>
