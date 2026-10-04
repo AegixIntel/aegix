@@ -74,6 +74,7 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
 export default function Discoveries() {
   const [data, setData] = useState<DiscoveryListResponse | null>(null);
   const [investigations, setInvestigations] = useState<Record<string, Investigation>>({});
+  const inFlight = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const { user, requireAuth } = useRequireAuth();
 
@@ -90,18 +91,21 @@ export default function Discoveries() {
 
   /** Opens a discovery under its own card, or closes it if it is open. */
   async function toggle(id: string) {
-    const current = investigations[id];
-    if (current?.state === "loading") return;
-    if (current?.state === "open") {
+    // Clicks can land faster than a render: the ref is what stops a second request.
+    if (inFlight.current.has(id)) return;
+    if (investigations[id]?.state === "open") {
       setInvestigations(({ [id]: _closed, ...rest }) => rest);
       return;
     }
+    inFlight.current.add(id);
     setInvestigations((all) => ({ ...all, [id]: { state: "loading" } }));
     try {
       const detail = await getDiscovery(id);
       setInvestigations((all) => ({ ...all, [id]: { state: "open", detail } }));
     } catch (err) {
       setInvestigations((all) => ({ ...all, [id]: { state: "failed", message: err instanceof Error ? err.message : "Discovery unavailable" } }));
+    } finally {
+      inFlight.current.delete(id);
     }
   }
 
