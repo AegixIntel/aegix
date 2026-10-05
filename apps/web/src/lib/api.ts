@@ -982,7 +982,7 @@ export async function getMarket(asset: MarketAsset, wallet?: string): Promise<Ma
   const response = await fetch(`${API_BASE_URL}/v1/markets/${asset}${query}`, { headers: authHeaders() });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
   return response.json() as Promise<MarketResponse>;
 }
@@ -1077,7 +1077,7 @@ async function billingRequest<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }
@@ -1123,7 +1123,7 @@ export async function rewind(input: { subjectType: RewindSubjectType; subject: s
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
   return response.json() as Promise<RewindResponse>;
 }
@@ -1133,7 +1133,7 @@ export async function getRewindSubjects(): Promise<RewindSubject[]> {
   const response = await fetch(`${API_BASE_URL}/v1/rewind/subjects`, { headers: authHeaders() });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
   return ((await response.json()) as { assets: RewindSubject[] }).assets;
 }
@@ -1174,7 +1174,7 @@ async function getDiscoveryJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders() });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? body?.code ?? `Request failed (${response.status})`);
+    throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }
