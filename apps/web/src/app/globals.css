@@ -538,9 +538,6 @@
     border-color: rgba(242, 64, 17, 0.8);
     background-color: theme("colors.paper-raised");
   }
-  .luxury-panel {
-    backdrop-filter: blur(12px);
-  }
   .hairline {
     @apply border-t border-ink/10;
   }

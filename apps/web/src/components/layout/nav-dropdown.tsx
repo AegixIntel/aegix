@@ -46,7 +46,7 @@ export function NavDropdown({ group }: { group: NavGroup }) {
       {open && (
         <div className="absolute left-0 top-full z-50 w-64 border border-ink/10 bg-paper p-1.5 pt-2">
           {group.items.map((item) => (
-            <Link
+            <Link prefetch={false}
               key={`${item.label}-${item.href}`}
               href={item.href}
               onClick={() => setOpen(false)}
@@ -82,7 +82,7 @@ export function MobileNavGroup({ group, onNavigate }: { group: NavGroup; onNavig
       {open && (
         <div className="mb-1 space-y-0.5 border-l border-ink/10 pl-3">
           {group.items.map((item) => (
-            <Link
+            <Link prefetch={false}
               key={`${item.label}-${item.href}`}
               href={item.href}
               onClick={onNavigate}

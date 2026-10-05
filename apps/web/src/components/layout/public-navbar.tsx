@@ -11,9 +11,9 @@ export function PublicNavbar() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-ink/10 bg-paper/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-ink/10 bg-paper/95">
       <nav className="container-page flex h-16 items-center justify-between gap-4" aria-label="Primary">
-        <Link href="/" className="flex flex-none items-center gap-3" aria-label="AEGIX home">
+        <Link prefetch={false} href="/" className="flex flex-none items-center gap-3" aria-label="AEGIX home">
           <AegixLogo />
           <span className="hidden whitespace-nowrap text-[10px] uppercase tracking-[0.2em] text-muted-2 xl:block">
             Financial &amp; On-Chain Intelligence
@@ -24,17 +24,17 @@ export function PublicNavbar() {
           {primaryNav.map((group) => (
             <NavDropdown key={group.label} group={group} />
           ))}
-          <Link href={docsNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
+          <Link prefetch={false} href={docsNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
             {docsNavLink.label}
           </Link>
-          <Link href={roadmapNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
+          <Link prefetch={false} href={roadmapNavLink.href} className="text-sm text-muted-foreground transition hover:text-ink">
             {roadmapNavLink.label}
           </Link>
         </div>
 
         <div className="hidden flex-none items-center gap-3 md:flex">
           <WalletAuthButton compact buttonClassName="w-[9.5rem]" />
-          <Link href="/app/analyze" className="btn-primary w-[9.5rem] whitespace-nowrap px-4 py-2 text-sm">
+          <Link prefetch={false} href="/app/analyze" className="btn-primary w-[9.5rem] whitespace-nowrap px-4 py-2 text-sm">
             Launch App <span className="text-inherit opacity-60">→</span>
           </Link>
         </div>
@@ -63,16 +63,16 @@ export function PublicNavbar() {
             {primaryNav.map((group) => (
               <MobileNavGroup key={group.label} group={group} onNavigate={() => setOpen(false)} />
             ))}
-            <Link href={docsNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
+            <Link prefetch={false} href={docsNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
               {docsNavLink.label}
             </Link>
-            <Link href={roadmapNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
+            <Link prefetch={false} href={roadmapNavLink.href} onClick={() => setOpen(false)} className="rounded px-3 py-2 text-sm text-muted-foreground hover:text-ink">
               {roadmapNavLink.label}
             </Link>
             <div className="mt-3">
               <WalletAuthButton compact />
             </div>
-            <Link href="/app/analyze" onClick={() => setOpen(false)} className="btn-primary mt-3 justify-center">
+            <Link prefetch={false} href="/app/analyze" onClick={() => setOpen(false)} className="btn-primary mt-3 justify-center">
               Launch App →
             </Link>
           </div>

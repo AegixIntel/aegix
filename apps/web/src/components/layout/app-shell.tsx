@@ -11,7 +11,7 @@ import type { AppNavItem } from "@/lib/site";
 
 function NavLink({ item, active, onNavigate }: { item: AppNavItem; active: boolean; onNavigate?: () => void }) {
   return (
-    <Link
+    <Link prefetch={false}
       href={item.href}
       onClick={onNavigate}
       className={`block rounded-sm px-3 py-1.5 text-sm transition ${
@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-none border-r border-ink/10 bg-paper md:flex md:flex-col">
         <div className="flex h-16 items-center border-b border-ink/10 px-5">
-          <Link href="/" className="flex items-center gap-2 text-ink">
+          <Link prefetch={false} href="/" className="flex items-center gap-2 text-ink">
             <AegixMark className="h-6 w-6" />
             <span className="font-display text-lg font-semibold tracking-tight">AEGIX</span>
           </Link>
@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bar */}
       <div className="flex w-full flex-1 flex-col">
         <div className="flex h-16 items-center justify-between border-b border-ink/10 bg-paper px-4 md:hidden">
-          <Link href="/" className="flex items-center gap-2 text-ink">
+          <Link prefetch={false} href="/" className="flex items-center gap-2 text-ink">
             <AegixMark className="h-6 w-6" />
             <span className="font-display text-base font-semibold">AEGIX</span>
           </Link>
