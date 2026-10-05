@@ -7,25 +7,49 @@
  *
  * Never sends transactions, never requests private keys, and explicitly
  * tells the user that signing costs no SOL.
+ *
+ * This module holds the session and the two API calls of the flow and
+ * imports nothing from the wallet libraries: those are a few hundred
+ * kilobytes and live in components/wallet-island.tsx, which a page loads
+ * only when a wallet is wanted.
  */
 
-"use client";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
-import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
-import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
-import { clusterApiUrl } from "@solana/web3.js";
 import { API_BASE_URL } from "./api";
 
 export const SESSION_TOKEN_KEY = "aegix_session_token";
+/** Where wallet-adapter remembers the wallet a visitor chose. */
+export const WALLET_NAME_KEY = "walletName";
 
 export interface AuthUser {
   id: string;
   wallet: string | null;
   email: string | null;
 }
+
+/** A wallet the visitor can pick, as the picker shows it. */
+export interface WalletOption {
+  name: string;
+  icon: string;
+  readyState: string;
+}
+
+/** The wallet libraries' state, as the rest of the app sees it. */
+export interface WalletView {
+  /** False until the wallet libraries have been loaded and have reported once. */
+  loaded: boolean;
+  connected: boolean;
+  connecting: boolean;
+  address: string | null;
+  wallets: WalletOption[];
+  select: (name: string) => void;
+  disconnect: () => Promise<void>;
+  signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | null;
+}
+
+export const NO_WALLET: WalletView = {
+  loaded: false, connected: false, connecting: false, address: null, wallets: [],
+  select: () => {}, disconnect: async () => {}, signMessage: null
+};
 
 export interface AuthState {
   /** Live wallet session user, or null when signed out. */
@@ -37,6 +61,9 @@ export interface AuthState {
   busy: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  wallet: WalletView;
+  /** Fetches the wallet libraries if they are not on the page yet. */
+  loadWallet: () => void;
 }
 
 export function getSessionToken(): string | null {
@@ -49,24 +76,7 @@ export function clearSessionToken(): void {
   window.localStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
-/** Wallet-adapter wallets; no vendor hard-coding beyond the standard adapters. */
-export function AegixWalletProvider({ children }: { children: React.ReactNode }) {
-  const network = WalletAdapterNetwork.Mainnet;
-  const endpoint = process.env.NEXT_PUBLIC_RPC_URL ?? clusterApiUrl(network);
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    []
-  );
-  return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        {children}
-      </WalletProvider>
-    </ConnectionProvider>
-  );
-}
-
-async function requestChallenge(wallet: string): Promise<{
+export async function requestChallenge(wallet: string): Promise<{
   challengeId: string;
   message: string;
   nonce: string;
@@ -84,7 +94,7 @@ async function requestChallenge(wallet: string): Promise<{
   return body.data;
 }
 
-async function verifySignature(input: {
+export async function verifySignature(input: {
   challengeId: string;
   wallet: string;
   signature: string;
@@ -106,7 +116,7 @@ async function verifySignature(input: {
 /** `null` means the session is invalid (401). `undefined` means the API could
  *  not answer — a rate limit, a 5xx or the network — which says nothing about
  *  the session and must not sign the user out. */
-async function fetchMe(token: string): Promise<AuthUser | null | undefined> {
+export async function fetchMe(token: string): Promise<AuthUser | null | undefined> {
   try {
     const res = await fetch(`${API_BASE_URL}/v1/auth/me`, { headers: { authorization: `Bearer ${token}` } });
     if (res.status === 401) return null;
@@ -118,109 +128,11 @@ async function fetchMe(token: string): Promise<AuthUser | null | undefined> {
   }
 }
 
-export function useAegixAuth(): AuthState {
-  const { publicKey, connected, signMessage, disconnect, connecting } = useWallet();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // Restore the session from storage on mount.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const token = getSessionToken();
-      if (!token) {
-        if (!cancelled) setReady(true);
-        return;
-      }
-      let me = await fetchMe(token);
-      if (me === undefined) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        me = await fetchMe(token);
-      }
-      if (!cancelled) {
-        // Only an invalid session clears the stored token; a transient failure
-        // keeps it so the next page load restores the session.
-        if (me === null) clearSessionToken();
-        setUser(me ?? null);
-        setReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Account switch (D6-P §41): the connected wallet changed → never stay
-  // authenticated as the previous user.
-  const walletStr = publicKey?.toBase58() ?? null;
-  useEffect(() => {
-    if (!connected || !walletStr) return;
-    if (user && user.wallet && user.wallet !== walletStr) {
-      clearSessionToken();
-      setUser(null);
-      setError("Wallet account switched — please sign in again.");
-    }
-  }, [walletStr, connected, user]);
-
-  const signIn = useCallback(async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      if (!connected || !publicKey) {
-        throw new Error("Please connect your wallet first.");
-      }
-      if (!signMessage) {
-        throw new Error("This wallet does not support message signing (signMessage).");
-      }
-      const wallet = publicKey.toBase58();
-      const { challengeId, message, nonce } = await requestChallenge(wallet);
-      const signature = await signMessage(new TextEncoder().encode(message));
-      // The API expects base58-encoded signatures.
-      const bs58 = (await import("bs58")).default;
-      const { token, user: me } = await verifySignature({
-        challengeId,
-        wallet,
-        signature: bs58.encode(signature),
-        nonce
-      });
-      window.localStorage.setItem(SESSION_TOKEN_KEY, token);
-      setUser(me);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [connected, publicKey, signMessage]);
-
-  const signOut = useCallback(async () => {
-    const token = getSessionToken();
-    if (token) {
-      try {
-        await fetch(`${API_BASE_URL}/v1/auth/logout`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${token}` }
-        });
-      } catch {
-        // server revocation is best-effort here; local clear always happens
-      }
-    }
-    clearSessionToken();
-    setUser(null);
-    setError(null);
-    if (connected) await disconnect().catch(() => {});
-  }, [connected, disconnect]);
-
-  return {
-    user,
-    ready,
-    connectedWallet: walletStr,
-    error,
-    signIn,
-    signOut,
-    busy: busy || connecting
-  };
+/** Revokes the session on the server; best-effort, the local clear always happens. */
+export async function revokeSession(token: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/v1/auth/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+  } catch {
+    // nothing to do: the token is cleared locally either way
+  }
 }
-
-export { useWallet };

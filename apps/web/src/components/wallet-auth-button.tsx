@@ -13,12 +13,14 @@
  * The wallet picker is a dropdown anchored below the Connect button (there
  * is no WalletModalProvider), listing registered wallets (Phantom, Solflare)
  * and calling wallet-adapter's select() on the chosen wallet.
+ *
+ * The wallet libraries are fetched when Connect is first pressed, unless an
+ * earlier visit already called for them; the picker says so while it waits.
  */
 
 import { useCallback, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import type { WalletName } from "@solana/wallet-adapter-base";
-import { useAegixAuth } from "@/lib/auth";
+import { useAuth } from "@/components/auth-provider";
+import type { WalletOption } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
 function shortWallet(wallet: string): string {
@@ -32,21 +34,23 @@ export default function WalletAuthButton({
   compact?: boolean;
   buttonClassName?: string;
 }) {
-  const { select, wallets, connected, publicKey, connecting, disconnect } = useWallet();
-  const auth = useAegixAuth();
+  const auth = useAuth();
+  const { select, wallets, connected, address, connecting, disconnect, loaded } = auth.wallet;
+  const { loadWallet } = auth;
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = useCallback(() => {
     setError(null);
+    loadWallet();
     setOpen((v) => !v);
-  }, []);
+  }, [loadWallet]);
 
   const chooseWallet = useCallback(
     (name: string) => {
       try {
         setOpen(false);
-        void select(name as WalletName);
+        select(name);
       } catch {
         setError("Unable to open that wallet. Is the extension installed?");
       }
@@ -57,7 +61,7 @@ export default function WalletAuthButton({
   const close = useCallback(() => setOpen(false), []);
 
   const picker = open ? (
-    <WalletPickerPopover wallets={wallets} onClose={close} onSelect={chooseWallet} />
+    <WalletPickerPopover wallets={wallets} loaded={loaded} onClose={close} onSelect={chooseWallet} />
   ) : null;
 
   if (auth.user) {
@@ -77,7 +81,7 @@ export default function WalletAuthButton({
     );
   }
 
-  if (connected && publicKey) {
+  if (connected && address) {
     return (
       <div className={cn("relative flex items-end gap-1", compact ? "flex-row items-center" : "flex-col")}>
         <button
@@ -126,10 +130,12 @@ export default function WalletAuthButton({
 /** Dropdown anchored below the Connect button. */
 function WalletPickerPopover({
   wallets,
+  loaded,
   onClose,
   onSelect
 }: {
-  wallets: ReturnType<typeof useWallet>["wallets"];
+  wallets: WalletOption[];
+  loaded: boolean;
   onClose: () => void;
   onSelect: (name: string) => void;
 }) {
@@ -161,18 +167,19 @@ function WalletPickerPopover({
       </p>
 
       <div className="mt-4 space-y-1.5">
+        {!loaded && <p role="status" className="py-2 text-xs text-muted-2">Loading wallets…</p>}
         {wallets.map((w) => (
           <button
-            key={w.adapter.name}
+            key={w.name}
             type="button"
-            onClick={() => onSelect(w.adapter.name)}
-            disabled={!w.adapter.readyState || w.adapter.readyState === "Unsupported"}
+            onClick={() => onSelect(w.name)}
+            disabled={!w.readyState || w.readyState === "Unsupported"}
             className="flex w-full items-center justify-between rounded-md border border-ink/10 px-3 py-2.5 text-left transition hover:border-accent disabled:opacity-40"
           >
             <span className="flex items-center gap-2.5">
-              {w.adapter.icon ? (
+              {w.icon ? (
                 <img
-                  src={w.adapter.icon}
+                  src={w.icon}
                   alt=""
                   className="inline-flex h-6 w-6 shrink-0 rounded-sm"
                   width={24}
@@ -180,12 +187,12 @@ function WalletPickerPopover({
                 />
               ) : (
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-ink/[0.04] font-display text-sm font-bold text-ink">
-                  {w.adapter.name.slice(0, 1)}
+                  {w.name.slice(0, 1)}
                 </span>
               )}
-              <span className="text-sm font-medium text-ink">{w.adapter.name}</span>
+              <span className="text-sm font-medium text-ink">{w.name}</span>
             </span>
-            {w.adapter.readyState === "Unsupported" ? (
+            {w.readyState === "Unsupported" ? (
               <span className="font-mono text-[10px] uppercase tracking-wide text-muted-2">Unsupported</span>
             ) : (
               <span className="text-accent-ink">→</span>
