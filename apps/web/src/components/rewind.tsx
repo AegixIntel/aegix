@@ -58,7 +58,7 @@ export default function Rewind() {
         ? <select aria-label="Asset" value={asset} onChange={(e) => setAsset(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
             {subjects.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
           </select>
-        : <input aria-label="Solana wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder="Solana wallet address" spellCheck={false} className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink" />}
+        : <input aria-label="Solana wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder="Solana wallet address" spellCheck={false} maxLength={44} className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink" />}
       <label className="text-sm text-ink/80">Event time
         <input aria-label="Event time" type="datetime-local" value={eventTime} onChange={(e) => setEventTime(e.target.value)} className="ml-2 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink" />
       </label>
@@ -67,7 +67,7 @@ export default function Rewind() {
           {LOOKBACKS.map((hours) => <option key={hours} value={hours}>{hours} hours before</option>)}
         </select>
       </label>
-      <button className="btn-primary px-4 py-2 text-sm" disabled={loading || !eventTime}>{loading ? "Replaying…" : "Could AEGIX have seen it?"}</button>
+      <button className="btn-primary px-4 py-2 text-sm" disabled={loading || !eventTime || (subjectType === "wallet" && !wallet.trim())}>{loading ? "Replaying…" : "Could AEGIX have seen it?"}</button>
     </form>
     {error ? <p role="alert" className="mt-6 text-sm text-amber-800">{error}</p> : null}
     {data ? <section className="mt-8 space-y-6">
