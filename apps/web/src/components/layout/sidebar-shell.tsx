@@ -13,7 +13,7 @@ function SidebarLink({ href, label }: { href: string; label: string }) {
   const pathname = usePathname();
   const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
   return (
-    <Link
+    <Link prefetch={false}
       href={href}
       className={`flex items-center justify-between rounded-sm px-3 py-1.5 text-sm transition ${
         active ? "text-ink" : "text-muted-foreground hover:text-ink"
@@ -31,7 +31,7 @@ function RailStop({ href, label, status }: { href: string; label: string; status
   const live = status === "LIVE";
 
   return (
-    <Link
+    <Link prefetch={false}
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -60,7 +60,7 @@ function RailStop({ href, label, status }: { href: string; label: string; status
 /** Nav link with an animated underline on hover. */
 function NavUnderline({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="group relative text-sm text-muted-foreground transition hover:text-ink">
+    <Link prefetch={false} href={href} className="group relative text-sm text-muted-foreground transition hover:text-ink">
       {children}
       <span
         className="absolute -bottom-0.5 left-0 h-px w-full origin-left scale-x-0 bg-accent transition-transform duration-200 group-hover:scale-x-100"
@@ -94,7 +94,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
         className={cn(
           "sticky top-0 z-50 transition-colors duration-300",
           scrolled
-            ? "border-b border-ink/10 bg-paper/90 backdrop-blur-md"
+            ? "border-b border-ink/10 bg-paper/95"
             : "border-b border-transparent bg-transparent"
         )}
       >
@@ -112,7 +112,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
                 {open ? <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /> : <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />}
               </svg>
             </button>
-            <Link href="/" className="flex items-center gap-2.5" aria-label="AEGIX home">
+            <Link prefetch={false} href="/" className="flex items-center gap-2.5" aria-label="AEGIX home">
               <AegixLogo className="h-6" />
             </Link>
           </div>
@@ -127,7 +127,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2">
             <WalletAuthButton compact buttonClassName="w-[9.5rem]" />
-            <Link href="/app/analyze" className="btn-primary hidden w-[9.5rem] px-4 py-2 text-sm sm:inline-flex">
+            <Link prefetch={false} href="/app/analyze" className="btn-primary hidden w-[9.5rem] px-4 py-2 text-sm sm:inline-flex">
               Launch App <span className="btn-arrow text-inherit">→</span>
             </Link>
           </div>
@@ -165,7 +165,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
               <p className="section-label px-3 pb-2">Explore</p>
               <div className="space-y-0.5">
                 {siteMenu.map((item) => (
-                  <Link
+                  <Link prefetch={false}
                     key={item.href}
                     href={item.href}
                     onClick={() => setOpen(false)}

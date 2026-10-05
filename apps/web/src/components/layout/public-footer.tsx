@@ -9,7 +9,7 @@ function FooterColumn({ title, links }: { title: string; links: { label: string;
       <ul className="space-y-2">
         {links.map((link) => (
           <li key={`${title}-${link.label}`}>
-            <Link href={link.href} className="text-sm text-muted-foreground transition hover:text-ink">
+            <Link prefetch={false} href={link.href} className="text-sm text-muted-foreground transition hover:text-ink">
               {link.label}
             </Link>
           </li>
@@ -48,7 +48,7 @@ export function PublicFooter() {
           <span>© {new Date().getFullYear()} {LEGAL_ENTITY}. All rights reserved.</span>
           <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
             {legalLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="transition hover:text-ink">
+              <Link prefetch={false} key={link.href} href={link.href} className="transition hover:text-ink">
                 {link.label}
               </Link>
             ))}
