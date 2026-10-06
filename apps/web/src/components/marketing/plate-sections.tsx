@@ -62,7 +62,7 @@ export function HeroStatement() {
           <Marked className="hero-fade" style={at(0)}>
             AEGIX · Intelligence layer
           </Marked>
-          <h1 className="statement-lg mt-7">
+          <h1 className="statement-lg statement-hero mt-7">
             <span className="hero-line" style={at(0)}>
               <span>Financial</span>
             </span>

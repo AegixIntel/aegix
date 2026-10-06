@@ -342,6 +342,15 @@
     @apply font-serif text-[3.4rem] font-medium leading-[0.96] text-ink sm:text-7xl lg:text-[5.25rem] xl:text-[6.25rem];
     letter-spacing: -0.028em;
   }
+  /* The hero headline shares its row with the plate and has 45% of the width
+     right of the rail. From 1024 px it is sized so that its longest word,
+     "Intelligence.", fits that column; at a fixed size the word was cut off
+     between 1024 and 1500 px. */
+  @media (min-width: 1024px) {
+    .statement-hero {
+      font-size: clamp(3.6rem, calc(8.6vw - 29px), 6.25rem);
+    }
+  }
   .section-title {
     @apply font-serif text-4xl font-medium leading-[1.04] text-ink md:text-5xl lg:text-[3.4rem];
     letter-spacing: -0.018em;
