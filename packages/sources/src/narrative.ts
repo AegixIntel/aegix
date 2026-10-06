@@ -90,10 +90,27 @@ export function parseGdeltDate(value: unknown): number {
 }
 
 /**
+ * Whether GDELT answered that it holds nothing for the window: an empty
+ * timeline, or an empty object for a window before its index begins.
+ *
+ * That is an answer, not a malformed one. Its index stopped taking articles
+ * on 2026-10-02, and once the last three days held nothing every sweep was
+ * reported as a malformed response from a source that was answering
+ * correctly.
+ */
+export function isEmptyGdeltTimeline(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const timeline = (payload as { timeline?: unknown }).timeline;
+  return timeline === undefined ? Object.keys(payload).length === 0 : Array.isArray(timeline) && timeline.length === 0;
+}
+
+/**
  * Hourly mean of GDELT's 15-minute volume intensity. Only hours that ended
- * before `at` are returned: the current hour is still filling.
+ * before `at` are returned: the current hour is still filling. A window GDELT
+ * holds nothing for gives no hours.
  */
 export function hourlyNarrativeVolume(payload: unknown, at: Date): Array<{ eventTime: string; value: number }> {
+  if (isEmptyGdeltTimeline(payload)) return [];
   const timeline = (payload as { timeline?: Array<{ data?: Array<{ date?: unknown; value?: unknown }> }> } | null)?.timeline;
   const data = Array.isArray(timeline) ? timeline[0]?.data : undefined;
   if (!Array.isArray(data)) throw new SourceError("MALFORMED_RESPONSE", "GDELT timeline is missing");
@@ -122,6 +139,8 @@ export function createNarrativeSource(options: {
   sleep?: (ms: number) => Promise<void>;
   /** Told when the topic whose turn it was ended the sweep with no data, and why. */
   onTopicFailure?: (topicId: string, code: string, attempts: number) => void;
+  /** Told when GDELT answered and holds nothing for the topic in the window. */
+  onEmptyWindow?: (topicId: string) => void;
 } = {}): SeriesSource {
   const topics = options.topics ?? NARRATIVE_TOPICS;
   const baseUrl = (options.baseUrl ?? "https://api.gdeltproject.org/api/v2").replace(/\/$/, "");
@@ -138,6 +157,7 @@ export function createNarrativeSource(options: {
         if (attempt > 1) await sleep(GDELT_RETRY_WAIT_MS);
         try {
           const payload = await fetchJson(`${baseUrl}/doc/doc?${query}`, { fetchImpl: options.fetchImpl ?? gdeltFetch, timeoutMs: options.timeoutMs ?? GDELT_TIMEOUT_MS });
+          if (isEmptyGdeltTimeline(payload)) options.onEmptyWindow?.(topic.id);
           return hourlyNarrativeVolume(payload, at).map((point): SeriesObservation => (
             { seriesKey: narrativeSeriesKey(topic.id), eventTime: point.eventTime, value: point.value, source: NARRATIVE_SOURCE }));
         } catch (error) {
