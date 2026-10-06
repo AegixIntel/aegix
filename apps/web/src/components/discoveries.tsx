@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { discoveryProofUrl, getDiscovery, listDiscoveries, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
+import { discoveryProofUrl, getDiscovery, listDiscoveries, type DiscoveryCluster, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
+import { ClusterGraph } from "@/components/cluster-graph";
 import { SignalGraph } from "@/components/signal-graph";
 import { useRequireAuth } from "@/lib/auth-guard";
 
@@ -85,6 +86,30 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
   </section>;
 }
 
+/** Several discoveries of one scan that share a series, shown as one relationship. */
+function Cluster({ cluster }: { cluster: DiscoveryCluster }) {
+  const [open, setOpen] = useState(false);
+  const label = (key: string) => cluster.series.find((s) => s.key === key)?.label ?? key;
+  const hub = cluster.series[0]!;
+  return <li className="rounded-lg border border-ink/30 p-5">
+    <p className="text-xs uppercase tracking-[0.12em] text-accent">New relationship detected</p>
+    <p className="mt-1 text-xs text-muted-2">{cluster.links.length} discoveries · {cluster.links[0]!.id} to {cluster.links.at(-1)!.id}</p>
+    <h2 className="mt-1 text-lg text-ink">{cluster.series.length} series developed linked relationships in the same scan</h2>
+    <p className="mt-2 text-sm text-ink/80">{cluster.series.slice(0, 6).map((s) => s.label).join(", ")}{cluster.series.length > 6 ? ` and ${cluster.series.length - 6} more` : ""}. The most connected is {hub.label}.</p>
+    <p className="mt-1 text-xs text-muted-foreground">First detected: {day(cluster.firstDetectedAt)} · {age(cluster.firstDetectedAt)}</p>
+    <button className="btn-primary mt-4 px-4 py-2 text-sm" onClick={() => setOpen((value) => !value)} aria-expanded={open}>{open ? "Close" : "Investigate →"}</button>
+    {open ? <div className="mt-6 space-y-4 border-t border-ink/10 pt-6">
+      <div><h3 className="text-sm font-semibold text-ink/80">Signal graph</h3><ClusterGraph cluster={cluster} /></div>
+      <div><h3 className="text-sm font-semibold text-ink/80">The discoveries it is made of</h3>
+        <ul className="mt-1 font-mono text-xs text-ink/80">{cluster.links.map((link) => <li key={link.id} className="mt-1">
+          #{link.id} · {link.status.replace("_", " ")} · {label(link.seriesA)} {link.lagHours === 0 ? "↔" : "→"} {label(link.seriesB)}{link.r === null ? "" : ` · r = ${link.r}`}
+        </li>)}</ul>
+      </div>
+      <p className="text-xs text-muted-2">A cluster is a reading of pairwise discoveries, not a test of its own: each line passed its own test in the same scan, and nothing here says the series move as one. Every discovery in it keeps its own Discovery ID, timestamp and confirmation below.</p>
+    </div> : null}
+  </li>;
+}
+
 export default function Discoveries() {
   const [data, setData] = useState<DiscoveryListResponse | null>(null);
   const [investigations, setInvestigations] = useState<Record<string, Investigation>>({});
@@ -132,6 +157,9 @@ export default function Discoveries() {
       <p className="mt-4 text-xs text-muted-2">{data.latestRun
         ? `Latest scan: epoch ending ${data.latestRun.epochEnd} · ${data.latestRun.hypothesesTested} hypotheses tested of ${data.latestRun.hypothesesConsidered} considered · ${data.latestRun.rejections} significant after correction · ${data.latestRun.engineVersion}`
         : "The engine has not completed a scan yet."}</p>
+      {data.clusters.length ? <section className="mt-6" aria-label="Relationships across more than two series">
+        <ul className="space-y-4">{data.clusters.map((cluster) => <Cluster key={cluster.key} cluster={cluster} />)}</ul>
+      </section> : null}
       {data.discoveries.length === 0
         ? <p className="mt-6 text-sm text-muted-foreground">No discovery on record. A scan that finds nothing is the expected result most days; it is not evidence that the series are unrelated.</p>
         : <ul className="mt-6 space-y-4">{data.discoveries.map((discovery) => <Card key={discovery.id} discovery={discovery} investigation={investigations[discovery.id]} onToggle={() => void toggle(discovery.id)} />)}</ul>}
