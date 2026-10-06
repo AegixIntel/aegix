@@ -123,6 +123,30 @@ Checkpoints sit at fixed fractions of the lookback (72h gives T−72, −48, −
 earliest single capture with three or more distinct signal types; its lead time
 is `eventTime − observed_at`.
 
+The page plays the checkpoints in order, oldest first, and names the
+convergence once the last one is shown. It is the same stored record either
+way; with reduced motion set in the browser nothing is animated.
+
+**Discoveries already on record.** For an asset, the replay also lists the
+Discovery IDs on that asset's own series (`market:<asset>:*`, or
+`xstock:<symbol>:*`) whose `detected_at` is before the event time. This is a
+read under the same lock, applied in the SQL and again in `buildReplay`:
+
+```text
+which       detected_at < eventTime, not limited to the lookback window: a
+            relationship found earlier was still on record
+status      the latest discovery_events row stored before eventTime, so a
+            confirmation that came after the event is not shown
+verdict     unchanged. A discovery is a relationship between two series, not
+            a signal about the event, and the response says so
+needs       ENABLE_DISCOVERY; a wallet has no series and lists none
+```
+
+`/app/rewind?subject=<asset or wallet>&eventTime=<ISO>&lookback=<hours>` fills
+the form in and does not press the button. A discovery's detail links there
+for each of its series that can be replayed, with the discovery's own stamp as
+the event time.
+
 Rewind audits observability. It does not claim the event was predictable, and
 the response says so.
 
@@ -517,7 +541,8 @@ after remain interpretable, but they are not directly comparable.
 ## 7. Verification
 
 ```text
-packages/rewind      unit: lock, checkpoints, convergence, coverage verdicts
+packages/rewind      unit: lock, checkpoints, convergence, coverage verdicts,
+                     a discovery stamped at or after the event refused
 packages/discovery   unit: BY q-values, effective sample size, no discovery on
                      independent series, planted relationship found at its lag,
                      known relationship rejected, no read past the epoch,
@@ -530,6 +555,7 @@ packages/sources     unit: pool price decode in both token orders, identity
                      attribution
 tests/e2e-d14.ts     PostgreSQL: append-only triggers, backdating refused,
                      capture idempotency, Rewind lock through the API,
+                     discoveries read under that lock with their status then,
                      tokenized stock capture and replay, Discovery ID chain,
                      read API, feature gates; anchors stored once per
                      calendar and append-only, a chain link recomputed from

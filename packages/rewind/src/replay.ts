@@ -42,12 +42,31 @@ export interface CaptureRecord {
   signals: CapturedSignal[];
 }
 
+/**
+ * A Discovery ID that already existed. `detectedAt` is the database's stamp on
+ * the discovery, and `status` its latest event stored before the lock: a
+ * confirmation that came after the event is not shown.
+ */
+export interface KnownDiscovery {
+  id: string;
+  detectedAt: string;
+  status: string;
+  title: string;
+  seriesA: string;
+  seriesB: string;
+  lagHours: number;
+  direction: string;
+  engineVersion: string;
+}
+
 export interface ReplayInput {
   subject: string;
   /** The moment being audited ("the move"). Nothing at or after it is admitted. */
   eventTime: string;
   lookbackHours: number;
   captures: CaptureRecord[];
+  /** Discoveries involving the subject's series. Only those stamped before the lock are admitted. */
+  discoveries?: KnownDiscovery[];
   /** Server time of the request; an event in the future cannot be rewound. */
   requestedAt: string;
 }
@@ -87,6 +106,12 @@ export interface ReplayResult {
   };
   /** Timeline of every admitted capture, oldest first. */
   timeline: CaptureRecord[];
+  /**
+   * Discoveries involving this subject that were already stamped before the
+   * event, oldest first. Not limited to the window: a relationship found
+   * earlier was still on record. They do not enter the verdict.
+   */
+  discoveries: Array<KnownDiscovery & { leadSeconds: number }>;
   engineVersions: string[];
   rewindEngineVersion: string;
   limitations: string[];
@@ -130,6 +155,12 @@ export function buildReplay(input: ReplayInput): ReplayResult {
     })
     .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.id.localeCompare(b.id));
   const excludedByLock = input.captures.length - admitted.length;
+
+  // The same lock, for discoveries: the stamp must be strictly before the event.
+  const discoveries = (input.discoveries ?? [])
+    .filter((d) => Date.parse(d.detectedAt) < lockMs)
+    .sort((a, b) => Date.parse(a.detectedAt) - Date.parse(b.detectedAt) || a.id.localeCompare(b.id))
+    .map((d) => ({ ...d, leadSeconds: Math.round((lockMs - Date.parse(d.detectedAt)) / 1000) }));
 
   const checkpoints: ReplayCheckpoint[] = CHECKPOINT_FRACTIONS.map((fraction) => {
     const hours = input.lookbackHours * fraction;
@@ -187,6 +218,9 @@ export function buildReplay(input: ReplayInput): ReplayResult {
   if (largestGapSeconds !== null && largestGapSeconds > 3 * 3600) {
     limitations.push(`The largest gap between captures is ${lead(largestGapSeconds)}; a signal that appeared and cleared inside a gap is not recorded.`);
   }
+  if (discoveries.length > 0) {
+    limitations.push("A discovery listed here is a statistical relationship between two series that was on record before the event, shown with the status it had then. It is not a signal about this event.");
+  }
   if (admitted.some((c) => c.providerStatus !== "OK" || c.qualityGrade === "LOW")) {
     limitations.push("Some captures were taken with a degraded provider or low data quality; see each capture.");
   }
@@ -210,6 +244,7 @@ export function buildReplay(input: ReplayInput): ReplayResult {
       excludedByLock
     },
     timeline: admitted,
+    discoveries,
     engineVersions: [...new Set(admitted.flatMap((c) => [c.engineVersion, ...c.signals.map((s) => s.engineVersion)]))].sort(),
     rewindEngineVersion: REWIND_ENGINE_VERSION,
     limitations

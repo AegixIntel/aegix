@@ -183,6 +183,18 @@ async function main() {
     const [tests] = await sql<Array<{ count: string }>>`select count(*)::text as count from discovery_tests where run_id = ${persisted!.runId}`;
     assert.equal(Number(tests?.count), scan.tests.length, "every hypothesis is on record, not only the one that was significant");
 
+    // ---- Rewind reads discoveries under the same lock ----
+    const [stamped] = await sql<Array<{ detected_at: Date }>>`select detected_at from discoveries where id = ${discoveryId}`;
+    const around = (ms: number) => new Date(new Date(stamped!.detected_at).getTime() + ms).toISOString();
+    const knownAfter = await discoveries.knownBefore([`e2e:${run}:a`], around(1000), 50);
+    assert.deepEqual(knownAfter.map((d) => [d.id, d.status]), [[discoveryId, "CANDIDATE"]], "a discovery stamped before the moment is on record, with its status then");
+    assert.equal((await discoveries.knownBefore([`e2e:${run}:b`], around(-1000), 50)).length, 0, "a discovery stamped after the moment is hindsight");
+    assert.equal((await discoveries.knownBefore([`e2e:${run}:unrelated`], around(1000), 50)).length, 0);
+    const withDiscoveries = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: new Date().toISOString(), lookbackHours: 24 })).json();
+    assert.ok(Array.isArray(withDiscoveries.discoveries), "a replay lists the discoveries on the subject's series");
+    assert.ok(withDiscoveries.discoveries.every((d: { detectedAt: string; seriesA: string; seriesB: string }) =>
+      d.detectedAt < withDiscoveries.lockedAt && [d.seriesA, d.seriesB].some((key) => key.startsWith("market:SOL:"))));
+
     const detail = await app.inject({ url: `/v1/discoveries/AEX-${discoveryId}`, headers });
     assert.equal(detail.statusCode, 200);
     assert.equal(detail.json().discovery.id, `AEX-${discoveryId}`);

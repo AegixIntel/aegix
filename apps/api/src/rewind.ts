@@ -1,13 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "@aegix/config";
 import { isValidSolanaAddress } from "@aegix/blockchain";
-import { createObservationRepo, type Sql, type StoredCaptureRow } from "@aegix/database";
+import { createDiscoveryRepo, createObservationRepo, type DiscoveryRow, type Sql, type StoredCaptureRow } from "@aegix/database";
 import { CANONICAL_ASSETS, isCanonicalAsset } from "@aegix/markets";
-import { TOKENIZED_STOCKS, isTokenizedStockSymbol } from "@aegix/sources";
+import { TOKENIZED_STOCKS, isTokenizedStockSymbol, tokenizedStockSeriesKey } from "@aegix/sources";
 import {
-  buildReplay, replayWindow, RewindError, REWIND_DEFAULT_LOOKBACK_HOURS, REWIND_MAX_LOOKBACK_HOURS, REWIND_MIN_LOOKBACK_HOURS,
-  type CaptureRecord
+  buildReplay, marketSeriesKey, MARKET_METRICS, replayWindow, RewindError, REWIND_DEFAULT_LOOKBACK_HOURS, REWIND_MAX_LOOKBACK_HOURS, REWIND_MIN_LOOKBACK_HOURS,
+  type CaptureRecord, type KnownDiscovery
 } from "@aegix/rewind";
+import { discoveryDisplayId } from "./discovery.js";
 
 export interface RewindDeps {
   app: FastifyInstance;
@@ -28,6 +29,30 @@ function toCapture(row: StoredCaptureRow): CaptureRecord {
   };
 }
 
+const KNOWN_DISCOVERIES_LIMIT = 50;
+
+/** The ledger series that belong to a replayable asset. */
+function subjectSeriesKeys(subject: string): string[] {
+  return isTokenizedStockSymbol(subject)
+    ? [tokenizedStockSeriesKey(subject, "price_usdc"), tokenizedStockSeriesKey(subject, "supply")]
+    : MARKET_METRICS.map((metric) => marketSeriesKey(subject, metric));
+}
+
+function toKnownDiscovery(row: DiscoveryRow): KnownDiscovery {
+  const title = (row.card as { title?: unknown } | null)?.title;
+  return {
+    id: discoveryDisplayId(row.id),
+    detectedAt: new Date(row.detected_at).toISOString(),
+    status: row.status,
+    title: typeof title === "string" ? title : `${row.series_a} and ${row.series_b}`,
+    seriesA: row.series_a,
+    seriesB: row.series_b,
+    lagHours: row.lag_hours,
+    direction: row.direction,
+    engineVersion: row.engine_version
+  };
+}
+
 /**
  * AEGIX Rewind (D14), see docs/milestone-d14-rewind-discovery.md.
  *
@@ -39,6 +64,7 @@ export function registerRewind(deps: RewindDeps): void {
   const { app, config, sql } = deps;
   const now = deps.now ?? (() => new Date());
   const repo = createObservationRepo(sql);
+  const discoveryRepo = createDiscoveryRepo(sql);
 
   // What can be replayed. Listed from the registries, not from the ledger: a
   // subject with no capture yet is still a valid question with a NO_COVERAGE answer.
@@ -76,7 +102,13 @@ export function registerRewind(deps: RewindDeps): void {
       const rows = subjectType === "asset"
         ? await repo.capturesBetween("MARKET", subject, start.toISOString(), lock.toISOString())
         : await repo.walletCapturesBetween("solana", subject, start.toISOString(), lock.toISOString());
-      const replay = buildReplay({ subject, eventTime, lookbackHours, requestedAt, captures: rows.map(toCapture) });
+      // Relationships the Discovery Engine had already stamped on this
+      // subject's series. Read under the same lock, and only when that
+      // product is on; a wallet has no series in the ledger.
+      const known = subjectType === "asset" && config.ENABLE_DISCOVERY
+        ? await discoveryRepo.knownBefore(subjectSeriesKeys(subject), lock.toISOString(), KNOWN_DISCOVERIES_LIMIT)
+        : [];
+      const replay = buildReplay({ subject, eventTime, lookbackHours, requestedAt, captures: rows.map(toCapture), discoveries: known.map(toKnownDiscovery) });
       if (subjectType === "asset" && isTokenizedStockSymbol(subject)) {
         replay.limitations.push(
           "Signals for a tokenized stock are measured on the token's price in one on-chain pool. That price can differ from the underlying equity, and it trades while the stock market is closed.",

@@ -97,6 +97,11 @@ export interface DiscoveryRepo {
   latestRun(): Promise<DiscoveryRunRow | null>;
   /** Other discoveries that share a series with this one. */
   related(discoveryId: string, seriesA: string, seriesB: string, limit: number): Promise<DiscoveryRow[]>;
+  /**
+   * Discoveries on any of these series stamped strictly before a moment,
+   * oldest first, each with the status it had at that moment.
+   */
+  knownBefore(seriesKeys: string[], before: string, limit: number): Promise<DiscoveryRow[]>;
   /** The newest discovery: its chain hash commits to every one before it. */
   chainHead(): Promise<DiscoveryChainRow | null>;
   /** Links of the chain in order, for a third party to recompute. */
@@ -251,6 +256,22 @@ export function createDiscoveryRepo(sql: Sql): DiscoveryRepo {
         where d.id <> ${discoveryId}
           and (d.series_a in (${seriesA}, ${seriesB}) or d.series_b in (${seriesA}, ${seriesB}))
         order by d.id desc limit ${limit}
+      `;
+    },
+
+    async knownBefore(seriesKeys, before, limit) {
+      if (seriesKeys.length === 0) return [];
+      // The status is read under the same lock as the discovery: an event
+      // stored at or after the moment is a later fact.
+      return sql<DiscoveryRow[]>`
+        select d.id::text, d.pair_key, d.series_a, d.series_b, d.lag_hours, d.direction, d.window_end, d.engine_version,
+          d.run_id::text, d.fingerprint, d.card, d.detected_at, d.prev_chain_hash, d.chain_hash,
+          coalesce((select e.event_type from discovery_events e
+            where e.discovery_id = d.id and e.created_at < ${before}::timestamptz order by e.id desc limit 1), 'CANDIDATE') as status
+        from discoveries d
+        where d.detected_at < ${before}::timestamptz
+          and (d.series_a = any(${seriesKeys}) or d.series_b = any(${seriesKeys}))
+        order by d.detected_at asc, d.id asc limit ${limit}
       `;
     },
 
