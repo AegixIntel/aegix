@@ -12,7 +12,9 @@ function at(i: number) {
 }
 
 /* A brand plate. The plates carry their own headline on one side, so only
-   the collage side is kept and the cut edge fades into the paper. */
+   the collage side is kept and the cut edge fades into the paper. The frame
+   clips its image: a plate waiting to be revealed is drawn 14% larger, and
+   unclipped it made the whole page scroll sideways. */
 function Plate({
   src,
   alt,
@@ -27,7 +29,7 @@ function Plate({
   className?: string;
 }) {
   return (
-    <div className={cn("plate relative aspect-[5/4] w-full", className)}>
+    <div className={cn("plate relative aspect-[5/4] w-full overflow-hidden", className)}>
       <Image
         src={src}
         alt={alt}
