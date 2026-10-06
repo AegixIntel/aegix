@@ -8,8 +8,8 @@ import { SITE_URL } from "@/lib/site";
 // is the cut without its optical-size axis: with it the file is 128 KB, without it 56.
 // The files are in the repository (src/fonts, see its README): fetched from
 // Google at build time, a bad answer failed the build.
-const sans = localFont({ src: "../fonts/ibm-plex-sans-latin.woff2", weight: "400 700", style: "normal", variable: "--font-sans", display: "swap" });
-const mono = localFont({
+const plexSans = localFont({ src: "../fonts/ibm-plex-sans-latin.woff2", weight: "400 700", style: "normal", variable: "--font-sans", display: "swap" });
+const plexMono = localFont({
   src: [
     { path: "../fonts/ibm-plex-mono-400-latin.woff2", weight: "400", style: "normal" },
     { path: "../fonts/ibm-plex-mono-500-latin.woff2", weight: "500", style: "normal" },
@@ -18,7 +18,7 @@ const mono = localFont({
   variable: "--font-mono",
   display: "swap"
 });
-const serif = localFont({ src: "../fonts/newsreader-latin.woff2", weight: "200 800", style: "normal", variable: "--font-serif", display: "swap" });
+const newsreader = localFont({ src: "../fonts/newsreader-latin.woff2", weight: "200 800", style: "normal", variable: "--font-serif", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -77,7 +77,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} ${newsreader.variable}`}>
       <body className="min-h-screen bg-paper text-ink antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
