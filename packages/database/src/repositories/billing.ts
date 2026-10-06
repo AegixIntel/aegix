@@ -397,6 +397,14 @@ export function createBillingRepo(sql: Sql): BillingRepo {
         where user_id = ${userId}
           and created_at >= ${periodStart}::timestamptz
           and created_at < ${periodEnd}::timestamptz
+          -- The same rule as the API's quota check: an analysis that found
+          -- nothing to analyze is not counted as used.
+          and not exists (
+            select 1 from analysis_jobs j
+            where j.id = usage_records.analysis_id
+              and j.status = 'FAILED'
+              and j.failure_code in ('INSUFFICIENT_HISTORY', 'ACCOUNT_NOT_ANALYZABLE')
+          )
         group by usage_type
         order by usage_type asc
       `;

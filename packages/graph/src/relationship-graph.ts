@@ -197,7 +197,7 @@ export async function findRelationshipPaths(input: RelationshipGraphInput): Prom
       strength: rel.strengthScore,
       confidence: rel.confidenceScore,
       observationClass: "OBSERVED",
-      evidence: Array.isArray(rel.evidenceJson) ? (rel.evidenceJson as string[]) : [String(rel.evidenceJson ?? "")].filter(Boolean),
+      evidence: evidenceLines(rel.evidenceJson),
       sourceEngine: rel.engineVersion ?? "wallet-relationships",
       engineVersion: rel.engineVersion ?? "unknown",
       hubFactor: Math.max(input.commonality?.get(rel.walletA) ?? 0, input.commonality?.get(rel.walletB) ?? 0)
@@ -381,6 +381,19 @@ export async function findRelationshipPaths(input: RelationshipGraphInput): Prom
     durationMs: Date.now() - started,
     engineVersion: RELATIONSHIP_GRAPH_ENGINE_VERSION
   };
+}
+
+/**
+ * A relationship's evidence is stored as JSON of any shape; an edge carries
+ * it as lines of text. `String()` on a stored object gave "[object Object]".
+ */
+export function evidenceLines(value: unknown): string[] {
+  if (value === null || value === undefined || value === "") return [];
+  if (Array.isArray(value)) return value.flatMap(evidenceLines);
+  if (typeof value !== "object") return [String(value)];
+  return Object.entries(value)
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([key, v]) => `${key}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
 }
 
 /** D5-G §42: classify a path by its edges' observation classes. */
