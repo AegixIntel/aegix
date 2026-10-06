@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { WalletRelationship } from "@aegix/types";
-import { canonicalPathIdentity, classifyPathType, findRelationshipPaths } from "./relationship-graph.js";
+import { canonicalPathIdentity, classifyPathType, evidenceLines, findRelationshipPaths } from "./relationship-graph.js";
 
 function rel(a: string, b: string, strength: number, confidence = 0.8, type: WalletRelationship["relationshipType"] = "FUNDED_BY", evidence: unknown = ["sig-1"]): WalletRelationship {
   return {
@@ -49,6 +49,17 @@ test("GRAPH: direct funding path is observed and ranked", async () => {
   assert.equal(p.edges[0]!.observationClass, "OBSERVED");
   assert.ok(p.edges[0]!.evidence.length > 0, "evidence references present");
   assert.ok(p.explanation.length > 0, "path explained");
+});
+
+test("GRAPH: evidence stored as an object reaches the edge as readable lines", async () => {
+  const r = await findRelationshipPaths({
+    targetWallet: TARGET,
+    relationships: [rel(TARGET, FUNDER, 0.9, 0.8, "FUNDED_BY", { transactionCount: 3, firstSignature: "sig-1", notes: null, amounts: [1, 2] })],
+    limits: { maxDepth: 2 }
+  });
+  assert.deepEqual(r.paths[0]!.path.edges[0]!.evidence, ["transactionCount: 3", "firstSignature: sig-1", "amounts: [1,2]"]);
+  assert.deepEqual(evidenceLines(["sig-1", { slot: 9 }, null]), ["sig-1", "slot: 9"]);
+  assert.deepEqual(evidenceLines({}), []);
 });
 
 test("GRAPH: 2-hop repeated funding path with bottleneck confidence", async () => {

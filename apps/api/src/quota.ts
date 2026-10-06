@@ -5,7 +5,8 @@
  * - anonymous visitors: FREE_ANON_DAILY_LIMIT (by IP + anonymous key)
  * - registered users:   FREE_USER_DAILY_LIMIT (by user id)
  *
- * Only expensive analyses consume quota. Fresh cached results return
+ * Only expensive analyses consume quota. An analysis that failed because the
+ * wallet is empty or the address is not a wallet is not counted. Fresh cached results return
  * without consuming quota (tracked separately, D3-C §24).
  *
  * Usage is recorded in usage_records so it can be audited and reported.
@@ -61,6 +62,14 @@ export async function checkQuota(sql: Sql, config: AppConfig, ctx: QuotaContext,
       and created_at >= ${start}::timestamptz
       and created_at < ${end}::timestamptz
       and (user_id = ${ctx.userId} or anonymous_key = ${key})
+      -- An analysis that found nothing to analyze did no expensive work:
+      -- an empty wallet, or an address that is not a wallet.
+      and not exists (
+        select 1 from analysis_jobs j
+        where j.id = usage_records.analysis_id
+          and j.status = 'FAILED'
+          and j.failure_code in ('INSUFFICIENT_HISTORY', 'ACCOUNT_NOT_ANALYZABLE')
+      )
   `;
   const used = row ? Number(row.count) : 0;
   return {
