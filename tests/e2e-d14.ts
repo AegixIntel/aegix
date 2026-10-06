@@ -175,11 +175,11 @@ async function main() {
       where c.domain = 'SECTOR' and c.subject = ${funds[0]!.symbol} order by s.signal_type`;
     assert.deepEqual(fundSignals.map((s) => s.signal_type), ["FUND_DAILY_MOVE", "SECTOR_RELATIVE_STRENGTH"]);
 
-    const around = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: new Date().toISOString(), lookbackHours: 24 })).json();
-    const mine = around.context.filter((c: { subject: string }) => c.subject === topic.id || c.subject === funds[0]!.symbol);
+    const withContext = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: new Date().toISOString(), lookbackHours: 24 })).json();
+    const mine = withContext.context.filter((c: { subject: string }) => c.subject === topic.id || c.subject === funds[0]!.symbol);
     assert.deepEqual(mine.map((c: { domain: string; signalType: string }) => `${c.domain}:${c.signalType}`).sort(),
       ["NARRATIVE:NARRATIVE_ACCELERATION", "SECTOR:FUND_DAILY_MOVE", "SECTOR:SECTOR_RELATIVE_STRENGTH"], "an asset's replay shows the news and fund signals stored in its window");
-    assert.ok(around.context.every((c: { firstObservedAt: string }) => c.firstObservedAt < around.lockedAt));
+    assert.ok(withContext.context.every((c: { firstObservedAt: string }) => c.firstObservedAt < withContext.lockedAt));
     const earlier = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: beforeContext, lookbackHours: 24 })).json();
     assert.ok(!earlier.context.some((c: { subject: string }) => c.subject === topic.id), "a context capture stored after the event is hindsight");
     const topicReplay = await rewind({ subjectType: "narrative", subject: "copper", eventTime: new Date().toISOString(), lookbackHours: 24 });
@@ -188,9 +188,9 @@ async function main() {
     assert.equal((await rewind({ subjectType: "sector", subject: "XLU", eventTime: new Date().toISOString() })).statusCode, 200);
     assert.equal((await rewind({ subjectType: "narrative", subject: "weather", eventTime: new Date().toISOString() })).json().code, "UNKNOWN_TOPIC");
     assert.equal((await rewind({ subjectType: "sector", subject: "ZZZ", eventTime: new Date().toISOString() })).json().code, "UNKNOWN_FUND");
-    const listed = (await app.inject({ url: "/v1/rewind/subjects" })).json();
-    assert.equal(listed.topics.length, 8);
-    assert.equal(listed.funds.length, 16);
+    const subjectLists = (await app.inject({ url: "/v1/rewind/subjects" })).json();
+    assert.equal(subjectLists.topics.length, 8);
+    assert.equal(subjectLists.funds.length, 16);
 
     // ---- Discovery: one ID per relationship, timestamped and chained ----
     const engineVersion = `e2e-d14-${run}`;
