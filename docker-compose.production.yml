@@ -86,6 +86,7 @@ services:
       # operator sets them; see docs/milestone-d14-rewind-discovery.md §6.
       ENABLE_REWIND_CAPTURE: ${ENABLE_REWIND_CAPTURE:-false}
       ENABLE_REWIND: ${ENABLE_REWIND:-false}
+      ENABLE_REWIND_RECONSTRUCTION: ${ENABLE_REWIND_RECONSTRUCTION:-false}
       ENABLE_DISCOVERY: ${ENABLE_DISCOVERY:-false}
       ENABLE_DISCOVERY_DAILY: ${ENABLE_DISCOVERY_DAILY:-false}
       ENABLE_DISCOVERY_ANCHOR: ${ENABLE_DISCOVERY_ANCHOR:-false}

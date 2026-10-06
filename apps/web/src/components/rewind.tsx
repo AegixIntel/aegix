@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { getRewindSubjects, rewind, type RewindResponse, type RewindSubject, type RewindSubjectType } from "@/lib/api";
+import { getRewindSubjects, rewind, type RewindReconstruction, type RewindResponse, type RewindSubject, type RewindSubjectType } from "@/lib/api";
 import { useRequireAuth } from "@/lib/auth-guard";
 
 const LOOKBACKS = [24, 48, 72, 168];
@@ -16,6 +16,28 @@ const lead = (seconds: number) => `${Math.floor(seconds / 3600)}h ${Math.floor((
 function localNow(): string {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+/**
+ * The hours AEGIX stored nothing for, run through the engine when the page
+ * was asked for. Drawn apart from the replay, with a broken border, because
+ * it is not a record and must not be read as one.
+ */
+function Reconstruction({ reconstruction }: { reconstruction: RewindReconstruction }) {
+  const slots = Math.max(4, ...reconstruction.checkpoints.map((c) => c.signalTypesSoFar.length));
+  return <div className="rounded-lg border border-dashed border-ink/40 p-5">
+    <p className="text-xs uppercase tracking-[0.12em] text-accent">Reconstructed · not a stored record</p>
+    <h2 className="mt-1 text-lg text-ink">{reconstruction.answer}</h2>
+    <p className="mt-2 text-xs text-muted-foreground">Hours from {reconstruction.from} to {reconstruction.to}, where AEGIX stored no capture · {reconstruction.hours} hours with a price · computed {reconstruction.computedAt} with {reconstruction.engineVersion} · read from {reconstruction.sources.join(", ")}</p>
+    <ol className="mt-4 space-y-2 font-mono text-sm">{reconstruction.checkpoints.map((checkpoint) => <li key={checkpoint.label} className="flex flex-wrap items-center gap-3">
+      <span className="w-16 text-muted-foreground">{checkpoint.label}</span>
+      <span aria-label={`${checkpoint.signalTypesSoFar.length} signal types reconstructed`} className="tracking-widest text-ink/70">
+        {Array.from({ length: slots }, (_, i) => i < checkpoint.signalTypesSoFar.length ? "◆" : "◇").join(" ")}
+      </span>
+      <span className="text-xs text-muted-2">{checkpoint.capturesSoFar === 0 ? "no hour reconstructed yet" : checkpoint.signalTypesSoFar.join(", ") || "reconstructed, no signal"}</span>
+    </li>)}</ol>
+    <ul className="mt-4 text-xs text-muted-2">{reconstruction.limitations.map((text) => <li key={text} className="mt-1">{text}</li>)}</ul>
+  </div>;
 }
 
 export default function Rewind() {
@@ -150,6 +172,7 @@ export default function Rewind() {
       </details>
       <ul className="text-xs text-muted-2">{data.limitations.map((text) => <li key={text} className="mt-1">{text}</li>)}</ul>
       <p className="text-xs text-muted-2">Engines at capture time: {data.engineVersions.join(", ") || "none"} · {data.rewindEngineVersion}</p>
+      {data.reconstruction ? <Reconstruction reconstruction={data.reconstruction} /> : null}
     </section> : null}
   </main>;
 }

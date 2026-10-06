@@ -137,6 +137,29 @@ async function main() {
     assert.equal(stockReplay.statusCode, 200);
     assert.ok(stockReplay.json().timeline.some((c: { id: string }) => c.id === stockRow.id));
     assert.ok(stockReplay.json().limitations.some((l: string) => l.includes("one on-chain pool")), "the replay says what a tokenized price is");
+
+    // ---- Reconstruction: hours with no capture, computed at request time, beside the replay ----
+    // Four weeks back no capture exists. The prices depend on the hour alone, so every run plants the same ones.
+    const pastEvent = Math.floor(now.getTime() / HOUR) * HOUR - 28 * 24 * HOUR;
+    await observations.appendPoints(Array.from({ length: 50 }, (_, i) => {
+      const at = pastEvent - (50 - i) * HOUR;
+      return { seriesKey: tokenizedStockSeriesKey("TSLAx", "price_usdc"), eventTime: new Date(at).toISOString(), value: 300 + (Math.floor(at / HOUR) % 7), source: "e2e-d14-history" };
+    }));
+    const reconstructing = await buildServer({ config: loadConfig({ ...process.env, ENABLE_REWIND: "true", ENABLE_REWIND_RECONSTRUCTION: "true" }), marketProvider: provider });
+    try {
+      const past = (await rewind({ subjectType: "asset", subject: "TSLAx", eventTime: new Date(pastEvent).toISOString(), lookbackHours: 24 }, reconstructing)).json();
+      assert.equal(past.verdict, "NO_COVERAGE", "a reconstruction does not change the replay's answer");
+      assert.equal(past.timeline.length, 0, "and adds no capture to it");
+      assert.equal(past.reconstruction.hours, 23, "every whole hour before the event that has a price");
+      assert.deepEqual(past.reconstruction.sources, ["e2e-d14-history"]);
+      assert.equal(past.reconstruction.to, past.lockedAt);
+      assert.equal(past.reconstruction.checkpoints.length, 5);
+      assert.ok(past.reconstruction.limitations[0].includes("not a record"));
+      const covered = (await rewind({ subjectType: "asset", subject: "NVDAx", eventTime: new Date().toISOString(), lookbackHours: 1 }, reconstructing)).json();
+      assert.equal(covered.reconstruction, null, "a window with no whole uncaptured hour has nothing to reconstruct");
+      assert.equal((await rewind({ subjectType: "wallet", subject: address, eventTime: afterCapture }, reconstructing)).json().reconstruction, undefined, "only an asset has a price history");
+    } finally { await reconstructing.close(); }
+    assert.equal(stockReplay.json().reconstruction, undefined, "without the flag a replay carries no reconstruction");
     const subjects = await app.inject({ url: "/v1/rewind/subjects" });
     assert.equal(subjects.statusCode, 200);
     assert.ok(subjects.json().assets.some((a: { subject: string; kind: string }) => a.subject === "NVDAx" && a.kind === "TOKENIZED_STOCK"));

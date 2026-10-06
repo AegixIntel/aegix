@@ -206,6 +206,10 @@ const envSchema = z.object({
   DISCOVERY_ANCHOR_CALENDARS: z.string().default("https://a.pool.opentimestamps.org,https://b.pool.opentimestamps.org,https://finney.calendar.eternitywall.com"),
   REWIND_CAPTURE_INTERVAL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
   REWIND_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  // Runs the signal engine at request time over provider history, for the
+  // hours of a replay window that hold no stored capture. Returned beside
+  // the replay, labelled as a reconstruction, and never merged into it.
+  ENABLE_REWIND_RECONSTRUCTION: z.preprocess(boolEnv, z.boolean()).default(false),
   // D14 series sources. Each one is a separate opt-in because each has a
   // different cost and a different standing: tokenized stocks are read from
   // RPC_URL, narrative volume from GDELT's public API, and options from

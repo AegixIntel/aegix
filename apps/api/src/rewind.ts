@@ -9,6 +9,7 @@ import {
   type CaptureRecord, type KnownDiscovery
 } from "@aegix/rewind";
 import { discoveryDisplayId } from "./discovery.js";
+import { reconstructReplay } from "./rewind-reconstruction.js";
 
 export interface RewindDeps {
   app: FastifyInstance;
@@ -56,7 +57,7 @@ function toKnownDiscovery(row: DiscoveryRow): KnownDiscovery {
 /**
  * AEGIX Rewind (D14), see docs/milestone-d14-rewind-discovery.md.
  *
- * The route reads stored captures and nothing else. It never calls a market
+ * A replay reads stored captures and nothing else. It never calls a market
  * provider, an RPC or an engine: anything fetched or computed now would be
  * hindsight by construction.
  */
@@ -120,6 +121,14 @@ export function registerRewind(deps: RewindDeps): void {
           "Wallet captures are completed analyses. An analysis exists only when someone requested it or a monitor ran, so coverage is irregular.",
           "Each analysis covers a bounded history window ending when it ran, not the wallet's full history."
         );
+      }
+      // The hours of the window with no stored capture, run through the
+      // engine now. A separate object beside the replay, behind its own flag.
+      if (config.ENABLE_REWIND_RECONSTRUCTION && subjectType === "asset") {
+        const reconstruction = await reconstructReplay({
+          repo, subject, eventTime, lookbackHours, requestedAt, windowStart: start, lock, firstCaptureAt: replay.coverage.firstCaptureAt
+        });
+        return { subjectType, ...replay, reconstruction };
       }
       return { subjectType, ...replay };
     } catch (error) {

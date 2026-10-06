@@ -1137,7 +1137,18 @@ export function requestUpgrade(plan: PlanCode, contact: string): Promise<{ reque
 }
 
 export type RewindSubjectType = "asset" | "wallet";
-export type RewindResponse = import("@aegix/rewind").ReplayResult & { subjectType: RewindSubjectType };
+/**
+ * The hours of a window with no stored capture, run through the engine when
+ * the replay was requested. Not a record: it is shown apart from the replay.
+ */
+export interface RewindReconstruction {
+  from: string; to: string; computedAt: string; engineVersion: string; sources: string[]; hours: number; answer: string;
+  checkpoints: import("@aegix/rewind").ReplayCheckpoint[];
+  convergence: import("@aegix/rewind").ReplayResult["convergence"];
+  firstSignal: import("@aegix/rewind").ReplayResult["firstSignal"];
+  limitations: string[];
+}
+export type RewindResponse = import("@aegix/rewind").ReplayResult & { subjectType: RewindSubjectType; reconstruction?: RewindReconstruction | null };
 export async function rewind(input: { subjectType: RewindSubjectType; subject: string; eventTime: string; lookbackHours: number }): Promise<RewindResponse> {
   const response = await fetch(`${API_BASE_URL}/v1/rewind`, {
     method: "POST", headers: { "content-type": "application/json", ...authHeaders() }, body: JSON.stringify(input)
