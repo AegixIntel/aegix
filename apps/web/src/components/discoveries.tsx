@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { discoveryProofUrl, getDiscovery, listDiscoveries, type DiscoveryDetailResponse, type DiscoveryListResponse, type DiscoverySummary } from "@/lib/api";
 import { SignalGraph } from "@/components/signal-graph";
@@ -8,6 +9,15 @@ import { useRequireAuth } from "@/lib/auth-guard";
 const day = (iso: string) => `${iso.slice(0, 10)} — ${iso.slice(11, 16)} UTC`;
 const daily = (d: DiscoverySummary) => d.engineVersion.startsWith("discovery-daily");
 const lagText = (d: DiscoverySummary) => d.lagHours === 0 ? (daily(d) ? "same day" : "same hour") : daily(d) ? `${Math.abs(d.lagHours) / 24}d lag` : `${Math.abs(d.lagHours)}h lag`;
+/** How long the discovery has been on record, counted from its stamp. */
+function age(iso: string): string {
+  const hours = Math.floor((Date.now() - Date.parse(iso)) / 3_600_000);
+  return hours < 1 ? "less than an hour ago" : hours < 48 ? `${hours}h ago` : `${Math.floor(hours / 24)} days ago`;
+}
+/** The Rewind subject a series belongs to: market assets and tokenized stocks can be replayed, other series cannot. */
+function rewindSubject(seriesKey: string): string | null {
+  return /^(?:market|xstock):([^:]+):/.exec(seriesKey)?.[1] ?? null;
+}
 
 /** What a card is showing under its discovery: a request in flight, the detail, or why it could not be read. */
 type Investigation = { state: "loading" } | { state: "open"; detail: DiscoveryDetailResponse } | { state: "failed"; message: string };
@@ -22,11 +32,12 @@ function Card({ discovery, investigation, onToggle }: { discovery: DiscoverySumm
     if (open) opened.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [open]);
   return <li className={`rounded-lg border p-5 ${investigation ? "border-ink/30" : "border-ink/10"}`}>
-    <p className="text-xs text-muted-2">Discovery #{discovery.id} · {discovery.status.replace("_", " ")}</p>
+    <p className="text-xs uppercase tracking-[0.12em] text-accent">AEGIX found something</p>
+    <p className="mt-1 text-xs text-muted-2">Discovery #{discovery.id} · {discovery.status.replace("_", " ")}</p>
     <h2 className="mt-1 text-lg text-ink">{card.title}</h2>
     <p className="mt-2 text-sm text-ink/80">{card.summary}</p>
     <p className="mt-3 text-xs text-muted-foreground">Confidence (1 − q): {(card.confidence * 100).toFixed(1)}% · q = {card.qValue.toExponential(2)} across {card.hypothesesTested} hypotheses · r = {card.effect.r} · {lagText(discovery)}</p>
-    <p className="mt-1 text-xs text-muted-foreground">First detected: {day(discovery.firstDetectedAt)}</p>
+    <p className="mt-1 text-xs text-muted-foreground">First detected: {day(discovery.firstDetectedAt)} · {age(discovery.firstDetectedAt)}</p>
     <button className="btn-primary mt-4 px-4 py-2 text-sm" onClick={onToggle} disabled={investigation?.state === "loading"} aria-expanded={open}>
       {investigation?.state === "loading" ? "Opening…" : open ? "Close" : "Investigate →"}
     </button>
@@ -38,7 +49,8 @@ function Card({ discovery, investigation, onToggle }: { discovery: DiscoverySumm
 function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
   const { discovery, run } = detail;
   const { card } = discovery;
-  const section = (title: string, body: string | string[]) => <div><h3 className="text-sm font-semibold text-ink/80">{title}</h3>
+  const subjects = [...new Set([discovery.seriesA, discovery.seriesB].map(rewindSubject).filter((s): s is string => s !== null))];
+  const section =(title: string, body: string | string[]) => <div><h3 className="text-sm font-semibold text-ink/80">{title}</h3>
     {Array.isArray(body) ? <ul className="mt-1 text-sm text-muted-foreground">{body.map((line) => <li key={line} className="mt-1">{line}</li>)}</ul> : <p className="mt-1 text-sm text-muted-foreground">{body}</p>}
   </div>;
   return <section className="mt-6 space-y-5 border-t border-ink/10 pt-6">
@@ -51,6 +63,8 @@ function Detail({ detail }: { detail: DiscoveryDetailResponse }) {
       })}</ul>
       {detail.related.length ? <p className="mt-2 text-xs text-muted-2">Shares a series with: {detail.related.map((r) => `#${r.id}`).join(", ")}</p> : null}
     </div>
+    {subjects.length ? <p className="text-sm text-muted-foreground">Rewind to before this was stamped, and see what AEGIX had stored by then: {subjects.map((subject, i) => <span key={subject}>{i ? " · " : ""}
+      <Link className="text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-accent" href={`/app/rewind?subject=${encodeURIComponent(subject)}&eventTime=${encodeURIComponent(discovery.firstDetectedAt)}&lookback=72`}>{subject}</Link></span>)}</p> : null}
     {section("Why this is unusual", card.whyUnusual)}
     {section("When it began", card.whenItBegan)}
     {section("Which signals support it", card.supporting)}

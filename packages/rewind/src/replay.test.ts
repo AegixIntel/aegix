@@ -73,6 +73,18 @@ test("a future event, a bad timestamp and an unbounded lookback are refused", ()
   assert.throws(() => buildReplay({ ...base, eventTime: EVENT, lookbackHours: 100_000 }), (e) => e instanceof RewindError && e.code === "INVALID_LOOKBACK");
 });
 
+test("a discovery stamped at or after the event is not shown, and an earlier one keeps its lead", () => {
+  const discovery = (id: string, hoursBefore: number) => ({
+    id, detectedAt: new Date(Date.parse(EVENT) - hoursBefore * 3_600_000).toISOString(), status: "CANDIDATE", title: id,
+    seriesA: "market:SOL:price_usd", seriesB: "market:BTC:price_usd", lagHours: 0, direction: "POSITIVE", engineVersion: "discovery-v1.0.0"
+  });
+  const result = buildReplay({ subject: "SOL", eventTime: EVENT, lookbackHours: 24, requestedAt: NOW, captures: [],
+    discoveries: [discovery("AEX-3", -1), discovery("AEX-2", 0), discovery("AEX-1", 200)] });
+  assert.deepEqual(result.discoveries.map((d) => d.id), ["AEX-1"], "older than the window is still on record; at or after the event is hindsight");
+  assert.equal(result.discoveries[0]!.leadSeconds, 200 * 3600);
+  assert.equal(result.verdict, "NO_COVERAGE", "a discovery does not stand in for a capture");
+});
+
 test("series keys name the measurement, not the provider", () => {
   assert.equal(marketSeriesKey("SOL", "price_usd"), "market:SOL:price_usd");
   assert.equal(marketSeries(["BTC", "ETH"]).length, 4);
