@@ -44,11 +44,17 @@ export default function Rewind() {
     finally { if (current === generation.current) setLoading(false); }
   }
 
+  /** The button answers the press at once, also while the session is still being restored. */
+  async function submit() {
+    setLoading(true);
+    if (!(await requireAuth(load))) setLoading(false);
+  }
+
   const slots = data ? Math.max(4, ...data.checkpoints.map((c) => c.signalTypesSoFar.length)) : 4;
   return <main className="mx-auto max-w-5xl px-4 py-8">
     <h1 className="font-display text-2xl font-semibold text-ink">AEGIX Rewind</h1>
     <p className="mt-2 text-sm text-muted-foreground">Go back to before the event and see what AEGIX had already stored. A replay reads captures exactly as they were recorded; nothing is recomputed, and nothing stored at or after the event time is shown. An observable signal is not a prediction.</p>
-    <form className="mt-6 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); void requireAuth(load); }}>
+    <form className="mt-6 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <label className="text-sm text-ink/80">Subject
         <select aria-label="Subject type" value={subjectType} onChange={(e) => { generation.current++; setData(null); setSubjectType(e.target.value as RewindSubjectType); }} className="ml-2 rounded-lg border border-ink/10 bg-paper px-3 py-2">
           <option value="asset">Asset</option><option value="wallet">Solana wallet</option>

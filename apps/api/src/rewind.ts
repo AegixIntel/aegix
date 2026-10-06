@@ -67,8 +67,8 @@ export function registerRewind(deps: RewindDeps): void {
 
     const { subjectType, subject, eventTime } = req.body;
     const lookbackHours = req.body.lookbackHours ?? REWIND_DEFAULT_LOOKBACK_HOURS;
-    if (subjectType === "asset" && !isCanonicalAsset(subject) && !isTokenizedStockSymbol(subject)) return reply.code(400).send({ code: "UNKNOWN_ASSET" });
-    if (subjectType === "wallet" && !isValidSolanaAddress(subject)) return reply.code(400).send({ code: "INVALID_WALLET" });
+    if (subjectType === "asset" && !isCanonicalAsset(subject) && !isTokenizedStockSymbol(subject)) return reply.code(400).send({ code: "UNKNOWN_ASSET", message: "This asset cannot be replayed" });
+    if (subjectType === "wallet" && !isValidSolanaAddress(subject)) return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address" });
 
     const requestedAt = now().toISOString();
     try {
