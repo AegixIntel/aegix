@@ -21,6 +21,8 @@ function localNow(): string {
 export default function Rewind() {
   const [subjectType, setSubjectType] = useState<RewindSubjectType>("asset");
   const [asset, setAsset] = useState("SOL");
+  const [topic, setTopic] = useState("data-center");
+  const [fund, setFund] = useState("XLK");
   const [wallet, setWallet] = useState("");
   const [eventTime, setEventTime] = useState(localNow);
   const [lookbackHours, setLookbackHours] = useState(72);
@@ -39,9 +41,12 @@ export default function Rewind() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const subject = params.get("subject")?.trim();
+    const type = params.get("type");
     if (subject) {
+      if (type === "narrative") { setSubjectType("narrative"); setTopic(subject); }
+      else if (type === "sector") { setSubjectType("sector"); setFund(subject); }
       // A Solana address is 32 to 44 characters; no asset symbol is that long.
-      if (subject.length >= 32) { setSubjectType("wallet"); setWallet(subject.slice(0, 44)); }
+      else if (subject.length >= 32) { setSubjectType("wallet"); setWallet(subject.slice(0, 44)); }
       else setAsset(subject);
     }
     const at = new Date(params.get("eventTime") ?? "");
@@ -75,7 +80,8 @@ export default function Rewind() {
     const current = ++generation.current;
     setLoading(true); setError(null); setData(null); setRevealed(0);
     try {
-      const result = await rewind({ subjectType, subject: subjectType === "asset" ? asset : wallet.trim(), eventTime: new Date(eventTime).toISOString(), lookbackHours });
+      const subject = subjectType === "asset" ? asset : subjectType === "narrative" ? topic : subjectType === "sector" ? fund : wallet.trim();
+      const result = await rewind({ subjectType, subject, eventTime: new Date(eventTime).toISOString(), lookbackHours });
       if (current === generation.current) setData(result);
     } catch (err) { if (current === generation.current) setError(err instanceof Error ? err.message : "Rewind unavailable"); }
     finally { if (current === generation.current) setLoading(false); }
@@ -87,19 +93,33 @@ export default function Rewind() {
     if (!(await requireAuth(load))) setLoading(false);
   }
 
-  const slots = data ? Math.max(4, ...data.checkpoints.map((c) => c.signalTypesSoFar.length)) : 4;
+  const assets = subjects.filter((item) => item.kind === "MARKET_ASSET" || item.kind === "TOKENIZED_STOCK");
+  const topics = subjects.filter((item) => item.kind === "NEWS_TOPIC");
+  const funds = subjects.filter((item) => item.kind === "FUND");
+  const slots = data ?Math.max(4, ...data.checkpoints.map((c) => c.signalTypesSoFar.length)) : 4;
   return <main className="mx-auto max-w-5xl px-4 py-8">
     <h1 className="font-display text-2xl font-semibold text-ink">AEGIX Rewind</h1>
     <p className="mt-2 text-sm text-muted-foreground">Go back to before the event and see what AEGIX had already stored. A replay reads captures exactly as they were recorded; nothing is recomputed, and nothing stored at or after the event time is shown. An observable signal is not a prediction.</p>
     <form className="mt-6 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <label className="text-sm text-ink/80">Subject
         <select aria-label="Subject type" value={subjectType} onChange={(e) => { generation.current++; setData(null); setSubjectType(e.target.value as RewindSubjectType); }} className="ml-2 rounded-lg border border-ink/10 bg-paper px-3 py-2">
-          <option value="asset">Asset</option><option value="wallet">Solana wallet</option>
+          <option value="asset">Asset</option>
+          {topics.length ? <option value="narrative">News topic</option> : null}
+          {funds.length ? <option value="sector">Sector or fund</option> : null}
+          <option value="wallet">Solana wallet</option>
         </select>
       </label>
       {subjectType === "asset"
         ? <select aria-label="Asset" value={asset} onChange={(e) => setAsset(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
-            {subjects.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
+            {assets.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
+          </select>
+        : subjectType === "narrative"
+        ? <select aria-label="News topic" value={topic} onChange={(e) => setTopic(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
+            {topics.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
+          </select>
+        : subjectType === "sector"
+        ? <select aria-label="Sector or fund" value={fund} onChange={(e) => setFund(e.target.value)} className="min-w-0 max-w-full rounded-lg border border-ink/10 bg-paper px-3 py-2 text-sm">
+            {funds.map((item) => <option key={item.subject} value={item.subject}>{item.label}</option>)}
           </select>
         : <input aria-label="Solana wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder="Solana wallet address" spellCheck={false} maxLength={44} className="min-w-0 flex-1 rounded-lg border border-ink/10 bg-ink/[0.03] px-3 py-2 text-sm text-ink" />}
       <label className="text-sm text-ink/80">Event time
@@ -134,6 +154,13 @@ export default function Rewind() {
         })}</ol>
         {data.convergence && revealed >= data.checkpoints.length ? <p className="mt-3 font-mono text-sm text-ink">Convergence stored {lead(data.convergence.leadSeconds)} before the event: {data.convergence.signalTypes.join(", ")}.</p> : null}
       </div>
+      {data.context.length ? <div><h2 className="text-sm font-semibold text-ink/80">What else was visible</h2>
+        <p className="mt-1 text-xs text-muted-2">News coverage and sector and commodity funds in the same window, as stored then. The surroundings of the subject: nothing links them to it.</p>
+        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">{data.context.map((item) => <li key={`${item.domain}:${item.subject}:${item.signalType}`}>
+          <span className="font-mono text-xs text-ink/80">{item.domain === "NARRATIVE" ? "NEWS" : "FUND"} · {item.signalType.replaceAll("_", " ")} · first stored {lead(item.leadSeconds)} before the event · {item.captures} capture{item.captures === 1 ? "" : "s"}</span>
+          <span className="block">{item.label}: {item.summary}</span>
+        </li>)}</ul>
+      </div> : null}
       {data.discoveries.length ? <div><h2 className="text-sm font-semibold text-ink/80">Relationships already on record</h2>
         <p className="mt-1 text-xs text-muted-2">Discoveries on this subject&apos;s series that the Discovery Engine had stamped before the event, with the status each had then.</p>
         <ul className="mt-3 space-y-2 text-sm text-muted-foreground">{data.discoveries.map((discovery) => <li key={discovery.id}>

@@ -7,7 +7,7 @@ import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
-import { anchorDiscoveryChain, captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
+import { anchorDiscoveryChain, captureFundSignals, captureMarketSignals, captureNarrativeSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
 import { DAILY_PROFILE, HOURLY_PROFILE } from "@aegix/discovery";
 import { createCoinPaprikaProvider } from "@aegix/markets";
 import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createSectorQuoteSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
@@ -252,6 +252,8 @@ try {
     capture();
     captureTimer = setInterval(capture, config.REWIND_CAPTURE_INTERVAL_SECONDS * 1000);
   }
+  // Context signals are stored for Rewind after the source they read from has swept.
+  const contextSignals = config.ENABLE_CONTEXT_SIGNAL_CAPTURE;
   // Series sources. Observations are stamped to the minute they were read,
   // and a sweep that fails adds nothing: the ledger shows the gap.
   const scheduleSource = (source: SeriesSource, intervalMs: number, after?: (at: Date) => Promise<unknown>) => {
@@ -289,13 +291,19 @@ try {
     scheduleSource(createNarrativeContextSource({
       baseUrl: config.NARRATIVE_BASE_URL,
       onHourFailure: (topic, eventTime, code) => logger.warn("narrative context hour not captured", { topic, eventTime, code })
-    }), NARRATIVE_ROTATION_MS);
+    }), NARRATIVE_ROTATION_MS, contextSignals ? async (at) => {
+      const result = await captureNarrativeSignals({ config, sql, logger }, at);
+      if (result.captured > 0) logger.info("narrative signal capture sweep", { ...result });
+    } : undefined);
   }
   if (config.ENABLE_OPTIONS_CAPTURE) {
     scheduleSource(createOptionsSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
   }
   if (config.ENABLE_SECTOR_CAPTURE) {
-    scheduleSource(createSectorQuoteSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS);
+    scheduleSource(createSectorQuoteSource({ baseUrl: config.OPTIONS_BASE_URL, timeoutMs: config.SERIES_SOURCE_TIMEOUT_MS }), SLOW_SOURCE_INTERVAL_MS, contextSignals ? async (at) => {
+      const result = await captureFundSignals({ config, sql, logger }, at);
+      if (result.captured > 0) logger.info("fund signal capture sweep", { ...result });
+    } : undefined);
   }
   if (config.ENABLE_DISCOVERY) {
     const profiles = config.ENABLE_DISCOVERY_DAILY ? [HOURLY_PROFILE, DAILY_PROFILE] : [HOURLY_PROFILE];

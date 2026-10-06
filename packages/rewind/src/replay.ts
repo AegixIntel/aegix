@@ -59,12 +59,40 @@ export interface KnownDiscovery {
   engineVersion: string;
 }
 
+/** A stored capture of something other than the subject: a news topic or a fund. */
+export interface ContextCapture extends CaptureRecord {
+  /** NARRATIVE or SECTOR. */
+  domain: string;
+  subject: string;
+  /** What the subject is, in words. */
+  label: string;
+}
+
+/** One signal type of one context subject, across the captures that held it in the window. */
+export interface ContextObservation {
+  domain: string;
+  subject: string;
+  label: string;
+  signalType: string;
+  /** Title and summary as the earliest capture stored them. */
+  title: string;
+  summary: string;
+  firstObservedAt: string;
+  lastObservedAt: string;
+  captures: number;
+  /** From the earliest capture to the event. */
+  leadSeconds: number;
+  engineVersion: string;
+}
+
 export interface ReplayInput {
   subject: string;
   /** The moment being audited ("the move"). Nothing at or after it is admitted. */
   eventTime: string;
   lookbackHours: number;
   captures: CaptureRecord[];
+  /** Captures of news topics and funds that held a signal. Admitted under the same window and lock. */
+  context?: ContextCapture[];
   /** Discoveries involving the subject's series. Only those stamped before the lock are admitted. */
   discoveries?: KnownDiscovery[];
   /** Server time of the request; an event in the future cannot be rewound. */
@@ -106,6 +134,13 @@ export interface ReplayResult {
   };
   /** Timeline of every admitted capture, oldest first. */
   timeline: CaptureRecord[];
+  /**
+   * What news coverage and the funds were doing in the window, as stored:
+   * one entry per signal type per topic or fund, earliest first. It is the
+   * surroundings of the subject, not evidence about it, and does not enter
+   * the verdict.
+   */
+  context: ContextObservation[];
   /**
    * Discoveries involving this subject that were already stamped before the
    * event, oldest first. Not limited to the window: a relationship found
@@ -155,6 +190,25 @@ export function buildReplay(input: ReplayInput): ReplayResult {
     })
     .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.id.localeCompare(b.id));
   const excludedByLock = input.captures.length - admitted.length;
+
+  // The same window and lock, for context captures.
+  const observed = new Map<string, ContextObservation>();
+  const contextCaptures = (input.context ?? [])
+    .filter((c) => { const t = Date.parse(c.observedAt); return Number.isFinite(t) && t >= startMs && t < lockMs; })
+    .sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt) || a.id.localeCompare(b.id));
+  for (const capture of contextCaptures) {
+    for (const s of capture.signals) {
+      const key = `${capture.domain}|${capture.subject}|${s.type}`;
+      const existing = observed.get(key);
+      if (existing) { existing.lastObservedAt = capture.observedAt; existing.captures += 1; continue; }
+      observed.set(key, {
+        domain: capture.domain, subject: capture.subject, label: capture.label, signalType: s.type, title: s.title, summary: s.summary,
+        firstObservedAt: capture.observedAt, lastObservedAt: capture.observedAt, captures: 1,
+        leadSeconds: Math.round((lockMs - Date.parse(capture.observedAt)) / 1000), engineVersion: s.engineVersion
+      });
+    }
+  }
+  const context = [...observed.values()];
 
   // The same lock, for discoveries: the stamp must be strictly before the event.
   const discoveries = (input.discoveries ?? [])
@@ -218,6 +272,9 @@ export function buildReplay(input: ReplayInput): ReplayResult {
   if (largestGapSeconds !== null && largestGapSeconds > 3 * 3600) {
     limitations.push(`The largest gap between captures is ${lead(largestGapSeconds)}; a signal that appeared and cleared inside a gap is not recorded.`);
   }
+  if (context.length > 0) {
+    limitations.push("Context signals describe news coverage and fund prices in the window, as stored at the time. They are the surroundings of the subject: nothing links them to it, and they do not enter the answer above.");
+  }
   if (discoveries.length > 0) {
     limitations.push("A discovery listed here is a statistical relationship between two series that was on record before the event, shown with the status it had then. It is not a signal about this event.");
   }
@@ -244,6 +301,7 @@ export function buildReplay(input: ReplayInput): ReplayResult {
       excludedByLock
     },
     timeline: admitted,
+    context,
     discoveries,
     engineVersions: [...new Set(admitted.flatMap((c) => [c.engineVersion, ...c.signals.map((s) => s.engineVersion)]))].sort(),
     rewindEngineVersion: REWIND_ENGINE_VERSION,

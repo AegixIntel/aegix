@@ -150,6 +150,59 @@ the event time.
 Rewind audits observability. It does not claim the event was predictable, and
 the response says so.
 
+## 3a. Context signals: news topics and funds
+
+Narrative and sector series were in the ledger with no signal engine run at
+capture time, so a replay could not show them: deriving a signal from them
+at replay time would be hindsight. `ENABLE_CONTEXT_SIGNAL_CAPTURE` runs an
+engine at capture time instead, after each source's sweep, and stores the
+result as signal captures. Migration 0017 lets a capture belong to the
+domains `NARRATIVE` and `SECTOR` besides `MARKET`; nothing else changes.
+
+It reaches back only to the first such capture, like every other replay.
+The thresholds are fixed by `context-v1.0.0` and are not configurable:
+
+```text
+NARRATIVE_ACCELERATION     a topic's GDELT Context article count: the mean of
+                           the newest 6 settled hours is at least 2 times the
+                           mean of the 48 hours before, and at least 3 an
+                           hour. Needs 4 of the 6 and 24 of the 48 hours on
+                           record; with fewer the capture is stored with no
+                           signal and LOW quality
+SECTOR_RELATIVE_STRENGTH   a sector fund's move on the day is 1.5 points or
+SECTOR_RELATIVE_WEAKNESS   more from the median of the sector funds; needs
+                           8 of the 11 with a return
+FUND_DAILY_MOVE            any of the 16 funds is 2.5% or more from the
+                           previous session's last read price
+```
+
+- A topic is captured when its turn in the source's rotation ends, at most
+  once an hour; in practice about every eighty minutes.
+- A fund is captured once an hour while the US session is open, and only if
+  it has a price today. Its day is today's last read price over the last
+  read price of the previous session, at most five days back.
+- An hour with no article and an hour that was not read are both absent from
+  the ledger. Both are left out of the averages, never counted as zero.
+- The topic list and the fund list are the Discovery Engine's, and the same
+  rule holds: neither is extended because something is already in the news.
+
+In Rewind:
+
+```text
+subjects   subjectType "narrative" with a topic id, "sector" with a fund
+           symbol; GET /v1/rewind/subjects lists them as topics and funds.
+           A topic has one signal type and a fund at most two, so neither
+           can reach a convergence; the response says so
+context    a replay of an asset also returns `context`: one entry per
+           signal type per topic or fund, from the captures that held a
+           signal in the window, under the same lock. It is the
+           surroundings of the asset. Nothing links it to the asset and it
+           does not enter the verdict
+```
+
+No rotation signal across sectors as a whole is derived, and nothing here
+is sentiment or social media.
+
 ## 4. Discovery Engine
 
 Scanning many pairs is how spurious relationships are manufactured, so the

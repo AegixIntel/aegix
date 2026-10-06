@@ -27,8 +27,17 @@ export interface StoredCaptureRow {
   signals: StoredSignalRow[];
 }
 
+/** What a capture is of: a market asset, a news topic, or a sector or commodity fund. */
+export type CaptureDomain = "MARKET" | "NARRATIVE" | "SECTOR";
+
+/** A capture that held at least one signal, with the subject it belongs to. */
+export interface ContextCaptureRow extends StoredCaptureRow {
+  domain: CaptureDomain;
+  subject: string;
+}
+
 export interface SignalCaptureWrite {
-  domain: "MARKET";
+  domain: CaptureDomain;
   subject: string;
   bucketStart: string;
   engineVersion: string;
@@ -46,7 +55,12 @@ export interface ObservationRepo {
   /** Stores one capture and its signals atomically. False when this bucket was already captured. */
   recordCapture(capture: SignalCaptureWrite): Promise<boolean>;
   /** Captures stored in [from, before) — strictly before the lock. */
-  capturesBetween(domain: "MARKET", subject: string, from: string, before: string): Promise<StoredCaptureRow[]>;
+  capturesBetween(domain: CaptureDomain, subject: string, from: string, before: string): Promise<StoredCaptureRow[]>;
+  /**
+   * Captures of whole domains stored in [from, before) that held a signal,
+   * oldest first: what the news and the funds were doing around a subject.
+   */
+  signalledCapturesBetween(domains: CaptureDomain[], from: string, before: string, limit: number): Promise<ContextCaptureRow[]>;
   /** Completed wallet analyses in [from, before), with the signals each one stored. */
   walletCapturesBetween(chain: string, address: string, from: string, before: string): Promise<StoredCaptureRow[]>;
 }
@@ -124,6 +138,24 @@ export function createObservationRepo(sql: Sql): ObservationRepo {
           and c.observed_at >= ${from}::timestamptz and c.observed_at < ${before}::timestamptz
         group by c.id
         order by c.observed_at asc
+      `;
+    },
+
+    async signalledCapturesBetween(domains, from, before, limit) {
+      if (domains.length === 0) return [];
+      return sql<ContextCaptureRow[]>`
+        select c.id::text, c.domain, c.subject, c.observed_at, c.engine_version, c.quality_grade, c.provider_status,
+          json_agg(json_build_object(
+            'type', s.signal_type, 'severity', s.severity, 'confidence', s.confidence::float8,
+            'title', s.title, 'summary', s.summary, 'evidence', s.evidence, 'engineVersion', s.engine_version
+          ) order by s.severity desc, s.signal_type asc) as signals
+        from signal_captures c
+        join signal_snapshots s on s.capture_id = c.id
+        where c.domain = any(${domains}) and c.signal_count > 0
+          and c.observed_at >= ${from}::timestamptz and c.observed_at < ${before}::timestamptz
+        group by c.id
+        order by c.observed_at asc
+        limit ${limit}
       `;
     },
 

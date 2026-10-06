@@ -1136,7 +1136,7 @@ export function requestUpgrade(plan: PlanCode, contact: string): Promise<{ reque
   });
 }
 
-export type RewindSubjectType = "asset" | "wallet";
+export type RewindSubjectType = "asset" | "wallet" | "narrative" | "sector";
 export type RewindResponse = import("@aegix/rewind").ReplayResult & { subjectType: RewindSubjectType };
 export async function rewind(input: { subjectType: RewindSubjectType; subject: string; eventTime: string; lookbackHours: number }): Promise<RewindResponse> {
   const response = await fetch(`${API_BASE_URL}/v1/rewind`, {
@@ -1149,14 +1149,15 @@ export async function rewind(input: { subjectType: RewindSubjectType; subject: s
   return response.json() as Promise<RewindResponse>;
 }
 
-export interface RewindSubject { subject: string; label: string; kind: "MARKET_ASSET" | "TOKENIZED_STOCK" }
+export interface RewindSubject { subject: string; label: string; kind: "MARKET_ASSET" | "TOKENIZED_STOCK" | "NEWS_TOPIC" | "FUND" }
 export async function getRewindSubjects(): Promise<RewindSubject[]> {
   const response = await fetch(`${API_BASE_URL}/v1/rewind/subjects`, { headers: authHeaders() });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.error?.message ?? body?.message ?? body?.code ?? `Request failed (${response.status})`);
   }
-  return ((await response.json()) as { assets: RewindSubject[] }).assets;
+  const body = (await response.json()) as { assets: RewindSubject[]; topics?: RewindSubject[]; funds?: RewindSubject[] };
+  return [...body.assets, ...(body.topics ?? []), ...(body.funds ?? [])];
 }
 
 export interface DiscoverySummary {
