@@ -4,10 +4,11 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { SITE_URL } from "@/lib/site";
 
-// Plex for interface and data, Newsreader for editorial statements.
+// Plex for interface and data, Newsreader for editorial statements. Newsreader
+// is loaded without its optical-size axis: with it the file is 128 KB, without it 56.
 const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans", display: "swap" });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono", display: "swap" });
-const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif", display: "swap", axes: ["opsz"] });
+const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
