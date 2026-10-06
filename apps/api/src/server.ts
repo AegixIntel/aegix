@@ -642,10 +642,11 @@ export async function buildServer(deps: ApiDeps) {
       // A failed analysis is answered from the cache only when asking again
       // cannot change the outcome. After a timeout or an RPC failure the
       // request falls through and a new analysis runs, under the same
-      // admission and quota checks as any other.
-      const cachedJob = cached?.analysisId ? await jobRepo.findById(cached.analysisId) : null;
+      // admission and quota checks as any other. An entry whose analysis is
+      // no longer in the database is passed over the same way.
+      const cachedJob = cached?.analysisId ? await jobRepo.findById(cached.analysisId).catch(() => null) : null;
       const retryable = cachedJob?.status === "FAILED" && !PERMANENT_ANALYSIS_FAILURES.has(cachedJob.failure_code ?? "");
-      if (cached?.analysisId && !retryable) {
+      if (cached?.analysisId && cachedJob && !retryable) {
         const quotaCtx = quotaContext(req);
         await recordCacheHit(sql, quotaCtx, cached.analysisId).catch(() => {});
         return reply.send({ analysisId: cached.analysisId, cached: true });
