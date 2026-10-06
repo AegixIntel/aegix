@@ -770,7 +770,7 @@ export async function buildServer(deps: ApiDeps) {
     // to find an analysis that is still running. A READY-only lookup left a
     // first-time analysis stuck on "No analysis yet".
     const latest = await jobRepo.latestJobForWallet(wallet.id);
-    return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null });
+    return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null, failureCode: latest?.failure_code ?? null });
   });
 
   app.get<{ Params: { address: string } }>("/v1/wallets/:address/x-ray", async (req, reply) => {

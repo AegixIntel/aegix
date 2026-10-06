@@ -146,10 +146,19 @@ export async function getAnalysisStatus(analysisId: string): Promise<AnalysisSta
   return res.json() as Promise<AnalysisStatusResponse>;
 }
 
-export async function getLatestAnalysis(address: string): Promise<{ wallet: string; latestAnalysisId: string | null; status: string | null }> {
+export interface LatestAnalysis { wallet: string; latestAnalysisId: string | null; status: string | null; failureCode?: string | null }
+export async function getLatestAnalysis(address: string): Promise<LatestAnalysis> {
   const res = await fetch(`${API_BASE_URL}/v1/wallets/${encodeURIComponent(address)}/latest`);
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
-  return res.json() as Promise<{ wallet: string; latestAnalysisId: string | null; status: string | null }>;
+  return res.json() as Promise<LatestAnalysis>;
+}
+
+/** Why a failed analysis left no report, in words a visitor can act on. */
+export function analysisFailureReason(code: string | null | undefined): string {
+  if (code === "INSUFFICIENT_HISTORY") return "This wallet has no on-chain activity yet, so there is nothing to analyze.";
+  if (code === "ACCOUNT_NOT_ANALYZABLE") return "This address is a program or token account, not a personal wallet.";
+  if (code === "RPC_RATE_LIMITED" || code === "RPC_TIMEOUT" || code === "ANALYSIS_TIMEOUT") return "The Solana network did not answer in time. Try again in a few minutes.";
+  return "The analysis could not be completed. Try again in a few minutes.";
 }
 
 export async function getWalletXRay(address: string): Promise<WalletXRay> {
