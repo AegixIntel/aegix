@@ -128,9 +128,11 @@ export interface WalletXRay {
 }
 
 export async function createAnalysis(address: string): Promise<CreateAnalysisResponse> {
+  // The session goes with the request: without it the API counts a signed-in
+  // visitor's analysis against the anonymous daily limit and not their plan.
   const res = await fetch(`${API_BASE_URL}/v1/analyses`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify({ address })
   });
   if (!res.ok) {
@@ -146,10 +148,19 @@ export async function getAnalysisStatus(analysisId: string): Promise<AnalysisSta
   return res.json() as Promise<AnalysisStatusResponse>;
 }
 
-export async function getLatestAnalysis(address: string): Promise<{ wallet: string; latestAnalysisId: string | null; status: string | null }> {
+export interface LatestAnalysis { wallet: string; latestAnalysisId: string | null; status: string | null; failureCode?: string | null }
+export async function getLatestAnalysis(address: string): Promise<LatestAnalysis> {
   const res = await fetch(`${API_BASE_URL}/v1/wallets/${encodeURIComponent(address)}/latest`);
   if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
-  return res.json() as Promise<{ wallet: string; latestAnalysisId: string | null; status: string | null }>;
+  return res.json() as Promise<LatestAnalysis>;
+}
+
+/** Why a failed analysis left no report, in words a visitor can act on. */
+export function analysisFailureReason(code: string | null | undefined): string {
+  if (code === "INSUFFICIENT_HISTORY") return "This wallet has no on-chain activity yet, so there is nothing to analyze.";
+  if (code === "ACCOUNT_NOT_ANALYZABLE") return "This address is a program or token account, not a personal wallet.";
+  if (code === "RPC_RATE_LIMITED" || code === "RPC_TIMEOUT" || code === "ANALYSIS_TIMEOUT") return "The Solana network did not answer in time. Try again in a few minutes.";
+  return "The analysis could not be completed. Try again in a few minutes.";
 }
 
 export async function getWalletXRay(address: string): Promise<WalletXRay> {
@@ -538,10 +549,20 @@ export interface CompareResult {
   cached?: boolean;
 }
 
+/**
+ * The API sends each relationship path as { path, identity, explanation };
+ * the page reads the path itself. Read as sent, the first path of any
+ * comparison that had one crashed the page.
+ */
+function withFlatPaths(result: CompareResult): CompareResult {
+  const paths = (result.relationshipPaths ?? []) as Array<ComparePath | { path: ComparePath }>;
+  return { ...result, relationshipPaths: paths.map((p) => ("path" in p ? p.path : p)) };
+}
+
 export async function compareWallets(walletA: string, walletB: string): Promise<CompareResult> {
   const res = await fetch(`${API_BASE_URL}/v1/compare`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify({ walletA, walletB })
   });
   if (!res.ok) {
@@ -550,13 +571,13 @@ export async function compareWallets(walletA: string, walletB: string): Promise<
     err.code = body.code;
     throw err;
   }
-  return res.json() as Promise<CompareResult>;
+  return withFlatPaths((await res.json()) as CompareResult);
 }
 
 export async function getComparison(pairId: string): Promise<CompareResult> {
   const res = await fetch(`${API_BASE_URL}/v1/compare/${encodeURIComponent(pairId)}`);
   if (!res.ok) throw new Error(`Comparison failed with status ${res.status}`);
-  return res.json() as Promise<CompareResult>;
+  return withFlatPaths((await res.json()) as CompareResult);
 }
 
 // ---- D6-A: saved comparisons (authenticated) ----

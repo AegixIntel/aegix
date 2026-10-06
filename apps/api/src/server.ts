@@ -76,6 +76,8 @@ export interface ApiDeps {
 
 const ENGINE_SCOPE = "full";
 const CACHE_PREFIX = "analysis-result";
+/** Failures that asking again cannot change: an empty wallet, or an address that is not a wallet. */
+const PERMANENT_ANALYSIS_FAILURES = new Set(["INSUFFICIENT_HISTORY", "ACCOUNT_NOT_ANALYZABLE"]);
 
 function analysisLockKey(address: string, engineVersion: string): string {
   return `analysis-lock:solana:${address}:${ENGINE_SCOPE}:${engineVersion}`;
@@ -637,7 +639,14 @@ export async function buildServer(deps: ApiDeps) {
       // 1. Fresh cached analysis? Return it immediately. Cache hits do not
       // consume quota, see D3-C §24.
       const cached = await cache.getJson<{ analysisId: string }>(`${CACHE_PREFIX}:${address}`);
-      if (cached?.analysisId) {
+      // A failed analysis is answered from the cache only when asking again
+      // cannot change the outcome. After a timeout or an RPC failure the
+      // request falls through and a new analysis runs, under the same
+      // admission and quota checks as any other. An entry whose analysis is
+      // no longer in the database is passed over the same way.
+      const cachedJob = cached?.analysisId ? await jobRepo.findById(cached.analysisId).catch(() => null) : null;
+      const retryable = cachedJob?.status === "FAILED" && !PERMANENT_ANALYSIS_FAILURES.has(cachedJob.failure_code ?? "");
+      if (cached?.analysisId && cachedJob && !retryable) {
         const quotaCtx = quotaContext(req);
         await recordCacheHit(sql, quotaCtx, cached.analysisId).catch(() => {});
         return reply.send({ analysisId: cached.analysisId, cached: true });
@@ -770,7 +779,7 @@ export async function buildServer(deps: ApiDeps) {
     // to find an analysis that is still running. A READY-only lookup left a
     // first-time analysis stuck on "No analysis yet".
     const latest = await jobRepo.latestJobForWallet(wallet.id);
-    return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null });
+    return reply.send({ wallet: address, latestAnalysisId: latest?.id ?? null, status: latest?.status ?? null, failureCode: latest?.failure_code ?? null });
   });
 
   app.get<{ Params: { address: string } }>("/v1/wallets/:address/x-ray", async (req, reply) => {

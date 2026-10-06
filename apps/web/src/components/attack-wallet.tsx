@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getWalletXRay, createAnalysis, getLatestAnalysis, type WalletXRay, type XRayPath } from "@/lib/api";
+import { analysisFailureReason, getWalletXRay, createAnalysis, getLatestAnalysis, type WalletXRay, type XRayPath } from "@/lib/api";
 import AnalysisTracker from "@/components/analysis-tracker";
 import { EmptyState, ErrorState } from "@/components/ui/primitives";
 
@@ -106,7 +106,7 @@ export default function AttackWalletPage({ initialAddress = "" }: { initialAddre
           setError(null);
           setTrackingId(latest.latestAnalysisId ?? null);
         } else {
-          setError(message);
+          setError(status === "FAILED" ? analysisFailureReason(latest?.failureCode) : message);
         }
       } else {
         setError(message);

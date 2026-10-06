@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { getWalletXRay, getLatestAnalysis, saveAnalysis, type WalletXRay, type XRaySignal } from "@/lib/api";
+import { analysisFailureReason, getWalletXRay, getLatestAnalysis, saveAnalysis, type WalletXRay, type XRaySignal } from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 import { useRequireAuth } from "@/lib/auth-guard";
 import AnalysisTracker from "@/components/analysis-tracker";
@@ -37,10 +37,12 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFailure(null);
     try {
       const xray = await getWalletXRay(wallet);
       setData(xray);
@@ -56,9 +58,14 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
           setError(null);
           setTrackingId(latest.latestAnalysisId ?? null);
         } else {
+          // The tracker must go with the analysis it followed. Left mounted
+          // for a failed one, it reported "done" and reloaded without end.
+          setTrackingId(null);
+          setFailure(status === "FAILED" ? analysisFailureReason(latest?.failureCode) : null);
           setError(message);
         }
       } else {
+        setTrackingId(null);
         setError(message);
       }
     } finally {
@@ -111,6 +118,18 @@ export default function WalletXRayPage({ wallet }: { wallet: string }) {
         <div className="mt-6 w-full max-w-md">
           <AnalysisTracker analysisId={trackingId} onComplete={handleTrackerComplete} />
         </div>
+      </main>
+    );
+  }
+
+  if (failure) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
+        <h1 className="text-2xl font-bold">Analysis failed</h1>
+        <p className="mt-3 max-w-md text-muted-foreground">{failure}</p>
+        <Link href="/app/analyze" className="btn-primary mt-6">
+          Analyze another wallet
+        </Link>
       </main>
     );
   }
