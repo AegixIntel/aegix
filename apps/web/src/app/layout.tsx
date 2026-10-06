@@ -1,14 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { SITE_URL } from "@/lib/site";
 
 // Plex for interface and data, Newsreader for editorial statements. Newsreader
-// is loaded without its optical-size axis: with it the file is 128 KB, without it 56.
-const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans", display: "swap" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono", display: "swap" });
-const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif", display: "swap" });
+// is the cut without its optical-size axis: with it the file is 128 KB, without it 56.
+// The files are in the repository (src/fonts, see its README): fetched from
+// Google at build time, a bad answer failed the build.
+const plexSans = localFont({ src: "../fonts/ibm-plex-sans-latin.woff2", weight: "400 700", style: "normal", variable: "--font-sans", display: "swap" });
+const plexMono = localFont({
+  src: [
+    { path: "../fonts/ibm-plex-mono-400-latin.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/ibm-plex-mono-500-latin.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/ibm-plex-mono-600-latin.woff2", weight: "600", style: "normal" }
+  ],
+  variable: "--font-mono",
+  display: "swap"
+});
+const newsreader = localFont({ src: "../fonts/newsreader-latin.woff2", weight: "200 800", style: "normal", variable: "--font-serif", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -67,7 +77,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} ${newsreader.variable}`}>
       <body className="min-h-screen bg-paper text-ink antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
