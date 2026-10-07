@@ -63,17 +63,11 @@ export const NARRATIVE_MIN_MENTIONS = 3;
 /** An hour is read once it has been over for an hour, as the source reads it. */
 export const NARRATIVE_SETTLE_HOURS = 1;
 
-/**
- * Whether a topic is being written about faster than in the two days before.
- *
- * Only hours the ledger holds are averaged. An hour with no row was either
- * not read or held no article, and the ledger cannot say which, so it is left
- * out of both means rather than counted as zero.
- */
-export function computeNarrativeSignals(input: { topic: NarrativeTopic; points: readonly LedgerPoint[]; at: Date }): ContextReading {
-  const newest = Math.floor(input.at.getTime() / HOUR_MS) - 1 - NARRATIVE_SETTLE_HOURS;
+/** The counts held for the newest settled hours and for the baseline hours before them. */
+export function narrativeWindows(points: readonly LedgerPoint[], at: Date): { recent: number[]; baseline: number[]; newestHour: number } {
+  const newest = Math.floor(at.getTime() / HOUR_MS) - 1 - NARRATIVE_SETTLE_HOURS;
   const byHour = new Map<number, number>();
-  for (const point of input.points) {
+  for (const point of points) {
     const time = Date.parse(point.eventTime);
     if (Number.isFinite(time) && Number.isFinite(point.value) && point.value >= 0) byHour.set(Math.floor(time / HOUR_MS), point.value);
   }
@@ -82,8 +76,22 @@ export function computeNarrativeSignals(input: { topic: NarrativeTopic; points: 
     for (let hour = from; hour <= to; hour++) { const value = byHour.get(hour); if (value !== undefined) values.push(value); }
     return values;
   };
-  const recent = collect(newest - NARRATIVE_RECENT_HOURS + 1, newest);
-  const baseline = collect(newest - NARRATIVE_RECENT_HOURS - NARRATIVE_BASELINE_HOURS + 1, newest - NARRATIVE_RECENT_HOURS);
+  return {
+    recent: collect(newest - NARRATIVE_RECENT_HOURS + 1, newest),
+    baseline: collect(newest - NARRATIVE_RECENT_HOURS - NARRATIVE_BASELINE_HOURS + 1, newest - NARRATIVE_RECENT_HOURS),
+    newestHour: newest
+  };
+}
+
+/**
+ * Whether a topic is being written about faster than in the two days before.
+ *
+ * Only hours the ledger holds are averaged. An hour with no row was either
+ * not read or held no article, and the ledger cannot say which, so it is left
+ * out of both means rather than counted as zero.
+ */
+export function computeNarrativeSignals(input: { topic: NarrativeTopic; points: readonly LedgerPoint[]; at: Date }): ContextReading {
+  const { recent, baseline } = narrativeWindows(input.points, input.at);
   if (recent.length < NARRATIVE_MIN_RECENT_HOURS || baseline.length < NARRATIVE_MIN_BASELINE_HOURS) return { signals: [], qualityGrade: "LOW" };
 
   const qualityGrade = recent.length === NARRATIVE_RECENT_HOURS && baseline.length >= 40 ? "HIGH" : "MEDIUM";

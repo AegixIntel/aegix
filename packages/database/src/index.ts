@@ -170,6 +170,7 @@ export {
   createObservationRepo,
   type ObservationRepo,
   type ObservationPointRow,
+  type CaptureCoverageRow,
   type CaptureDomain,
   type ContextCaptureRow,
   type SignalCaptureWrite,

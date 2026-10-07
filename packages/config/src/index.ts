@@ -223,6 +223,15 @@ const envSchema = z.object({
   // sweep, so Rewind can replay them. Needs ENABLE_NARRATIVE_CONTEXT_CAPTURE
   // or ENABLE_SECTOR_CAPTURE: with neither, there is nothing to read.
   ENABLE_CONTEXT_SIGNAL_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  // D15: the market intelligence engines, see
+  // docs/milestone-d15-market-intelligence-engines.md. All default off. The
+  // anomaly capture writes signal captures from then on; the other four only
+  // read what the ledger and the captures already hold.
+  ENABLE_ANOMALY_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_ANOMALY_DETECTION: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_NARRATIVE_RADAR: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_SIGNAL_ENGINE: z.preprocess(boolEnv, z.boolean()).default(false),
+  ENABLE_CROSS_MARKET: z.preprocess(boolEnv, z.boolean()).default(false),
   NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
   OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
   SERIES_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),

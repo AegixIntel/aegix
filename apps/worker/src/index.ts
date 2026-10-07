@@ -7,7 +7,7 @@ import { processAnalysis } from "./processors/analysis.js";
 import { processMonitorJob } from "./processors/monitoring.js";
 import { processWebhookJob } from "./processors/webhooks.js";
 import { runBillingLifecycle } from "./processors/billing.js";
-import { anchorDiscoveryChain, captureFundSignals, captureMarketSignals, captureNarrativeSignals, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
+import { anchorDiscoveryChain, captureFundSignals, captureMarketSignals, captureNarrativeSignals, captureSeriesAnomalies, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
 import { DAILY_PROFILE, HOURLY_PROFILE } from "@aegix/discovery";
 import { createCoinPaprikaProvider } from "@aegix/markets";
 import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createSectorQuoteSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
@@ -304,6 +304,20 @@ try {
       const result = await captureFundSignals({ config, sql, logger }, at);
       if (result.captured > 0) logger.info("fund signal capture sweep", { ...result });
     } : undefined);
+  }
+  // D15: reads the ledger the sources above write. Each series is stored once
+  // per hourly change, so sweeping at the capture interval only decides how
+  // soon after the hour a change is read.
+  if (config.ENABLE_ANOMALY_CAPTURE) {
+    const detect = () => {
+      void captureSeriesAnomalies({ config, sql, logger })
+        .then((result) => { if (result.captured > 0) logger.info("anomaly capture sweep", { ...result }); })
+        .catch((error: unknown) => {
+          logger.error("anomaly capture sweep failed", { error: error instanceof Error ? error.message : "unknown" });
+        });
+    };
+    detect();
+    sourceTimers.push(setInterval(detect, config.REWIND_CAPTURE_INTERVAL_SECONDS * 1000));
   }
   if (config.ENABLE_DISCOVERY) {
     const profiles = config.ENABLE_DISCOVERY_DAILY ? [HOURLY_PROFILE, DAILY_PROFILE] : [HOURLY_PROFILE];

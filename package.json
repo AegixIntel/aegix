@@ -49,6 +49,7 @@
     "test:pipeline-wiring": "node --import tsx tests/e2e-pipeline-wiring.ts",
     "billing:grant": "node --import tsx scripts/grant-plan.ts",
     "test:e2e-d14": "node --import tsx tests/e2e-d14.ts",
+    "test:e2e-d15": "node --import tsx tests/e2e-d15.ts",
     "verify:tokenized-stocks": "node --import tsx scripts/verify-tokenized-stocks.ts"
   },
   "devDependencies": {

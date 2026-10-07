@@ -27,8 +27,17 @@ export interface StoredCaptureRow {
   signals: StoredSignalRow[];
 }
 
-/** What a capture is of: a market asset, a news topic, or a sector or commodity fund. */
-export type CaptureDomain = "MARKET" | "NARRATIVE" | "SECTOR";
+/** What a capture is of: a market asset, a news topic, a sector or commodity fund, or one ledger series read for anomalies. */
+export type CaptureDomain = "MARKET" | "NARRATIVE" | "SECTOR" | "ANOMALY";
+
+export interface CaptureCoverageRow {
+  domain: CaptureDomain;
+  captures: number;
+  signalled: number;
+  subjects: number;
+  first_observed_at: string | null;
+  last_observed_at: string | null;
+}
 
 /** A capture that held at least one signal, with the subject it belongs to. */
 export interface ContextCaptureRow extends StoredCaptureRow {
@@ -61,6 +70,10 @@ export interface ObservationRepo {
    * oldest first: what the news and the funds were doing around a subject.
    */
   signalledCapturesBetween(domains: CaptureDomain[], from: string, before: string, limit: number): Promise<ContextCaptureRow[]>;
+  /** The newest captures of whole domains stored in [from, before) that held a signal, newest first. */
+  latestSignalledCaptures(domains: CaptureDomain[], from: string, before: string, limit: number): Promise<ContextCaptureRow[]>;
+  /** How many captures each domain stored in [from, before), how many held a signal, and over how many subjects. */
+  captureCoverage(domains: CaptureDomain[], from: string, before: string): Promise<CaptureCoverageRow[]>;
   /** Completed wallet analyses in [from, before), with the signals each one stored. */
   walletCapturesBetween(chain: string, address: string, from: string, before: string): Promise<StoredCaptureRow[]>;
 }
@@ -156,6 +169,35 @@ export function createObservationRepo(sql: Sql): ObservationRepo {
         group by c.id
         order by c.observed_at asc
         limit ${limit}
+      `;
+    },
+
+    async latestSignalledCaptures(domains, from, before, limit) {
+      if (domains.length === 0) return [];
+      return sql<ContextCaptureRow[]>`
+        select c.id::text, c.domain, c.subject, c.observed_at, c.engine_version, c.quality_grade, c.provider_status,
+          json_agg(json_build_object(
+            'type', s.signal_type, 'severity', s.severity, 'confidence', s.confidence::float8,
+            'title', s.title, 'summary', s.summary, 'evidence', s.evidence, 'engineVersion', s.engine_version
+          ) order by s.severity desc, s.signal_type asc) as signals
+        from signal_captures c
+        join signal_snapshots s on s.capture_id = c.id
+        where c.domain = any(${domains}) and c.signal_count > 0
+          and c.observed_at >= ${from}::timestamptz and c.observed_at < ${before}::timestamptz
+        group by c.id
+        order by c.observed_at desc, c.id desc
+        limit ${limit}
+      `;
+    },
+
+    async captureCoverage(domains, from, before) {
+      if (domains.length === 0) return [];
+      return sql<CaptureCoverageRow[]>`
+        select domain, count(*)::int as captures, count(*) filter (where signal_count > 0)::int as signalled,
+          count(distinct subject)::int as subjects, min(observed_at) as first_observed_at, max(observed_at) as last_observed_at
+        from signal_captures
+        where domain = any(${domains}) and observed_at >= ${from}::timestamptz and observed_at < ${before}::timestamptz
+        group by domain
       `;
     },
 

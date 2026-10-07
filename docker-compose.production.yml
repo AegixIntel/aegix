@@ -95,6 +95,12 @@ services:
       ENABLE_OPTIONS_CAPTURE: ${ENABLE_OPTIONS_CAPTURE:-false}
       ENABLE_SECTOR_CAPTURE: ${ENABLE_SECTOR_CAPTURE:-false}
       ENABLE_CONTEXT_SIGNAL_CAPTURE: ${ENABLE_CONTEXT_SIGNAL_CAPTURE:-false}
+      # D15: see docs/milestone-d15-market-intelligence-engines.md §6.
+      ENABLE_ANOMALY_CAPTURE: ${ENABLE_ANOMALY_CAPTURE:-false}
+      ENABLE_ANOMALY_DETECTION: ${ENABLE_ANOMALY_DETECTION:-false}
+      ENABLE_NARRATIVE_RADAR: ${ENABLE_NARRATIVE_RADAR:-false}
+      ENABLE_SIGNAL_ENGINE: ${ENABLE_SIGNAL_ENGINE:-false}
+      ENABLE_CROSS_MARKET: ${ENABLE_CROSS_MARKET:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
