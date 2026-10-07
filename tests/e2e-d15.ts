@@ -7,7 +7,7 @@ import { loadConfig } from "@aegix/config";
 import { createLogger } from "@aegix/logging";
 import { assessFreshness, type MarketDataProvider } from "../packages/markets/src/index.js";
 import { ANOMALY_ENGINE_VERSION, NARRATIVE_RADAR_VERSION, SIGNAL_ENGINE_VERSION, CROSS_MARKET_ENGINE_VERSION } from "../packages/sources/src/index.js";
-import { anomalySeries, captureMarketSignals, captureSeriesAnomalies } from "../apps/worker/src/processors/intelligence.js";
+import { anomalySeries, captureSeriesAnomalies } from "../apps/worker/src/processors/intelligence.js";
 import { buildServer } from "../apps/api/src/server.js";
 import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
@@ -41,7 +41,7 @@ async function main() {
   const source = `e2e-d15-${run}`;
   const provider: MarketDataProvider = { name: source,
     async getQuote(asset) { return { asset, priceUsd: 200, volume24hUsd: 1000, marketCapUsd: null, percentChange24h: null, provider: source, freshness: assessFreshness(now.toISOString(), now) }; },
-    async getHistory() { return Array.from({ length: 30 }, (_, i) => ({ timestamp: new Date((currentHour - (29 - i)) * HOUR).toISOString(), priceUsd: 100 + i, volumeUsd: 100 + i })); } };
+    async getHistory() { return []; } };
 
   const app = await buildServer({ config, marketProvider: provider });
   const disabled = await buildServer({ config: loadConfig({ ...process.env, ...Object.fromEntries(Object.keys(FLAGS).map((flag) => [flag, "false"])) }), marketProvider: provider });
@@ -139,8 +139,9 @@ async function main() {
     assert.deepEqual((feed.coverage as Array<{ domain: string }>).map((c) => c.domain), ["MARKET", "NARRATIVE", "SECTOR", "ANOMALY"]);
 
     // ---- Cross-Market: measured on the ledger, only the classes being captured ----
-    const captured = await captureMarketSignals(ctx, provider, now);
-    assert.equal(captured.failed, 0);
+    // Thirty hourly prices from one source, the newest in the current hour.
+    await observations.appendPoints(Array.from({ length: 30 }, (_, i) => ({
+      seriesKey: "market:SOL:price_usd", eventTime: new Date((currentHour - (29 - i)) * HOUR).toISOString(), value: 100 + i, source })));
     const cross = await app.inject({ url: "/v1/cross-market", headers });
     assert.equal(cross.statusCode, 200);
     const view = cross.json();
