@@ -42,7 +42,7 @@ import { createCache } from "@aegix/cache";
 import { createQueues, queueForPriority } from "@aegix/queue";
 import { explainPath, explainSignal } from "@aegix/explanation";
 import { buildWalletContext, type WalletContextProfile } from "@aegix/context";
-import { createOpenAICompatibleProvider } from "@aegix/ai";
+import { createOpenAICompatibleProvider, type AIProvider } from "@aegix/ai";
 import { createManualProvider, type FeatureKey } from "@aegix/billing";
 import { createBillingRepo } from "@aegix/database";
 import { createEntitlementService } from "./entitlements.js";
@@ -54,6 +54,7 @@ import { registerMarkets } from "./markets.js";
 import { registerRewind } from "./rewind.js";
 import { registerDiscovery } from "./discovery.js";
 import { registerMarketIntelligence } from "./market-intelligence.js";
+import { registerCopilot } from "./copilot.js";
 import { loadContextSupporting } from "./context-supporting.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
@@ -73,6 +74,8 @@ export interface ApiDeps {
   config: AppConfig;
   provider?: BlockchainProvider;
   marketProvider?: MarketDataProvider;
+  /** The model behind the copilot; tests supply one that answers without a network. */
+  aiProvider?: AIProvider;
 }
 
 const ENGINE_SCOPE = "full";
@@ -1649,6 +1652,13 @@ export async function buildServer(deps: ApiDeps) {
   registerDiscovery({ app, config, sql, requireUser });
   // ---- D15: Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market (read-only) ----
   registerMarketIntelligence({ app, config, sql, requireUser });
+  // ---- D16: AI Intelligence Copilot (explains the record above; decides nothing) ----
+  registerCopilot({
+    app, sql, config, logger, requireUser,
+    provider: deps.aiProvider ?? createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
+    loadWalletContext: loadWalletContextProfile,
+    claimQuota: async (userId) => claimDailyUsage(sql, userId, "ask_aegix", await entitlements.limit(userId, "ask.daily"))
+  });
 
   // ---- D11: billing / entitlements (architecture.md §69) ----
   registerBilling({

@@ -101,6 +101,8 @@ services:
       ENABLE_NARRATIVE_RADAR: ${ENABLE_NARRATIVE_RADAR:-false}
       ENABLE_SIGNAL_ENGINE: ${ENABLE_SIGNAL_ENGINE:-false}
       ENABLE_CROSS_MARKET: ${ENABLE_CROSS_MARKET:-false}
+      # D16: see docs/milestone-d16-ai-copilot.md.
+      ENABLE_AI_COPILOT: ${ENABLE_AI_COPILOT:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }

@@ -185,7 +185,14 @@ export const products: Product[] = [
   },
 
   // Later.
-  { id: "ai-intelligence-copilot", name: "AI Intelligence Copilot", status: "PLANNED", surfaces: ["ROADMAP", "CATEGORY"] },
+  // D16. Built and switched off by default, like the D15 engines it reads.
+  {
+    id: "ai-intelligence-copilot",
+    name: "AI Intelligence Copilot",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP", "CATEGORY"],
+    note: "Built, not yet switched on. Answers a question from what AEGIX's engines already stored: signals, anomalies, discoveries, news coverage and the cross-market view. It explains that record and decides nothing in it; a statement that cites nothing AEGIX issued is removed. Requires a configured LLM provider."
+  },
   {
     id: "wallet-reputation",
     name: "Wallet Reputation",
@@ -345,6 +352,7 @@ export const appNavGroups: AppNavGroup[] = [
       { label: "Anomalies", href: "/app/anomalies" },
       { label: "Signals", href: "/app/signals" },
       { label: "Cross-Market", href: "/app/cross-market" },
+      { label: "Copilot", href: "/app/copilot" },
       { label: "Network intelligence", href: "/app/network" }
     ]
   },
