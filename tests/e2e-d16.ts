@@ -4,7 +4,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import base58 from "bs58";
 import { createDb, createObservationRepo } from "@aegix/database";
 import { loadConfig } from "@aegix/config";
-import { AIError, COPILOT_ENGINE_VERSION, COPILOT_SYSTEM_PROMPT, type AIProvider, type GenerateRequest } from "../packages/ai/src/index.js";
+import { AIError, COPILOT_ENGINE_VERSION, COPILOT_SYSTEM_PROMPT, type AIProvider, type GenerateRequest } from "@aegix/ai";
 import { buildServer } from "../apps/api/src/server.js";
 import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
