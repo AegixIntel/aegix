@@ -54,7 +54,6 @@ import { registerMarkets } from "./markets.js";
 import { registerRewind } from "./rewind.js";
 import { registerDiscovery } from "./discovery.js";
 import { registerMarketIntelligence } from "./market-intelligence.js";
-import { registerMarketIntelligence } from "./market-intelligence.js";
 import { loadContextSupporting } from "./context-supporting.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
