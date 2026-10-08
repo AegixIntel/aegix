@@ -58,7 +58,7 @@ async function main(): Promise<void> {
     const [fixture] = await sql<Array<{ id: string }>>`select id from profiles where id = ${fixtureId}`;
     assert.equal(fixture?.id, fixtureId, "existing fixture data survives idempotent migrations");
     const [count] = await sql<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.equal(Number(count?.count), 16, "exactly sixteen migrations are recorded");
+    assert.equal(Number(count?.count), 17, "exactly seventeen migrations are recorded");
   } finally {
     await sql.end();
   }
@@ -112,8 +112,8 @@ async function main(): Promise<void> {
       select to_regclass('public.billing_upgrade_requests') is not null as exists
     `;
     assert.equal(requests?.exists, true, "migration 0011 creates the upgrade request table");
-    assert.equal(Number(count?.count), 16, "D7 upgrade records migrations 0009-0016 exactly once");
-    console.log("16 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
+    assert.equal(Number(count?.count), 17, "D7 upgrade records migrations 0009-0017 exactly once");
+    console.log("17 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
   } finally {
     await upgraded.end();
   }

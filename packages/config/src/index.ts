@@ -219,6 +219,10 @@ const envSchema = z.object({
   // Sector and commodity fund prices, from the same Cboe feed as options and
   // with the same standing: delayed, and no redistribution licence.
   ENABLE_SECTOR_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
+  // Stores a signal capture per news topic and per fund after their sources
+  // sweep, so Rewind can replay them. Needs ENABLE_NARRATIVE_CONTEXT_CAPTURE
+  // or ENABLE_SECTOR_CAPTURE: with neither, there is nothing to read.
+  ENABLE_CONTEXT_SIGNAL_CAPTURE: z.preprocess(boolEnv, z.boolean()).default(false),
   NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
   OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
   SERIES_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),

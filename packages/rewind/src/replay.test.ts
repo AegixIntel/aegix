@@ -89,3 +89,18 @@ test("series keys name the measurement, not the provider", () => {
   assert.equal(marketSeriesKey("SOL", "price_usd"), "market:SOL:price_usd");
   assert.equal(marketSeries(["BTC", "ETH"]).length, 4);
 });
+
+test("context captures are admitted under the same window and lock, one entry per subject and signal", () => {
+  const around = (id: string, hoursBefore: number, subject: string, types: string[]) => ({ ...capture(id, hoursBefore, types), domain: "NARRATIVE", subject, label: `${subject} news coverage` });
+  const result = buildReplay({ subject: "SOL", eventTime: EVENT, lookbackHours: 24, requestedAt: NOW, captures: [capture("own", 5, [])], context: [
+    around("late", -1, "copper", ["NARRATIVE_ACCELERATION"]),
+    around("second", 6, "copper", ["NARRATIVE_ACCELERATION"]),
+    around("first", 20, "copper", ["NARRATIVE_ACCELERATION"]),
+    around("other", 3, "uranium", ["NARRATIVE_ACCELERATION"]),
+    around("old", 40, "uranium", ["NARRATIVE_ACCELERATION"])
+  ] });
+  assert.deepEqual(result.context.map((c) => [c.subject, c.captures, c.leadSeconds]), [["copper", 2, 20 * 3600], ["uranium", 1, 3 * 3600]]);
+  assert.equal(result.context[0]!.lastObservedAt, new Date(Date.parse(EVENT) - 6 * 3_600_000).toISOString());
+  assert.equal(result.verdict, "NOTHING_OBSERVED", "what the news was doing is not a signal on the subject");
+  assert.ok(result.limitations.some((l) => l.includes("surroundings")));
+});

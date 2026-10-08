@@ -18,8 +18,10 @@ import { createDiscoveryRepo, createObservationRepo, type Sql } from "@aegix/dat
 import { CANONICAL_ASSETS, MARKETS_ENGINE_VERSION, computeMarketSignals, createMarketService, type MarketDataProvider } from "@aegix/markets";
 import { marketSeries, marketSeriesKey, type SeriesDescriptor } from "@aegix/rewind";
 import {
-  TOKENIZED_STOCKS, narrativeContextSeries, narrativeSeries, optionsSeries, sectorQuoteSeries, tokenizedStockSeries, tokenizedStockSeriesKey,
-  type SeriesSource, type TokenizedStock
+  CONTEXT_ENGINE_VERSION, NARRATIVE_BASELINE_HOURS, NARRATIVE_CONTEXT_SOURCE, NARRATIVE_RECENT_HOURS, NARRATIVE_TOPICS, QUOTED_FUNDS, SECTOR_QUOTES_SOURCE,
+  TOKENIZED_STOCKS, computeFundSignals, computeNarrativeSignals, fundPriceSeriesKey, narrativeContextSeries, narrativeContextSeriesKey, narrativeSeries,
+  narrativeTopicFor, optionsSeries, sectorQuoteSeries, tokenizedStockSeries, tokenizedStockSeriesKey, usEquitySessionOpen,
+  type ContextSignal, type NarrativeTopic, type QuotedFund, type SeriesSource, type TokenizedStock
 } from "@aegix/sources";
 import {
   DISCOVERY_FDR_LEVEL, HOURLY_PROFILE, epochEndFor, parseCalendars, runScan, scanHorizonHours, submitToCalendar,
@@ -148,6 +150,86 @@ export async function captureTokenizedStockSignals(
         type: s.type, severity: s.severity, confidence: s.confidence, title: s.title,
         summary: s.summary, evidence: s.evidence, engineVersion: s.engineVersion
       }))
+    });
+    if (stored) result.captured += 1; else result.skipped += 1;
+  }
+  return result;
+}
+
+const HOUR_MS = 3_600_000;
+
+const storedSignals = (signals: ContextSignal[]) => signals.map((s) => ({
+  type: s.type, severity: s.severity, confidence: s.confidence, title: s.title,
+  summary: s.summary, evidence: s.evidence, engineVersion: s.engineVersion
+}));
+
+/**
+ * Stores one capture of the news topic whose turn the context source just
+ * took, so Rewind can replay what its coverage was doing. One per topic per
+ * hour. The reading is made here, once, from the ledger as it stands; a
+ * topic with too few hours on record is stored as a capture with no signal
+ * and LOW quality, which is what was knowable.
+ */
+export async function captureNarrativeSignals(
+  ctx: IntelligenceContext,
+  at: Date = new Date(),
+  topics: readonly NarrativeTopic[] = NARRATIVE_TOPICS
+): Promise<CaptureResult> {
+  const repo = createObservationRepo(ctx.sql);
+  const topic = narrativeTopicFor(at, topics);
+  const key = narrativeContextSeriesKey(topic.id);
+  const from = new Date(at.getTime() - (NARRATIVE_RECENT_HOURS + NARRATIVE_BASELINE_HOURS + 4) * HOUR_MS).toISOString();
+  const rows = await repo.pointsBetween([key], from, at.toISOString());
+  const points = rows.filter((r) => r.source === NARRATIVE_CONTEXT_SOURCE).map((r) => ({ eventTime: new Date(r.event_time).toISOString(), value: Number(r.value) }));
+  const reading = computeNarrativeSignals({ topic, points, at });
+  const stored = await repo.recordCapture({
+    domain: "NARRATIVE",
+    subject: topic.id,
+    bucketStart: new Date(Math.floor(at.getTime() / HOUR_MS) * HOUR_MS).toISOString(),
+    engineVersion: CONTEXT_ENGINE_VERSION,
+    provider: NARRATIVE_CONTEXT_SOURCE,
+    providerStatus: "OK",
+    qualityGrade: reading.qualityGrade,
+    signals: storedSignals(reading.signals)
+  });
+  return { captured: stored ? 1 : 0, skipped: stored ? 0 : 1, failed: 0, pointsAdded: 0 };
+}
+
+/**
+ * Stores one capture per sector and commodity fund that has a price today,
+ * once an hour while the US session is open. Outside it the feed stands
+ * still, the source reads nothing, and no capture is written.
+ */
+export async function captureFundSignals(
+  ctx: IntelligenceContext,
+  at: Date = new Date(),
+  funds: readonly QuotedFund[] = QUOTED_FUNDS
+): Promise<CaptureResult> {
+  const result: CaptureResult = { captured: 0, skipped: 0, failed: 0, pointsAdded: 0 };
+  if (!usEquitySessionOpen(at)) return result;
+  const repo = createObservationRepo(ctx.sql);
+  const from = new Date(at.getTime() - 8 * 24 * HOUR_MS).toISOString();
+  const rows = await repo.pointsBetween(funds.map((f) => fundPriceSeriesKey(f.symbol)), from, new Date(at.getTime() + 1).toISOString());
+  const points = new Map(funds.map((f) => {
+    const key = fundPriceSeriesKey(f.symbol);
+    return [f.symbol, rows.filter((r) => r.series_key === key && r.source === SECTOR_QUOTES_SOURCE)
+      .map((r) => ({ eventTime: new Date(r.event_time).toISOString(), value: Number(r.value) }))] as const;
+  }));
+  const readings = computeFundSignals({ funds, points, at });
+  const bucketStart = new Date(Math.floor(at.getTime() / HOUR_MS) * HOUR_MS).toISOString();
+  for (const fund of funds) {
+    const reading = readings.get(fund.symbol);
+    // No price today: nobody looked at this fund in this sweep.
+    if (!reading || Date.parse(reading.currentAt) < Date.parse(bucketStart)) { result.skipped += 1; continue; }
+    const stored = await repo.recordCapture({
+      domain: "SECTOR",
+      subject: fund.symbol,
+      bucketStart,
+      engineVersion: CONTEXT_ENGINE_VERSION,
+      provider: SECTOR_QUOTES_SOURCE,
+      providerStatus: "OK",
+      qualityGrade: reading.qualityGrade,
+      signals: storedSignals(reading.signals)
     });
     if (stored) result.captured += 1; else result.skipped += 1;
   }

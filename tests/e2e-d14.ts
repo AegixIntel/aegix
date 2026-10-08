@@ -7,8 +7,8 @@ import { loadConfig } from "@aegix/config";
 import { createLogger } from "@aegix/logging";
 import { assessFreshness, type MarketDataProvider } from "../packages/markets/src/index.js";
 import { DISCOVERY_WINDOW_HOURS, runScan } from "../packages/discovery/src/index.js";
-import { tokenizedStockSeriesKey, type SeriesSource } from "../packages/sources/src/index.js";
-import { anchorDiscoveryChain, captureMarketSignals, captureSeriesSource, captureTokenizedStockSignals, discoverySeries } from "../apps/worker/src/processors/intelligence.js";
+import { CONTEXT_ENGINE_VERSION, NARRATIVE_CONTEXT_SOURCE, SECTOR_QUOTES_SOURCE, fundPriceSeriesKey, narrativeContextSeriesKey, tokenizedStockSeriesKey, type SeriesSource } from "../packages/sources/src/index.js";
+import { anchorDiscoveryChain, captureFundSignals, captureMarketSignals, captureNarrativeSignals, captureSeriesSource, captureTokenizedStockSignals, discoverySeries } from "../apps/worker/src/processors/intelligence.js";
 import { buildServer } from "../apps/api/src/server.js";
 import { requireSafeTestDatabaseReset } from "./helpers/test-environment.js";
 
@@ -144,6 +144,53 @@ async function main() {
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_TOKENIZED_STOCK_CAPTURE: "true", ENABLE_NARRATIVE_CAPTURE: "true" })).length, 28 + 8);
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_NARRATIVE_CONTEXT_CAPTURE: "true" })).length, 8, "the context reading is its own eight series");
     assert.equal(discoverySeries(loadConfig({ ...process.env, ENABLE_SECTOR_CAPTURE: "true" })).length, 16, "sector and commodity funds are sixteen series");
+
+    // ---- Context signals: a news topic and a fund are captured once, and an asset's replay shows them ----
+    const beforeContext = new Date().toISOString();
+    const topic = { id: `e2e-${run}`, label: "E2E topic", query: "e2e" };
+    const settled = Math.floor(now.getTime() / HOUR) - 2;
+    await observations.appendPoints(Array.from({ length: 54 }, (_, i) => ({
+      seriesKey: narrativeContextSeriesKey(topic.id), eventTime: new Date((settled - 53 + i) * HOUR).toISOString(), value: i < 48 ? 5 : 12, source: NARRATIVE_CONTEXT_SOURCE })));
+    assert.deepEqual(await captureNarrativeSignals({ config, sql, logger }, now, [topic]), { captured: 1, skipped: 0, failed: 0, pointsAdded: 0 });
+    assert.equal((await captureNarrativeSignals({ config, sql, logger }, now, [topic])).captured, 0, "a topic is captured once an hour");
+    const [topicCapture] = await sql<Array<{ signal_count: number; quality_grade: string; engine_version: string }>>`
+      select signal_count, quality_grade, engine_version from signal_captures where domain = 'NARRATIVE' and subject = ${topic.id}`;
+    assert.deepEqual({ ...topicCapture }, { signal_count: 1, quality_grade: "HIGH", engine_version: CONTEXT_ENGINE_VERSION });
+    await assert.rejects(sql`delete from signal_captures where domain = 'NARRATIVE' and subject = ${topic.id}`, APPEND_ONLY);
+    await assert.rejects(sql`insert into signal_captures (domain, subject, bucket_start, engine_version, provider, provider_status, quality_grade, signal_count)
+      values ('OTHER', 'x', now(), 'e2e', 'e2e', 'OK', 'HIGH', 0)`, /signal_captures_domain_check/);
+
+    // A Tuesday at 14:30 in New York; the funds are this run's own.
+    const session = new Date("2026-10-06T18:30:00.000Z");
+    const funds = Array.from({ length: 9 }, (_, i) => ({ symbol: `E${i}${run.slice(0, 8)}`, holds: "an e2e sector", group: `sector:e2e-${i}` }));
+    await observations.appendPoints(funds.flatMap((fund, i) => [
+      { seriesKey: fundPriceSeriesKey(fund.symbol), eventTime: "2026-10-05T20:03:00.000Z", value: 100, source: SECTOR_QUOTES_SOURCE },
+      { seriesKey: fundPriceSeriesKey(fund.symbol), eventTime: "2026-10-06T18:03:00.000Z", value: i === 0 ? 103 : 100.2, source: SECTOR_QUOTES_SOURCE }]));
+    const fundCapture = await captureFundSignals({ config, sql, logger }, session, funds);
+    assert.equal(fundCapture.captured, 9, "every fund with a price in this hour is captured");
+    assert.equal((await captureFundSignals({ config, sql, logger }, session, funds)).captured, 0);
+    assert.deepEqual(await captureFundSignals({ config, sql, logger }, new Date("2026-10-04T18:30:00.000Z"), funds), { captured: 0, skipped: 0, failed: 0, pointsAdded: 0 }, "nothing is captured on a Sunday");
+    const fundSignals = await sql<Array<{ signal_type: string }>>`
+      select s.signal_type from signal_snapshots s join signal_captures c on c.id = s.capture_id
+      where c.domain = 'SECTOR' and c.subject = ${funds[0]!.symbol} order by s.signal_type`;
+    assert.deepEqual(fundSignals.map((s) => s.signal_type), ["FUND_DAILY_MOVE", "SECTOR_RELATIVE_STRENGTH"]);
+
+    const withContext = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: new Date().toISOString(), lookbackHours: 24 })).json();
+    const mine = withContext.context.filter((c: { subject: string }) => c.subject === topic.id || c.subject === funds[0]!.symbol);
+    assert.deepEqual(mine.map((c: { domain: string; signalType: string }) => `${c.domain}:${c.signalType}`).sort(),
+      ["NARRATIVE:NARRATIVE_ACCELERATION", "SECTOR:FUND_DAILY_MOVE", "SECTOR:SECTOR_RELATIVE_STRENGTH"], "an asset's replay shows the news and fund signals stored in its window");
+    assert.ok(withContext.context.every((c: { firstObservedAt: string }) => c.firstObservedAt < withContext.lockedAt));
+    const earlier = (await rewind({ subjectType: "asset", subject: "SOL", eventTime: beforeContext, lookbackHours: 24 })).json();
+    assert.ok(!earlier.context.some((c: { subject: string }) => c.subject === topic.id), "a context capture stored after the event is hindsight");
+    const topicReplay = await rewind({ subjectType: "narrative", subject: "copper", eventTime: new Date().toISOString(), lookbackHours: 24 });
+    assert.equal(topicReplay.statusCode, 200);
+    assert.ok(topicReplay.json().limitations.some((l: string) => l.includes("not sentiment")));
+    assert.equal((await rewind({ subjectType: "sector", subject: "XLU", eventTime: new Date().toISOString() })).statusCode, 200);
+    assert.equal((await rewind({ subjectType: "narrative", subject: "weather", eventTime: new Date().toISOString() })).json().code, "UNKNOWN_TOPIC");
+    assert.equal((await rewind({ subjectType: "sector", subject: "ZZZ", eventTime: new Date().toISOString() })).json().code, "UNKNOWN_FUND");
+    const subjectLists = (await app.inject({ url: "/v1/rewind/subjects" })).json();
+    assert.equal(subjectLists.topics.length, 8);
+    assert.equal(subjectLists.funds.length, 16);
 
     // ---- Discovery: one ID per relationship, timestamped and chained ----
     const engineVersion = `e2e-d14-${run}`;

@@ -3,7 +3,7 @@ import type { AppConfig } from "@aegix/config";
 import { isValidSolanaAddress } from "@aegix/blockchain";
 import { createDiscoveryRepo, createObservationRepo, type DiscoveryRow, type Sql, type StoredCaptureRow } from "@aegix/database";
 import { CANONICAL_ASSETS, isCanonicalAsset } from "@aegix/markets";
-import { TOKENIZED_STOCKS, isTokenizedStockSymbol, tokenizedStockSeriesKey } from "@aegix/sources";
+import { NARRATIVE_TOPICS, QUOTED_FUNDS, TOKENIZED_STOCKS, isTokenizedStockSymbol, tokenizedStockSeriesKey } from "@aegix/sources";
 import {
   buildReplay, marketSeriesKey, MARKET_METRICS, replayWindow, RewindError, REWIND_DEFAULT_LOOKBACK_HOURS, REWIND_MAX_LOOKBACK_HOURS, REWIND_MIN_LOOKBACK_HOURS,
   type CaptureRecord, type KnownDiscovery
@@ -30,6 +30,15 @@ function toCapture(row: StoredCaptureRow): CaptureRecord {
 }
 
 const KNOWN_DISCOVERIES_LIMIT = 50;
+/** Context captures read for one replay; a 720-hour window of every topic and fund stays under it. */
+const CONTEXT_CAPTURES_LIMIT = 5000;
+
+/** What a context capture's subject is, in words. */
+function contextLabel(domain: string, subject: string): string {
+  if (domain === "NARRATIVE") return `${NARRATIVE_TOPICS.find((topic) => topic.id === subject)?.label ?? subject} news coverage`;
+  const fund = QUOTED_FUNDS.find((f) => f.symbol === subject);
+  return fund ? `${fund.symbol} fund (${fund.holds})` : subject;
+}
 
 /** The ledger series that belong to a replayable asset. */
 function subjectSeriesKeys(subject: string): string[] {
@@ -74,14 +83,16 @@ export function registerRewind(deps: RewindDeps): void {
       assets: [
         ...CANONICAL_ASSETS.map((asset) => ({ subject: asset as string, label: asset as string, kind: "MARKET_ASSET" })),
         ...TOKENIZED_STOCKS.filter((s) => s.pool).map((s) => ({ subject: s.symbol, label: `${s.symbol} — ${s.underlying} (tokenized, on-chain price)`, kind: "TOKENIZED_STOCK" }))
-      ]
+      ],
+      topics: NARRATIVE_TOPICS.map((topic) => ({ subject: topic.id, label: `${topic.label} — news coverage`, kind: "NEWS_TOPIC" })),
+      funds: QUOTED_FUNDS.map((fund) => ({ subject: fund.symbol, label: `${fund.symbol} — fund holding ${fund.holds}`, kind: "FUND" }))
     };
   });
 
-  app.post<{ Body: { subjectType: "asset" | "wallet"; subject: string; eventTime: string; lookbackHours?: number } }>("/v1/rewind", {
+  app.post<{ Body: { subjectType: "asset" | "wallet" | "narrative" | "sector"; subject: string; eventTime: string; lookbackHours?: number } }>("/v1/rewind", {
     config: { rateLimit: { max: config.REWIND_RATE_LIMIT_PER_MINUTE, timeWindow: "1 minute" } },
     schema: { body: { type: "object", additionalProperties: false, required: ["subjectType", "subject", "eventTime"], properties: {
-      subjectType: { type: "string", enum: ["asset", "wallet"] },
+      subjectType: { type: "string", enum: ["asset", "wallet", "narrative", "sector"] },
       subject: { type: "string", minLength: 1, maxLength: 44 },
       eventTime: { type: "string", maxLength: 40 },
       lookbackHours: { type: "number", minimum: REWIND_MIN_LOOKBACK_HOURS, maximum: REWIND_MAX_LOOKBACK_HOURS } } } }
@@ -95,20 +106,45 @@ export function registerRewind(deps: RewindDeps): void {
     const lookbackHours = req.body.lookbackHours ?? REWIND_DEFAULT_LOOKBACK_HOURS;
     if (subjectType === "asset" && !isCanonicalAsset(subject) && !isTokenizedStockSymbol(subject)) return reply.code(400).send({ code: "UNKNOWN_ASSET", message: "This asset cannot be replayed" });
     if (subjectType === "wallet" && !isValidSolanaAddress(subject)) return reply.code(400).send({ code: "INVALID_WALLET", message: "Invalid Solana wallet address" });
+    if (subjectType === "narrative" && !NARRATIVE_TOPICS.some((topic) => topic.id === subject)) return reply.code(400).send({ code: "UNKNOWN_TOPIC", message: "This news topic cannot be replayed" });
+    if (subjectType === "sector" && !QUOTED_FUNDS.some((fund) => fund.symbol === subject)) return reply.code(400).send({ code: "UNKNOWN_FUND", message: "This fund cannot be replayed" });
 
     const requestedAt = now().toISOString();
     try {
       const { start, lock } = replayWindow(eventTime, lookbackHours, requestedAt);
-      const rows = subjectType === "asset"
-        ? await repo.capturesBetween("MARKET", subject, start.toISOString(), lock.toISOString())
-        : await repo.walletCapturesBetween("solana", subject, start.toISOString(), lock.toISOString());
+      const rows = subjectType === "wallet"
+        ? await repo.walletCapturesBetween("solana", subject, start.toISOString(), lock.toISOString())
+        : await repo.capturesBetween(subjectType === "narrative" ? "NARRATIVE" : subjectType === "sector" ? "SECTOR" : "MARKET", subject, start.toISOString(), lock.toISOString());
+      // What news coverage and the funds were doing around an asset, as
+      // stored then. Captures that held a signal only: a quiet capture of a
+      // topic says nothing about the asset.
+      const around = subjectType === "asset"
+        ? await repo.signalledCapturesBetween(["NARRATIVE", "SECTOR"], start.toISOString(), lock.toISOString(), CONTEXT_CAPTURES_LIMIT)
+        : [];
       // Relationships the Discovery Engine had already stamped on this
       // subject's series. Read under the same lock, and only when that
       // product is on; a wallet has no series in the ledger.
       const known = subjectType === "asset" && config.ENABLE_DISCOVERY
         ? await discoveryRepo.knownBefore(subjectSeriesKeys(subject), lock.toISOString(), KNOWN_DISCOVERIES_LIMIT)
         : [];
-      const replay = buildReplay({ subject, eventTime, lookbackHours, requestedAt, captures: rows.map(toCapture), discoveries: known.map(toKnownDiscovery) });
+      const replay = buildReplay({
+        subject, eventTime, lookbackHours, requestedAt, captures: rows.map(toCapture), discoveries: known.map(toKnownDiscovery),
+        context: around.map((row) => ({ ...toCapture(row), domain: row.domain, subject: row.subject, label: contextLabel(row.domain, row.subject) }))
+      });
+      if (subjectType === "narrative") {
+        replay.limitations.push(
+          "A news topic's signals are measured on the number of articles GDELT's Context index saw mentioning it, per hour. That is how much was published, not sentiment, not social media, and not whether the coverage was accurate.",
+          "An hour with no article and an hour that was not read are both absent from the record, so both are left out of the averages.",
+          "A topic has one signal type, so no capture can hold three: the answer can be a signal observed, never a convergence."
+        );
+      }
+      if (subjectType === "sector") {
+        replay.limitations.push(
+          "A fund's signals are measured on its delayed price from the exchange's public website feed, read once an hour while the US market is open. Nothing is captured outside the session.",
+          "A fund's price is not the price of what it holds: a futures fund loses to the roll, and a miners' fund is shares of companies.",
+          "A fund has at most two signal types, so no capture can hold three: the answer can be a signal observed, never a convergence."
+        );
+      }
       if (subjectType === "asset" && isTokenizedStockSymbol(subject)) {
         replay.limitations.push(
           "Signals for a tokenized stock are measured on the token's price in one on-chain pool. That price can differ from the underlying equity, and it trades while the stock market is closed.",

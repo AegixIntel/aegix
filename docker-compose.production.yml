@@ -94,6 +94,7 @@ services:
       ENABLE_NARRATIVE_CONTEXT_CAPTURE: ${ENABLE_NARRATIVE_CONTEXT_CAPTURE:-false}
       ENABLE_OPTIONS_CAPTURE: ${ENABLE_OPTIONS_CAPTURE:-false}
       ENABLE_SECTOR_CAPTURE: ${ENABLE_SECTOR_CAPTURE:-false}
+      ENABLE_CONTEXT_SIGNAL_CAPTURE: ${ENABLE_CONTEXT_SIGNAL_CAPTURE:-false}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
