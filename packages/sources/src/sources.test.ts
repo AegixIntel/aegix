@@ -5,7 +5,7 @@ import {
   RAYDIUM_CLMM_PROGRAM, TOKENIZED_STOCKS, TOKEN_2022_PROGRAM, USDC_MINT, XSTOCKS_MINT_AUTHORITY,
   createTokenizedStockSource, decodeClmmPoolPrice, isTokenizedStockSymbol, tokenizedStockSeries, type TokenizedStock
 } from "./tokenized-stocks.js";
-import { GDELT_MAX_ATTEMPTS, GDELT_RETRY_WAIT_MS, GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, narrativeSeries, narrativeTopicFor } from "./narrative.js";
+import { GDELT_MAX_ATTEMPTS, GDELT_RETRY_WAIT_MS, GDELT_TIMEOUT_MS, NARRATIVE_ROTATION_MS, NARRATIVE_TOPICS, createNarrativeSource, hourlyNarrativeVolume, isEmptyGdeltTimeline, narrativeSeries, narrativeTopicFor } from "./narrative.js";
 import {
   CONTEXT_HOURS_PER_SWEEP, CONTEXT_MAX_RECORDS, CONTEXT_REQUEST_GAP_MS, NARRATIVE_CONTEXT_SOURCE,
   contextMentionCount, createNarrativeContextSource, narrativeContextSeries
@@ -126,7 +126,28 @@ test("narrative volume is averaged per completed hour", () => {
   assert.equal(hours[0]!.eventTime, "2026-10-01T02:00:00.000Z");
   assert.ok(Math.abs(hours[0]!.value - 0.3) < 1e-12);
   assert.equal(hours[1]!.value, 0.6);
-  assert.throws(() => hourlyNarrativeVolume({ timeline: [] }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  assert.throws(() => hourlyNarrativeVolume({ timeline: [{ series: "Volume Intensity" }] }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+  assert.throws(() => hourlyNarrativeVolume({ error: "x" }, AT), (e) => e instanceof SourceError && e.code === "MALFORMED_RESPONSE");
+});
+
+test("a window GDELT holds nothing for is an answer with no hours, not a malformed one", async () => {
+  // What GDELT sent on 2026-10-06 for the last three days, four days after its index stopped.
+  const empty = { query_details: { title: "bitcoin", date_resolution: "15m" }, timeline: [] };
+  assert.deepEqual(hourlyNarrativeVolume(empty, AT), []);
+  assert.deepEqual(hourlyNarrativeVolume({}, AT), [], "its answer for a window before the index begins");
+  assert.equal(isEmptyGdeltTimeline(gdelt([["20261001T020000Z", 0.5]])), false);
+  assert.equal(isEmptyGdeltTimeline({ timeline: "no" }), false);
+  assert.equal(isEmptyGdeltTimeline(null), false);
+
+  const emptyTopics: string[] = [];
+  const failures: string[] = [];
+  let requests = 0;
+  const source = createNarrativeSource({ sleep: async () => {}, onEmptyWindow: (id) => emptyTopics.push(id), onTopicFailure: (id) => failures.push(id),
+    fetchImpl: (async () => { requests += 1; return new Response(JSON.stringify(empty), { status: 200 }); }) as typeof fetch });
+  assert.deepEqual(await source.collect(AT), []);
+  assert.equal(requests, 1, "an empty answer is not asked for again");
+  assert.deepEqual(emptyTopics, [narrativeTopicFor(AT).id]);
+  assert.deepEqual(failures, []);
 });
 
 test("a sweep asks for exactly one topic, and the rotation reaches every topic", async () => {
