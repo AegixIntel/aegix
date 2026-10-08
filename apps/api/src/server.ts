@@ -53,6 +53,7 @@ import { createCoinPaprikaProvider, createMarketService, type MarketDataProvider
 import { registerMarkets } from "./markets.js";
 import { registerRewind } from "./rewind.js";
 import { registerDiscovery } from "./discovery.js";
+import { registerMarketIntelligence } from "./market-intelligence.js";
 import { loadContextSupporting } from "./context-supporting.js";
 import { createAuth, requireUser, type AuthUser } from "./auth.js";
 import { createWalletAuth, WALLET_AUTH_MESSAGE_VERSION } from "./wallet-auth.js";
@@ -1646,6 +1647,8 @@ export async function buildServer(deps: ApiDeps) {
   // ---- D14: Rewind and the Discovery Engine (stored captures only) ----
   registerRewind({ app, config, sql, requireUser });
   registerDiscovery({ app, config, sql, requireUser });
+  // ---- D15: Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market (read-only) ----
+  registerMarketIntelligence({ app, config, sql, requireUser });
 
   // ---- D11: billing / entitlements (architecture.md §69) ----
   registerBilling({

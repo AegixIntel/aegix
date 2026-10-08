@@ -135,16 +135,36 @@ export const products: Product[] = [
     body: "BTC, ETH and SOL price, volume, bounded hourly history and deterministic signals.",
     note: "BTC, ETH and SOL only, over a bounded hourly window. Sector, ETF, narrative and cross-market analysis are not built."
   },
-  { id: "narrative-radar", name: "Narrative Radar", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
+  // D15. Built and switched off by default: each stays IN DEVELOPMENT, with
+  // no link, until it is on in production and has a record to show.
+  {
+    id: "narrative-radar",
+    name: "Narrative Radar",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP"],
+    note: "Built, not yet switched on. Reads how many articles mention each of eight fixed news topics per hour and says which are accelerating or fading. It measures how much is published: not sentiment, and not social media."
+  },
   {
     id: "anomaly-detection",
     name: "Anomaly Detection",
     status: "IN DEVELOPMENT",
     surfaces: ["ROADMAP"],
-    note: "Market-domain anomaly detection depends on a licensed historical data source that the repository does not yet have."
+    note: "Built, not yet switched on. Measures each hourly change of a crypto, tokenized stock or news series against that series' own two weeks before, from the day its capture starts. Series priced only in the US session are not read."
   },
-  { id: "signal-engine", name: "Signal Engine", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
-  { id: "cross-market-intelligence", name: "Cross-Market Intelligence", status: "IN DEVELOPMENT", surfaces: ["ROADMAP"] },
+  {
+    id: "signal-engine",
+    name: "Signal Engine",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP"],
+    note: "Built, not yet switched on. Puts every stored signal of every domain on one timeline and marks the moments three or more market classes held one within six hours. It claims no link between them."
+  },
+  {
+    id: "cross-market-intelligence",
+    name: "Cross-Market Intelligence",
+    status: "IN DEVELOPMENT",
+    surfaces: ["ROADMAP"],
+    note: "Built, not yet switched on. Compares crypto assets, tokenized stocks priced on-chain and sector and commodity funds: returns, breadth and one week of correlation. Fund prices come from a delayed exchange feed with no redistribution licence; there is no licensed market data source."
+  },
   // D14. Both read the observation ledger, so each note says how far back
   // that ledger goes and where its history came from.
   {
@@ -321,6 +341,10 @@ export const appNavGroups: AppNavGroup[] = [
       { label: "Markets", href: "/app/markets" },
       { label: "Rewind", href: "/app/rewind" },
       { label: "Discoveries", href: "/app/discoveries" },
+      { label: "Narrative Radar", href: "/app/narratives" },
+      { label: "Anomalies", href: "/app/anomalies" },
+      { label: "Signals", href: "/app/signals" },
+      { label: "Cross-Market", href: "/app/cross-market" },
       { label: "Network intelligence", href: "/app/network" }
     ]
   },

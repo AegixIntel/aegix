@@ -151,28 +151,41 @@ expansion, momentum and anomaly (`packages/markets/src/signals.ts`). The
 anomaly signal is a statistical outlier against a short price window; it is
 not evidence of manipulation, and the product copy says so.
 
-**The four directions below have no engine and no data source.** They are
-stated as design intent and marked the same way on the website (`/markets`,
-`/roadmap`).
+**The four directions below each have a first engine (D15), switched off by
+default and not on in production.** They stay marked in development on the
+website (`/roadmap`) until they are on and have a record to show. Each line
+says the design intent, then what the engine actually does; the two are not
+the same size. See `docs/milestone-d15-market-intelligence-engines.md`.
 
 - **Narrative Radar** — detect when a theme moves from noise to momentum to
-  market attention to consensus.
+  market attention to consensus. *Built:* for eight fixed news topics, whether
+  the articles mentioning it per hour are accelerating or fading against the
+  two days before. News volume only: no sentiment, no social media, no stages
+  of attention.
 - **Anomaly Detector** — surface activity that deviates from historical
   expectation across price, volume, sector behavior and relative
-  performance. The output is "pay attention", never "buy" or "sell". This is
-  the market-domain detector; the repository has no historical baseline store
-  for it.
+  performance. The output is "pay attention", never "buy" or "sell". *Built:*
+  each hourly change of a crypto, tokenized stock or news series measured
+  against that series' own two weeks in the observation ledger, which is the
+  baseline store. Session-only series (options, funds) are not read.
 - **Cross-Market Intelligence** — map relationships between on-chain
   activity, crypto assets, sectors, public companies, ETFs and macro
-  signals.
+  signals. *Built:* returns, breadth and one week of correlation across the
+  classes AEGIX captures: three crypto assets, tokenized stocks priced
+  on-chain, and sector and commodity funds. No public companies' exchange
+  prices and no macro signals.
 - **Signal Engine** — aggregate independent indicators and report
-  convergence with an explicit confidence value.
+  convergence with an explicit confidence value. *Built:* one timeline of the
+  signals every engine stored, and the moments three or more market classes
+  held one within six hours. It reports that they coincided and gives no
+  confidence value, because nothing has tested that the coincidence means
+  anything.
 
-**What it would take.** A licensed market data source, a historical store for
-baselines, and an extension of the graph node types to `SECTOR`, `COMPANY`,
-`ETF` and `NARRATIVE`. None of these exist in the repository today. Until
-they do, the market sections of any public copy must stay marked as
-in development.
+**What it would still take.** A licensed market data source: the fund and
+options prices come from an exchange's delayed website feed with no
+redistribution licence, and nothing read from it should back a public claim.
+And an extension of the graph node types to `SECTOR`, `COMPANY`, `ETF` and
+`NARRATIVE`, which does not exist.
 
 ---
 

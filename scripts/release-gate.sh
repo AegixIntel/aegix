@@ -33,6 +33,7 @@ pnpm test:e2e-d10
 pnpm test:e2e-d11
 pnpm test:e2e-d11-revenue-safety
 pnpm test:e2e-d14
+pnpm test:e2e-d15
 pnpm test:pipeline-wiring
 pnpm test:wallets
 pnpm test:account-classification

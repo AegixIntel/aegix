@@ -26,7 +26,9 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   topic and delayed options activity are built but not captured in production
   (`docs/milestone-d14-rewind-discovery.md`).
 - **In development:** Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market
-  Intelligence — no engine and no data source exists for any of them.
+  Intelligence — each has a first engine, default off and not switched on in production
+  (`docs/milestone-d15-market-intelligence-engines.md`). There is still no licensed
+  market data source.
 - **Planned:** AI Intelligence Copilot, Wallet Reputation, $AEX economic layer,
   multi-chain. **Research:** Intelligence Network.
 

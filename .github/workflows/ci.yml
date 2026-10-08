@@ -303,6 +303,7 @@ jobs:
             pnpm test:e2e-d11
             pnpm test:e2e-d11-revenue-safety
             pnpm test:e2e-d14
+            pnpm test:e2e-d15
           } 2>&1 | tee artifacts/e2e-d11.log
       - name: Upload D11 logs on failure
         if: failure()

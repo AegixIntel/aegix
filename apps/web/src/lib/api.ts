@@ -1206,3 +1206,72 @@ export function listDiscoveries(): Promise<DiscoveryListResponse> {
 export function getDiscovery(id: string): Promise<DiscoveryDetailResponse> {
   return getDiscoveryJson(`/v1/discoveries/${encodeURIComponent(id)}`);
 }
+
+// ---- D15: Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market ----
+export interface StoredSignal {
+  type: string; severity: number; confidence: number; title: string; summary: string;
+  evidence: Array<{ key: string; value: string | number | boolean; label: string }>; engineVersion: string;
+}
+export interface CaptureCoverage { domain: string; captures: number; signalled: number; subjects: number; firstObservedAt: string | null; lastObservedAt: string | null }
+
+export type NarrativeState = "ACCELERATING" | "STEADY" | "FADING" | "INSUFFICIENT_DATA";
+export interface NarrativeTopicReading {
+  topic: string; label: string; state: NarrativeState;
+  recentMean: number | null; baselineMean: number | null; ratio: number | null;
+  recentHours: number; baselineHours: number; latestHour: string | null;
+  series: Array<{ hour: string; mentions: number }>;
+  storedSignals: Array<StoredSignal & { observedAt: string; domain: string }>;
+}
+export interface NarrativeRadarResponse {
+  engineVersion: string; asOf: string; recentHours: number; baselineHours: number;
+  capture: { mentions: boolean; signals: boolean; anomalies: boolean };
+  topics: NarrativeTopicReading[]; limitations: string[];
+}
+export function getNarrativeRadar(): Promise<NarrativeRadarResponse> {
+  return getDiscoveryJson("/v1/narratives");
+}
+
+export interface AnomalyRecord extends StoredSignal { id: string; series: string; label: string; marketClass: string; observedAt: string; qualityGrade: string }
+export interface AnomaliesResponse {
+  engineVersion: string; asOf: string; windowHours: number;
+  rule: { baselineHours: number; minBaselineChanges: number; threshold: number };
+  capture: boolean; coverage: CaptureCoverage; truncated: boolean; anomalies: AnomalyRecord[]; limitations: string[];
+}
+export function getAnomalies(hours: number): Promise<AnomaliesResponse> {
+  return getDiscoveryJson(`/v1/anomalies?hours=${hours}`);
+}
+
+export interface SignalFeedEntry {
+  domain: string; subject: string; label: string; marketClass: string; signalType: string; title: string; summary: string;
+  peakSeverity: number; firstObservedAt: string; lastObservedAt: string; captures: number;
+}
+export interface SignalConfluence {
+  from: string; to: string; classes: string[];
+  subjects: Array<{ subject: string; label: string; marketClass: string; signalTypes: string[] }>;
+}
+export interface SignalFeedResponse {
+  engineVersion: string; asOf: string; windowHours: number; capturesRead: number; truncated: boolean;
+  rule: { confluenceWindowHours: number; confluenceMinClasses: number };
+  entries: SignalFeedEntry[]; confluences: SignalConfluence[]; coverage: CaptureCoverage[]; limitations: string[];
+}
+export function getSignalFeed(hours: number): Promise<SignalFeedResponse> {
+  return getDiscoveryJson(`/v1/signals?hours=${hours}`);
+}
+
+export interface CrossMarketMember { symbol: string; label: string; price: number | null; priceAt: string | null; return24hPercent: number | null; return7dPercent: number | null }
+export interface CrossMarketClassReading {
+  marketClass: string; session: boolean; members: CrossMarketMember[]; measured: number; advancing: number;
+  median24hPercent: number | null; median7dPercent: number | null;
+}
+export interface CrossMarketResponse {
+  engineVersion: string; asOf: string;
+  capture: { crypto: boolean; tokenizedStocks: boolean; funds: boolean };
+  classes: CrossMarketClassReading[];
+  correlations: Array<{ a: string; b: string; r: number | null; pairedHours: number }>;
+  sectors: Array<{ symbol: string; label: string; dayReturnPercent: number; excessPoints: number }>;
+  readings: Array<{ type: string; title: string; summary: string }>;
+  limitations: string[];
+}
+export function getCrossMarket(): Promise<CrossMarketResponse> {
+  return getDiscoveryJson("/v1/cross-market");
+}

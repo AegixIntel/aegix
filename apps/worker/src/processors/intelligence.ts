@@ -18,6 +18,7 @@ import { createDiscoveryRepo, createObservationRepo, type Sql } from "@aegix/dat
 import { CANONICAL_ASSETS, MARKETS_ENGINE_VERSION, computeMarketSignals, createMarketService, type MarketDataProvider } from "@aegix/markets";
 import { marketSeries, marketSeriesKey, type SeriesDescriptor } from "@aegix/rewind";
 import {
+  ANOMALY_BASELINE_HOURS, ANOMALY_ENGINE_VERSION, ANOMALY_MAX_AGE_HOURS, computeSeriesAnomaly,
   CONTEXT_ENGINE_VERSION, NARRATIVE_BASELINE_HOURS, NARRATIVE_CONTEXT_SOURCE, NARRATIVE_RECENT_HOURS, NARRATIVE_TOPICS, QUOTED_FUNDS, SECTOR_QUOTES_SOURCE,
   TOKENIZED_STOCKS, computeFundSignals, computeNarrativeSignals, fundPriceSeriesKey, narrativeContextSeries, narrativeContextSeriesKey, narrativeSeries,
   narrativeTopicFor, optionsSeries, sectorQuoteSeries, tokenizedStockSeries, tokenizedStockSeriesKey, usEquitySessionOpen,
@@ -230,6 +231,62 @@ export async function captureFundSignals(
       providerStatus: "OK",
       qualityGrade: reading.qualityGrade,
       signals: storedSignals(reading.signals)
+    });
+    if (stored) result.captured += 1; else result.skipped += 1;
+  }
+  return result;
+}
+
+/**
+ * The series the anomaly detector reads: the ones captured every hour of the
+ * week, and only while their capture is on. Session series (options, funds)
+ * have a change in six hours of a day and cannot fill an hourly baseline;
+ * token supply is flat most hours; the first narrative reading is a share
+ * with zero hours. None of those is read.
+ */
+export function anomalySeries(config: AppConfig): SeriesDescriptor[] {
+  return [
+    ...(config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS ? marketSeries(CANONICAL_ASSETS) : []),
+    ...(config.ENABLE_TOKENIZED_STOCK_CAPTURE ? tokenizedStockSeries().filter((s) => s.key.endsWith(":price_usdc")) : []),
+    ...(config.ENABLE_NARRATIVE_CONTEXT_CAPTURE ? narrativeContextSeries() : [])
+  ];
+}
+
+/**
+ * Stores one anomaly reading per series per hourly change (D15), see
+ * docs/milestone-d15-market-intelligence-engines.md §2. The reading is made
+ * here, once, from the ledger as it stands. A series with no change in the
+ * last few hours gets no capture: nobody saw it move. A capture's bucket is
+ * the hour its change ends in, so a later sweep stores nothing for it again.
+ */
+export async function captureSeriesAnomalies(
+  ctx: IntelligenceContext,
+  at: Date = new Date(),
+  descriptors: readonly SeriesDescriptor[] = anomalySeries(ctx.config)
+): Promise<CaptureResult> {
+  const result: CaptureResult = { captured: 0, skipped: 0, failed: 0, pointsAdded: 0 };
+  if (descriptors.length === 0) return result;
+  const repo = createObservationRepo(ctx.sql);
+  const from = new Date(at.getTime() - (ANOMALY_BASELINE_HOURS + ANOMALY_MAX_AGE_HOURS + 2) * HOUR_MS).toISOString();
+  const rows = await repo.pointsBetween(descriptors.map((d) => d.key), from, new Date(at.getTime() + 1).toISOString());
+  const points = new Map<string, Array<{ eventTime: string; value: number; source: string }>>();
+  for (const row of rows) {
+    const list = points.get(row.series_key) ?? [];
+    list.push({ eventTime: new Date(row.event_time).toISOString(), value: Number(row.value), source: row.source });
+    points.set(row.series_key, list);
+  }
+  for (const descriptor of descriptors) {
+    const reading = computeSeriesAnomaly({ label: descriptor.label, points: points.get(descriptor.key) ?? [], at });
+    if (!reading.changeHour || !reading.source) { result.skipped += 1; continue; }
+    const stored = await repo.recordCapture({
+      domain: "ANOMALY",
+      subject: descriptor.key,
+      bucketStart: reading.changeHour,
+      engineVersion: ANOMALY_ENGINE_VERSION,
+      provider: reading.source,
+      providerStatus: "OK",
+      qualityGrade: reading.qualityGrade,
+      signals: reading.signals
     });
     if (stored) result.captured += 1; else result.skipped += 1;
   }
