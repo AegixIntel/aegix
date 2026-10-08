@@ -10,7 +10,7 @@ import { runBillingLifecycle } from "./processors/billing.js";
 import { anchorDiscoveryChain, captureFundSignals, captureMarketSignals, captureNarrativeSignals, captureSeriesAnomalies, captureSeriesSource, captureTokenizedStockSignals, runDiscoverySweep } from "./processors/intelligence.js";
 import { DAILY_PROFILE, HOURLY_PROFILE } from "@aegix/discovery";
 import { createCoinPaprikaProvider } from "@aegix/markets";
-import { NARRATIVE_ROTATION_MS, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createSectorQuoteSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
+import { NARRATIVE_ROTATION_MS, NARRATIVE_SOURCE, createNarrativeContextSource, createNarrativeSource, createOptionsSource, createSectorQuoteSource, createTokenizedStockSource, type SeriesSource } from "@aegix/sources";
 import { registerMonitorScheduler } from "./scheduler.js";
 import { workerHeartbeatKey } from "./health.js";
 import { isFinalJobFailure } from "./failure.js";
@@ -284,7 +284,9 @@ try {
   if (config.ENABLE_NARRATIVE_CAPTURE) {
     scheduleSource(createNarrativeSource({
       baseUrl: config.NARRATIVE_BASE_URL,
-      onTopicFailure: (topic, code, attempts) => logger.warn("narrative topic not captured", { topic, code, attempts })
+      onTopicFailure: (topic, code, attempts) => logger.warn("narrative topic not captured", { topic, code, attempts }),
+      // GDELT answered and holds nothing for the last three days. Its index, not this source, is behind.
+      onEmptyWindow: (topic) => logger.info("narrative topic has no coverage in the window", { topic, source: NARRATIVE_SOURCE })
     }), NARRATIVE_ROTATION_MS);
   }
   if (config.ENABLE_NARRATIVE_CONTEXT_CAPTURE) {
