@@ -4,6 +4,13 @@ export interface OpenAICompatibleOptions {
   /** Base URL of an OpenAI-compatible API, e.g. Groq's `/openai/v1` endpoint. */
   baseUrl: string | undefined;
   apiKey: string | undefined;
+  /**
+   * Sends `thinking: { type: "disabled" }`. For a provider whose model spends
+   * output tokens on reasoning before the answer, which the output ceiling
+   * then cuts off. Off by default: a provider that does not know the field may
+   * refuse the request.
+   */
+  disableThinking?: boolean;
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch;
 }
@@ -54,6 +61,7 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
             max_tokens: request.maxOutputTokens,
             temperature: 0,
             response_format: { type: "json_object" },
+            ...(options.disableThinking ? { thinking: { type: "disabled" } } : {}),
             messages: [
               { role: "system", content: request.system },
               { role: "user", content: `${request.evidenceBlock}\n\nQuestion: ${request.question}` }

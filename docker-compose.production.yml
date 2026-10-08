@@ -109,6 +109,11 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # For a model that reasons before it answers: the reasoning counts
+      # against the output ceiling and the answer comes back cut off.
+      LLM_DISABLE_THINKING: ${LLM_DISABLE_THINKING:-false}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-900}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-20000}
     depends_on:
       migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }

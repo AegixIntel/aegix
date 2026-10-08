@@ -200,3 +200,15 @@ test("the system prompt forbids the claims the engines refuse to make", () => {
   assert.ok(prompt.includes("not the wallet"));
   assert.ok(prompt.includes("cite every"));
 });
+
+test("reasoning is switched off only when the operator asks for it", async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+    bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+    return completion(JSON.stringify({ summary: "s", findings: [], limitations: [] }));
+  }) as typeof fetch;
+  await createOpenAICompatibleProvider({ baseUrl: "https://example.invalid/v1", apiKey: "test-key", fetchImpl }).generateStructuredResponse(REQUEST);
+  await createOpenAICompatibleProvider({ baseUrl: "https://example.invalid/v1", apiKey: "test-key", disableThinking: true, fetchImpl }).generateStructuredResponse(REQUEST);
+  assert.equal("thinking" in bodies[0]!, false);
+  assert.deepEqual(bodies[1]!.thinking, { type: "disabled" });
+});

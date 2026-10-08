@@ -50,6 +50,8 @@ const envSchema = z.object({
   GROQ_API_KEY: z.preprocess(blankAsUnset, z.string().optional()),
   LLM_BASE_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
   LLM_MODEL: z.preprocess(blankAsUnset, z.string().default("gpt-4o-mini")),
+  /** Asks the provider not to reason before answering; see the provider adapter. */
+  LLM_DISABLE_THINKING: z.preprocess(boolEnv, z.boolean()).default(false),
 
   JWT_SECRET: z.string().min(16).default("development-only-secret-change-me"),
 
