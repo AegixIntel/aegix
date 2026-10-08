@@ -152,8 +152,10 @@ anomaly signal is a statistical outlier against a short price window; it is
 not evidence of manipulation, and the product copy says so.
 
 **The four directions below each have a first engine (D15), switched off by
-default and not on in production.** They stay marked in development on the
-website (`/roadmap`) until they are on and have a record to show. Each line
+default.** Narrative Radar, Cross-Market Intelligence and the Signal Engine
+have been on in production since 8 October 2026. The Anomaly Detector has
+captured since the same day; it stays marked in development on the website
+(`/roadmap`) until its corrected engine has a record to show. Each line
 says the design intent, then what the engine actually does; the two are not
 the same size. See `docs/milestone-d15-market-intelligence-engines.md`.
 
@@ -214,7 +216,8 @@ are enforced, so the model explains findings and decides none of them.
 
 The wider **AI Intelligence Copilot** — explaining an anomaly, "what changed
 today", portfolio-level reasoning — has a first version (D16,
-`POST /v1/copilot/ask`), switched off by default and not on in production:
+`POST /v1/copilot/ask`), switched off by default and on in production since
+8 October 2026:
 one question answered from the signals, anomalies, discoveries, news coverage
 and cross-market view already on record, plus one wallet's analysis when the
 caller names it. It is the same grounded machinery as Ask AEGIX over a wider
@@ -296,9 +299,9 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 
 | Status | Capability |
 |---|---|
-| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers) |
+| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
-| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence, AI Intelligence Copilot |
+| NEXT | Anomaly Detection |
 | LATER | Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
 
 ---

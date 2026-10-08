@@ -89,7 +89,7 @@ reads is switched on.
 
 ## 2. Anomaly Detection
 
-`anomaly-v1.0.0`, `packages/sources/src/anomaly.ts`,
+`anomaly-v1.1.0`, `packages/sources/src/anomaly.ts`,
 `captureSeriesAnomalies` in the worker.
 
 This product waited for a historical baseline store. The ledger is one.
@@ -100,15 +100,25 @@ change       the newest completed hour's log-change of a series: the last
              both from the same source
 baseline     the same series' hourly changes of the 336 hours before, from
              that source; at least 96 of them
-score        0.6745 x (change - median) / median absolute deviation
-             (Iglewicz and Hoaglin's modified z-score)
+spread       the larger of two estimates of one standard deviation:
+             median absolute deviation / 0.6745, and
+             1.2533 x mean absolute deviation, both about the median
+score        (change - median) / spread
 anomaly      |score| >= 3.5 -> SERIES_ANOMALY_UP or SERIES_ANOMALY_DOWN
 ```
 
-The median and the median absolute deviation are used so that one earlier
-spike does not widen the baseline and hide the next one. A baseline with no
-spread cannot rank a change and is stored as a capture with LOW quality and
-no signal.
+The median absolute deviation is used so that one earlier spike does not
+widen the baseline and hide the next one. It is not used alone. A series that
+stands still most hours and moves in a few, such as a token priced in one
+thinly traded pool, has a median deviation near zero, and `anomaly-v1.0.0`
+scored a 1.5% hour of such a series at fifteen thousand deviations. The mean
+absolute deviation counts the hours the series did move. A baseline that
+never moved cannot rank a change and is stored as a capture with LOW quality
+and no signal.
+
+Readings stored by `anomaly-v1.0.0` (production, 8 October 2026) are kept,
+as every capture is, and counted in the coverage. The API lists only readings
+of the current engine version.
 
 **Stored once, at capture time.** A capture is a `signal_captures` row with
 domain `ANOMALY`, the series key as its subject and the hour the change ends

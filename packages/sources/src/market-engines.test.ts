@@ -206,3 +206,15 @@ test("most of what is priced around the clock moving one way is a broad advance"
   const view = buildCrossMarketView({ at: AT, series: Array.from({ length: 9 }, (_, i) => series(`S${i}`, i < 3 ? "CRYPTO" : "TOKENIZED_EQUITY", moved(i === 8 ? -1 : 2, shared, 20 + i))) });
   assert.deepEqual(view.readings.map((r) => r.type), ["BROAD_ADVANCE"]);
 });
+
+test("a series that stands still most hours is measured against the hours it moved", () => {
+  // Three hours in four flat: the median deviation is zero, and v1.0.0 either refused the series or scored it in the thousands.
+  const baseline = Array.from({ length: 300 }, (_, i) => (i % 4 === 0 ? (i % 8 === 0 ? 0.004 : -0.004) : 0));
+  const large = computeSeriesAnomaly({ label: "HOODx on-chain price (USDC)", points: path([...baseline, 0.015]), at: AT });
+  assert.equal(large.signals[0]?.type, "SERIES_ANOMALY_UP");
+  const evidence = Object.fromEntries(large.signals[0]!.evidence.map((e) => [e.key, e.value]));
+  assert.ok(Number(evidence.robust_z) > ANOMALY_Z_THRESHOLD && Number(evidence.robust_z) < 20, `a 1.5% hour is ${evidence.robust_z} deviations, not thousands`);
+  assert.ok(Number(evidence.typical_move_percent) > 0.1, "and the typical move stated is one the series makes");
+  const usual = computeSeriesAnomaly({ label: "HOODx on-chain price (USDC)", points: path([...baseline, 0.004]), at: AT });
+  assert.deepEqual([usual.signals.length, usual.qualityGrade], [0, "HIGH"], "a move it makes every few hours is read and is not an anomaly");
+});

@@ -15,7 +15,7 @@
 
 import type { LedgerPoint } from "./context-signals.js";
 
-export const ANOMALY_ENGINE_VERSION = "anomaly-v1.0.0";
+export const ANOMALY_ENGINE_VERSION = "anomaly-v1.1.0";
 
 const HOUR_MS = 3_600_000;
 
@@ -23,12 +23,14 @@ const HOUR_MS = 3_600_000;
 export const ANOMALY_BASELINE_HOURS = 336;
 /** Hourly changes the baseline must hold before anything is measured. */
 export const ANOMALY_MIN_BASELINE_CHANGES = 96;
-/** Modified z-score at or above which a change is called an anomaly (Iglewicz and Hoaglin). */
+/** Robust z-score at or above which a change is called an anomaly (the modified z-score's cutoff, Iglewicz and Hoaglin). */
 export const ANOMALY_Z_THRESHOLD = 3.5;
 /** A change older than this is not captured: it was not seen as it happened. */
 export const ANOMALY_MAX_AGE_HOURS = 6;
 /** Scales the median absolute deviation to a standard deviation under normality. */
 const MAD_SCALE = 0.6745;
+/** Scales the mean absolute deviation to a standard deviation under normality. */
+const MEAN_AD_SCALE = 1.2533;
 
 export interface AnomalySignal {
   type: "SERIES_ANOMALY_UP" | "SERIES_ANOMALY_DOWN";
@@ -88,10 +90,14 @@ export function hourlyChanges(points: readonly SourcedPoint[]): Map<number, { ch
  * Reads the newest completed hourly change of one series against the changes
  * of the ANOMALY_BASELINE_HOURS before it.
  *
- * The centre and the spread are the median and the median absolute
- * deviation, so one earlier spike does not widen the baseline and hide the
- * next one. A baseline whose spread is zero cannot rank a change and is
- * reported as LOW quality with no signal.
+ * The centre is the median. The spread is the larger of two estimates of one
+ * standard deviation: from the median absolute deviation, which one earlier
+ * spike does not widen, and from the mean absolute deviation. A series that
+ * stands still most hours and moves in a few (a token priced in one thinly
+ * traded pool) has a median deviation near zero, and against that alone every
+ * move it makes is thousands of deviations: anomaly-v1.0.0 did exactly that.
+ * A baseline that never moved cannot rank a change and is reported as LOW
+ * quality with no signal.
  */
 export function computeSeriesAnomaly(input: { label: string; points: readonly SourcedPoint[]; at: Date }): AnomalyReading {
   const currentHour = Math.floor(input.at.getTime() / HOUR_MS);
@@ -110,16 +116,17 @@ export function computeSeriesAnomaly(input: { label: string; points: readonly So
   }
   if (baseline.length < ANOMALY_MIN_BASELINE_CHANGES) return { signals: [], qualityGrade: "LOW", changeHour, source };
   const centre = median(baseline);
-  const spread = median(baseline.map((value) => Math.abs(value - centre)));
+  const deviations = baseline.map((value) => Math.abs(value - centre));
+  const spread = Math.max(median(deviations) / MAD_SCALE, MEAN_AD_SCALE * (deviations.reduce((sum, value) => sum + value, 0) / deviations.length));
   if (!(spread > 0)) return { signals: [], qualityGrade: "LOW", changeHour, source };
 
   const qualityGrade = baseline.length >= ANOMALY_BASELINE_HOURS * 0.75 ? "HIGH" : "MEDIUM";
-  const score = (MAD_SCALE * (change - centre)) / spread;
+  const score = (change - centre) / spread;
   if (Math.abs(score) < ANOMALY_Z_THRESHOLD) return { signals: [], qualityGrade, changeHour, source };
 
   const up = score > 0;
   const percent = (Math.exp(change) - 1) * 100;
-  const typical = (Math.exp(spread / MAD_SCALE) - 1) * 100;
+  const typical = (Math.exp(spread) - 1) * 100;
   return { qualityGrade, changeHour, source, signals: [{
     type: up ? "SERIES_ANOMALY_UP" : "SERIES_ANOMALY_DOWN",
     severity: clamp(Math.round(10 * Math.abs(score)), 0, 100),
@@ -128,8 +135,8 @@ export function computeSeriesAnomaly(input: { label: string; points: readonly So
     summary: `${input.label} changed ${round(percent)}% in the hour to ${new Date((newest + 1) * HOUR_MS).toISOString().slice(0, 16)}Z. Against its ${baseline.length} hourly changes of the ${ANOMALY_BASELINE_HOURS} hours before, that is ${round(Math.abs(score), 1)} robust standard deviations from the median; a typical hour moves about ${round(typical)}%.`,
     evidence: [
       { key: "change_percent", value: round(percent, 3), label: "Change in the hour, %" },
-      { key: "robust_z", value: round(score), label: "Modified z-score" },
-      { key: "threshold", value: ANOMALY_Z_THRESHOLD, label: "Threshold, modified z-score" },
+      { key: "robust_z", value: round(score), label: "Robust z-score" },
+      { key: "threshold", value: ANOMALY_Z_THRESHOLD, label: "Threshold, robust z-score" },
       { key: "baseline_changes", value: baseline.length, label: `Hourly changes in the baseline, of ${ANOMALY_BASELINE_HOURS}` },
       { key: "baseline_median_percent", value: round((Math.exp(centre) - 1) * 100, 4), label: "Median hourly change in the baseline, %" },
       { key: "typical_move_percent", value: round(typical, 3), label: "Typical hourly move in the baseline, %" }

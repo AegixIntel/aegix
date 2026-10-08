@@ -87,3 +87,9 @@ test("every included item is citable by the id in the block", () => {
     assert.ok(ctx.block.includes(id), `${id} must appear in the block`);
   }
 });
+
+test("a pinned item is kept ahead of higher-ranked ones", () => {
+  const items = [item({ id: "sig:A", severity: 90, confidence: 1 }), item({ id: "sig:B", severity: 80, confidence: 1 }), item({ id: "ind:QUIET", severity: 10, confidence: 0.5 })];
+  assert.deepEqual(buildBoundedContext(items, { maxItems: 2, maxChars: 100000 }).includedIds, ["sig:A", "sig:B"]);
+  assert.deepEqual(buildBoundedContext(items, { maxItems: 2, maxChars: 100000 }, new Set(["ind:QUIET"])).includedIds, ["ind:QUIET", "sig:A"]);
+});

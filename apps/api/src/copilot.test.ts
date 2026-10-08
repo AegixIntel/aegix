@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { COPILOT_SYSTEM_PROMPT, buildBoundedContext, enforceGrounding } from "@aegix/ai";
 import type { DiscoveryRow } from "@aegix/database";
 import { buildSignalFeed, type CrossMarketView, type NarrativeRadarEntry } from "@aegix/sources";
-import { recordToEvidence, type CopilotRecord } from "./copilot.js";
+import { recordToEvidence, reservedEvidence, type CopilotRecord } from "./copilot.js";
 import { resolveSubject } from "./market-intelligence.js";
 
 const AT = "2026-10-06T18:00:00.000Z";
@@ -70,4 +70,19 @@ test("an answer is held to the evidence offered, and the instructions forbid cau
   assert.deepEqual([grounded.droppedFindings, grounded.droppedReferences], [2, 1]);
   assert.match(COPILOT_SYSTEM_PROMPT, /that is not a link between them/);
   assert.match(COPILOT_SYSTEM_PROMPT, /Never offer trading recommendations/);
+});
+
+test("a day of market signals does not push news coverage out of the block", () => {
+  const signals = Array.from({ length: 80 }, (_, i) => ({ id: `sig:market:S${i}:MOMENTUM`, label: "signal", detail: "x".repeat(300), severity: 100, confidence: 0.9 }));
+  const quiet = [
+    { id: "ind:narrative:copper", label: "Copper news coverage: steady", detail: "5 articles an hour.", severity: 15, confidence: 0.8 },
+    { id: "ind:cross:CRYPTO", label: "CRYPTO on the day", detail: "Median -1%.", severity: 30, confidence: 0.9 },
+    { id: "cov:record", label: "What the record covers", detail: "Everything.", severity: 100, confidence: 1 }
+  ];
+  const all = [...signals, ...quiet];
+  const bounds = { maxItems: 60, maxChars: 20_000 };
+  assert.equal(buildBoundedContext(all, bounds).includedIds.includes("ind:narrative:copper"), false, "ranked alone, the quiet items are left out");
+  const kept = buildBoundedContext(all, bounds, reservedEvidence(all)).includedIds;
+  assert.ok(["ind:narrative:copper", "ind:cross:CRYPTO", "cov:record"].every((id) => kept.includes(id)));
+  assert.ok(kept.some((id) => id.startsWith("sig:market:")), "and the strongest signals still fill the rest");
 });

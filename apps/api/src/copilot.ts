@@ -24,7 +24,7 @@ import {
 import { buildSignalFeed, type CrossMarketView, type NarrativeRadarEntry, type SignalFeed } from "@aegix/sources";
 import { profileToEvidence } from "./ask-aegix.js";
 import { discoveryDisplayId } from "./discovery.js";
-import { loadCrossMarketView, loadNarrativeRadar, resolveSubject } from "./market-intelligence.js";
+import { currentAnomalies, loadCrossMarketView, loadNarrativeRadar, resolveSubject } from "./market-intelligence.js";
 
 export interface CopilotDeps {
   app: FastifyInstance;
@@ -44,7 +44,26 @@ export const COPILOT_SIGNAL_HOURS = 24;
 const COPILOT_CAPTURES_LIMIT = 2000;
 const COPILOT_DISCOVERIES = 10;
 /** More items than Ask AEGIX is given, because the record spans several products. */
-const COPILOT_CONTEXT_BOUNDS = { maxItems: 40, maxChars: 12_000 };
+const COPILOT_CONTEXT_BOUNDS = { maxItems: 60, maxChars: 20_000 };
+/**
+ * How many items of each product are kept whatever else outranks them, by ID
+ * prefix. Ranked on severity alone, a day's market signals fill the block and
+ * a question about news coverage or the cross-market view finds nothing to cite.
+ */
+const COPILOT_RESERVED: ReadonlyArray<readonly [prefix: string, count: number]> = [
+  ["cov:", 1], ["ind:narrative:", 8], ["ind:cross:", 8], ["sig:discovery:", 5], ["sig:anomaly:", 5], ["ind:confluence:", 3]
+];
+
+/** The IDs kept ahead of the general ranking: each product's own highest-ranked items. */
+export function reservedEvidence(items: readonly EvidenceItem[]): Set<string> {
+  const reserved = new Set<string>();
+  for (const [prefix, count] of COPILOT_RESERVED) {
+    items.filter((item) => item.id.startsWith(prefix))
+      .sort((a, b) => b.severity * b.confidence - a.severity * a.confidence || a.id.localeCompare(b.id))
+      .slice(0, count).forEach((item) => reserved.add(item.id));
+  }
+  return reserved;
+}
 
 /** An evidence ID may hold letters, digits and a few marks; anything else in a subject becomes a dash. */
 const idPart = (value: string) => value.replace(/[^A-Za-z0-9_.\-]/g, "-");
@@ -152,7 +171,7 @@ export function registerCopilot(deps: CopilotDeps): void {
     const before = new Date(at.getTime() + 1).toISOString();
     const domains: CaptureDomain[] = ["MARKET", "NARRATIVE", "SECTOR", "ANOMALY"];
     const [captures, coverage, radar, crossMarket, found] = await Promise.all([
-      config.ENABLE_SIGNAL_ENGINE ? observations.latestSignalledCaptures(domains, from, before, COPILOT_CAPTURES_LIMIT) : null,
+      config.ENABLE_SIGNAL_ENGINE ? observations.latestSignalledCaptures(domains, from, before, COPILOT_CAPTURES_LIMIT).then(currentAnomalies) : null,
       config.ENABLE_SIGNAL_ENGINE ? observations.captureCoverage(domains, from, before) : [],
       config.ENABLE_NARRATIVE_RADAR ? loadNarrativeRadar(observations, at) : null,
       config.ENABLE_CROSS_MARKET ? loadCrossMarketView(observations, config, at) : null,
@@ -193,7 +212,7 @@ export function registerCopilot(deps: CopilotDeps): void {
     const [record, profile] = await Promise.all([loadRecord(now()), req.body.wallet ? deps.loadWalletContext(req.body.wallet) : null]);
     const evidence = recordToEvidence(record);
     if (profile) evidence.push(...profileToEvidence(profile));
-    const context = buildBoundedContext(evidence, COPILOT_CONTEXT_BOUNDS);
+    const context = buildBoundedContext(evidence, COPILOT_CONTEXT_BOUNDS, reservedEvidence(evidence));
 
     let generated;
     try {

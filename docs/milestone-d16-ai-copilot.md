@@ -67,9 +67,13 @@ wallet named             that wallet's analysis, as Ask   as Ask AEGIX issues th
 What was not measured is not offered: a topic with too few hours on record, a
 class with no measured member, a correlation with too few shared hours.
 
-The block is bounded at 40 items and 12,000 characters, ranked by severity
-times confidence as in Ask AEGIX. When items do not fit, the model is told
-how many were left out and the answer reports it.
+The block is bounded at 60 items and 20,000 characters. Each product's own
+highest-ranked items are placed first (eight news topics, eight cross-market
+items, five discoveries, five anomalies, three confluences and the coverage
+item), and the rest is filled by severity times confidence as in Ask AEGIX.
+Ranked on severity alone, a day of market signals filled the block and a
+question about news coverage had nothing to cite. When items do not fit, the
+model is told how many were left out and the answer reports it.
 
 ## 3. What comes back
 

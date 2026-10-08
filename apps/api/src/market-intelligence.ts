@@ -72,6 +72,14 @@ function hoursParam(value: string | undefined, fallback: number, max: number): n
 }
 
 /** The radar's reading of every topic at `at`, from the hourly counts on record. */
+/**
+ * Anomaly readings of an engine version that has been replaced stay stored,
+ * and are not listed: anomaly-v1.0.0 measured thinly traded series against a
+ * spread near zero.
+ */
+export const currentAnomalies = <T extends { domain: string; engine_version: string }>(rows: T[]): T[] =>
+  rows.filter((row) => row.domain !== "ANOMALY" || row.engine_version === ANOMALY_ENGINE_VERSION);
+
 export async function loadNarrativeRadar(repo: ObservationRepo, at: Date): Promise<NarrativeRadarEntry[]> {
   const keys = new Map(NARRATIVE_TOPICS.map((topic) => [narrativeContextSeriesKey(topic.id), topic.id]));
   const rows = await repo.pointsBetween([...keys.keys()], new Date(at.getTime() - NARRATIVE_RADAR_HORIZON_HOURS * HOUR_MS).toISOString(), new Date(at.getTime() + 1).toISOString());
@@ -142,7 +150,7 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
     const before = new Date(at.getTime() + 1).toISOString();
     const [radar, stored] = await Promise.all([
       loadNarrativeRadar(repo, at),
-      repo.latestSignalledCaptures(["NARRATIVE", "ANOMALY"], new Date(at.getTime() - NARRATIVE_SIGNALS_DAYS * 24 * HOUR_MS).toISOString(), before, FEED_CAPTURES_LIMIT)
+      repo.latestSignalledCaptures(["NARRATIVE", "ANOMALY"], new Date(at.getTime() - NARRATIVE_SIGNALS_DAYS * 24 * HOUR_MS).toISOString(), before, FEED_CAPTURES_LIMIT).then(currentAnomalies)
     ]);
     const signalsFor = (topic: string) => stored
       .filter((row) => (row.domain === "NARRATIVE" && row.subject === topic) || (row.domain === "ANOMALY" && row.subject === narrativeContextSeriesKey(topic)))
@@ -173,7 +181,7 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
     const from = new Date(at.getTime() - windowHours * HOUR_MS).toISOString();
     const before = new Date(at.getTime() + 1).toISOString();
     const [rows, coverage] = await Promise.all([
-      repo.latestSignalledCaptures(["ANOMALY"], from, before, ANOMALIES_LIMIT),
+      repo.latestSignalledCaptures(["ANOMALY"], from, before, ANOMALIES_LIMIT).then(currentAnomalies),
       repo.captureCoverage(["ANOMALY"], from, before)
     ]);
     return {
@@ -191,6 +199,7 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
       limitations: [
         "An anomaly is an hourly change far outside the same series' changes of the two weeks before. It is a measurement of size, not a cause, a forecast or advice.",
         "Each reading was made once, when the hour was first seen, and stored. Nothing here is recomputed, so the record begins when the capture was switched on.",
+        "Only readings of the engine version named here are listed. Readings an earlier version stored are kept and counted in the coverage, and are not shown as anomalies.",
         "A series is read only when it has a change in consecutive hours from one source: a gap in the ledger is a gap here, and a series with fewer than 96 hourly changes on record is not measured.",
         "Series priced only in the US session (options, sector and commodity funds), token supply and the share-of-news reading are not read by this version.",
         "A tokenized stock's price is the token's price in one on-chain pool. One large swap can be an anomaly without the underlying equity moving.",
@@ -208,7 +217,7 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
     const before = new Date(at.getTime() + 1).toISOString();
     const domains: CaptureDomain[] = ["MARKET", "NARRATIVE", "SECTOR", "ANOMALY"];
     const [rows, coverage] = await Promise.all([
-      repo.latestSignalledCaptures(domains, from, before, FEED_CAPTURES_LIMIT),
+      repo.latestSignalledCaptures(domains, from, before, FEED_CAPTURES_LIMIT).then(currentAnomalies),
       repo.captureCoverage(domains, from, before)
     ]);
     const feed = buildSignalFeed({

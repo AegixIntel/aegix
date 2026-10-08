@@ -37,13 +37,19 @@ export const DEFAULT_CONTEXT_BOUNDS: ContextBounds = { maxItems: 24, maxChars: 6
  * certain finding of no consequence are both worth less than a severe finding
  * that holds up. Ties break on ID so the same analysis always produces the
  * same context — an unstable context would make the answer unstable too.
+ *
+ * `pinned` IDs are placed ahead of the ranking, in the same order among
+ * themselves. A caller whose evidence spans several kinds uses it so that the
+ * most numerous kind cannot push every item of another out of the block.
  */
 export function buildBoundedContext(
   items: EvidenceItem[],
-  bounds: ContextBounds = DEFAULT_CONTEXT_BOUNDS
+  bounds: ContextBounds = DEFAULT_CONTEXT_BOUNDS,
+  pinned: ReadonlySet<string> = new Set()
 ): BoundedContext {
   const ranked = [...items].sort(
-    (a, b) => b.severity * b.confidence - a.severity * a.confidence || a.id.localeCompare(b.id)
+    (a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id))
+      || b.severity * b.confidence - a.severity * a.confidence || a.id.localeCompare(b.id)
   );
 
   const lines: string[] = [];

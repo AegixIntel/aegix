@@ -24,12 +24,13 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   AEGIX Rewind and the AEGIX Discovery Engine (both default off). Their series are
   BTC, ETH and SOL market data and tokenized stocks read from Solana; news volume by
   topic and delayed options activity are built but not captured in production
-  (`docs/milestone-d14-rewind-discovery.md`).
-- **In development:** Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market
-  Intelligence — each has a first engine, default off and not switched on in production
-  (`docs/milestone-d15-market-intelligence-engines.md`). There is still no licensed
-  market data source. AI Intelligence Copilot — built, default off, needs an LLM
-  provider (`docs/milestone-d16-ai-copilot.md`).
+  (`docs/milestone-d14-rewind-discovery.md`). Narrative Radar, Signal Engine and
+  Cross-Market Intelligence (first engines, default off;
+  `docs/milestone-d15-market-intelligence-engines.md`), and the AI Intelligence
+  Copilot (default off, needs an LLM provider; `docs/milestone-d16-ai-copilot.md`).
+  There is still no licensed market data source.
+- **In development:** Anomaly Detection — capturing since 8 October 2026; its first
+  engine version was replaced the same day and the corrected one has no record yet.
 - **Planned:** Wallet Reputation, $AEX economic layer,
   multi-chain. **Research:** Intelligence Network.
 

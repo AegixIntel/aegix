@@ -135,35 +135,38 @@ export const products: Product[] = [
     body: "BTC, ETH and SOL price, volume, bounded hourly history and deterministic signals.",
     note: "BTC, ETH and SOL only, over a bounded hourly window. Sector, ETF, narrative and cross-market analysis are not built."
   },
-  // D15. Built and switched off by default: each stays IN DEVELOPMENT, with
-  // no link, until it is on in production and has a record to show.
+  // D15. Switched on in production on 8 October 2026. Anomaly Detection stays
+  // IN DEVELOPMENT, with no link, until its corrected engine has a record to show.
   {
     id: "narrative-radar",
     name: "Narrative Radar",
-    status: "IN DEVELOPMENT",
+    href: "/app/narratives",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Built, not yet switched on. Reads how many articles mention each of eight fixed news topics per hour and says which are accelerating or fading. It measures how much is published: not sentiment, and not social media."
+    note: "Reads how many articles mention each of eight fixed news topics per hour and says which are accelerating or fading against the two days before. It measures how much is published: not sentiment, and not social media. Counts are on record from 4 October 2026."
   },
   {
     id: "anomaly-detection",
     name: "Anomaly Detection",
     status: "IN DEVELOPMENT",
     surfaces: ["ROADMAP"],
-    note: "Built, not yet switched on. Measures each hourly change of a crypto, tokenized stock or news series against that series' own two weeks before, from the day its capture starts. Series priced only in the US session are not read."
+    note: "Switched on for capture on 8 October 2026, and its first engine version was replaced the same day: it scored thinly traded series against a spread near zero. Measures each hourly change of a crypto, tokenized stock or news series against that series' own two weeks before. Series priced only in the US session are not read."
   },
   {
     id: "signal-engine",
     name: "Signal Engine",
-    status: "IN DEVELOPMENT",
+    href: "/app/signals",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Built, not yet switched on. Puts every stored signal of every domain on one timeline and marks the moments three or more market classes held one within six hours. It claims no link between them."
+    note: "Puts every stored signal of every domain on one timeline and marks the moments three or more market classes held one within six hours. It claims no link between them, and gives no confidence value."
   },
   {
     id: "cross-market-intelligence",
     name: "Cross-Market Intelligence",
-    status: "IN DEVELOPMENT",
+    href: "/app/cross-market",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Built, not yet switched on. Compares crypto assets, tokenized stocks priced on-chain and sector and commodity funds: returns, breadth and one week of correlation. Fund prices come from a delayed exchange feed with no redistribution licence; there is no licensed market data source."
+    note: "Compares crypto assets, tokenized stocks priced on-chain and sector and commodity funds: returns, breadth and one week of correlation. Fund prices come from a delayed exchange feed with no redistribution licence; there is no licensed market data source."
   },
   // D14. Both read the observation ledger, so each note says how far back
   // that ledger goes and where its history came from.
@@ -185,13 +188,14 @@ export const products: Product[] = [
   },
 
   // Later.
-  // D16. Built and switched off by default, like the D15 engines it reads.
+  // D16. Switched on in production on 8 October 2026, with a configured provider.
   {
     id: "ai-intelligence-copilot",
     name: "AI Intelligence Copilot",
-    status: "IN DEVELOPMENT",
+    href: "/app/copilot",
+    status: "LIVE",
     surfaces: ["ROADMAP", "CATEGORY"],
-    note: "Built, not yet switched on. Answers a question from what AEGIX's engines already stored: signals, anomalies, discoveries, news coverage and the cross-market view. It explains that record and decides nothing in it; a statement that cites nothing AEGIX issued is removed. Requires a configured LLM provider."
+    note: "Answers a question from what AEGIX's engines already stored: signals, anomalies, discoveries, news coverage and the cross-market view. It explains that record and decides nothing in it; a statement that cites nothing AEGIX issued is removed. One question at a time, with no memory between questions and no portfolio reasoning. Requires a configured LLM provider."
   },
   {
     id: "wallet-reputation",
