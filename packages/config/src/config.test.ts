@@ -90,3 +90,15 @@ test("production: empty RPC failover URLs are treated as unset (compose default)
   assert.equal(config.RPC_TERTIARY_URL, undefined);
   assert.doesNotThrow(() => loadConfig(prodEnv({ RPC_PRIMARY_URL: "https://rpc.backup.example" })));
 });
+
+test("model provider: variables Compose passes empty count as unset", () => {
+  const config = loadConfig(prodEnv({ LLM_API_KEY: "", LLM_BASE_URL: "", LLM_MODEL: "", GROQ_API_KEY: "" }));
+  assert.deepEqual([config.LLM_API_KEY, config.LLM_BASE_URL, config.LLM_MODEL], [undefined, undefined, "gpt-4o-mini"]);
+});
+
+test("model provider: a Groq key alone selects Groq's endpoint and model, and stated values win", () => {
+  const groq = loadConfig(prodEnv({ GROQ_API_KEY: "gsk-test", LLM_API_KEY: "", LLM_BASE_URL: "", LLM_MODEL: "" }));
+  assert.deepEqual([groq.LLM_API_KEY, groq.LLM_BASE_URL, groq.LLM_MODEL], ["gsk-test", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"]);
+  const stated = loadConfig(prodEnv({ GROQ_API_KEY: "gsk-test", LLM_BASE_URL: "https://llm.example.com/v1", LLM_MODEL: "some-model" }));
+  assert.deepEqual([stated.LLM_BASE_URL, stated.LLM_MODEL], ["https://llm.example.com/v1", "some-model"]);
+});

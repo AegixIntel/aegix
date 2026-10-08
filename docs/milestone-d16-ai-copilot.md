@@ -104,6 +104,10 @@ It needs the provider Ask AEGIX uses (`LLM_BASE_URL`, `LLM_API_KEY`,
 `LLM_MODEL`). Without a credential the route answers `503 AI_UNAVAILABLE`
 with reason `MISSING_CREDENTIAL`, before the daily limit is touched.
 
+`docker-compose.production.yml` passes those three and `GROQ_API_KEY` to the
+API from the operator's environment file. Until one of the keys is set there,
+production has no provider: the copilot and Ask AEGIX both answer 503.
+
 A question costs one of the caller's daily Ask AEGIX questions
 (`ask.daily`), and is claimed before the provider is called, as there. A
 provider outage costs this route and nothing else.
