@@ -1625,7 +1625,7 @@ export async function buildServer(deps: ApiDeps) {
     sql,
     config,
     logger,
-    provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
+    provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY, disableThinking: config.LLM_DISABLE_THINKING }),
     loadContext: loadWalletContextProfile,
     requireUser: requireUser as never,
     checkDailyQuota: async (userId, analysisId) =>
@@ -1635,7 +1635,7 @@ export async function buildServer(deps: ApiDeps) {
 
   registerMarkets({ app, config, logger,
     service: createMarketService({ provider: deps.marketProvider ?? createCoinPaprikaProvider({ baseUrl: config.MARKETS_BASE_URL, timeoutMs: config.MARKETS_TIMEOUT_MS }), cache, cacheSeconds: config.MARKETS_CACHE_SECONDS }),
-    provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
+    provider: createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY, disableThinking: config.LLM_DISABLE_THINKING }),
     requireUser,
     loadWalletContext: loadWalletContextProfile,
     claimQuota: async (userId, ai) =>
@@ -1655,7 +1655,7 @@ export async function buildServer(deps: ApiDeps) {
   // ---- D16: AI Intelligence Copilot (explains the record above; decides nothing) ----
   registerCopilot({
     app, sql, config, logger, requireUser,
-    provider: deps.aiProvider ?? createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY }),
+    provider: deps.aiProvider ?? createOpenAICompatibleProvider({ baseUrl: config.LLM_BASE_URL, apiKey: config.LLM_API_KEY, disableThinking: config.LLM_DISABLE_THINKING }),
     loadWalletContext: loadWalletContextProfile,
     claimQuota: async (userId) => claimDailyUsage(sql, userId, "ask_aegix", await entitlements.limit(userId, "ask.daily"))
   });

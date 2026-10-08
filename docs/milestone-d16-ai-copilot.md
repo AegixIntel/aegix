@@ -108,6 +108,12 @@ with reason `MISSING_CREDENTIAL`, before the daily limit is touched.
 API from the operator's environment file. Until one of the keys is set there,
 production has no provider: the copilot and Ask AEGIX both answer 503.
 
+A model that reasons before it answers spends output tokens on the reasoning,
+and an answer cut off by `AI_MAX_OUTPUT_TOKENS` is refused as `TRUNCATED`
+(502). For such a provider set `LLM_DISABLE_THINKING=true`, which sends
+`thinking: { type: "disabled" }`, or raise `AI_MAX_OUTPUT_TOKENS` and
+`AI_TIMEOUT_MS`. Compose passes all three.
+
 A question costs one of the caller's daily Ask AEGIX questions
 (`ask.daily`), and is claimed before the provider is called, as there. A
 provider outage costs this route and nothing else.
