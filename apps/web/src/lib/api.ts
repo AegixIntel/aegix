@@ -1020,6 +1020,25 @@ export async function askMarket(asset: MarketAsset, question: string, wallet?: s
   return { ...(await response.json()), wallet: wallet ?? asset, analysisId: "" } as AskResponse;
 }
 
+/** D16: one question over the record of every product that is switched on. */
+export interface CopilotResponse extends Omit<AskResponse, "wallet" | "analysisId"> {
+  wallet: string | null;
+  evidence: Array<{ id: string; label: string }>;
+  sources: { signals: boolean; narratives: boolean; crossMarket: boolean; discoveries: boolean; wallet: boolean };
+}
+export async function askCopilot(question: string, wallet?: string): Promise<CopilotResponse> {
+  const response = await fetch(`${API_BASE_URL}/v1/copilot/ask`, {
+    method: "POST", headers: { "content-type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ question, ...(wallet ? { wallet } : {}) })
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new AskAegixError({ code: body?.code ?? "AI_UNAVAILABLE", reason: body?.reason,
+      message: body?.message ?? body?.code ?? "The copilot is unavailable" });
+  }
+  return response.json() as Promise<CopilotResponse>;
+}
+
 // ---- D11: billing / entitlements ----
 
 export type PlanCode = "free" | "pro" | "team";

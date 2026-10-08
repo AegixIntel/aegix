@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "@aegix/config";
-import { createObservationRepo, type CaptureCoverageRow, type CaptureDomain, type ContextCaptureRow, type Sql } from "@aegix/database";
+import { createObservationRepo, type CaptureCoverageRow, type CaptureDomain, type ContextCaptureRow, type ObservationRepo, type Sql } from "@aegix/database";
 import { CANONICAL_ASSETS, isCanonicalAsset } from "@aegix/markets";
 import { marketSeries, marketSeriesKey } from "@aegix/rewind";
 import {
@@ -8,7 +8,7 @@ import {
   CROSS_MARKET_HORIZON_HOURS, NARRATIVE_BASELINE_HOURS, NARRATIVE_CONTEXT_SOURCE, NARRATIVE_RADAR_HORIZON_HOURS, NARRATIVE_RADAR_VERSION,
   NARRATIVE_RECENT_HOURS, NARRATIVE_TOPICS, QUOTED_FUNDS, SECTOR_QUOTES_SOURCE, TOKENIZED_STOCKS, buildCrossMarketView, buildNarrativeRadar,
   buildSignalFeed, fundPriceSeriesKey, narrativeContextSeries, narrativeContextSeriesKey, narrativeSeries, optionsSeries, sectorQuoteSeries,
-  tokenizedStockSeries, tokenizedStockSeriesKey, type CrossMarketSeries, type MarketClass, type SignalDomain, type SourcedPoint
+  tokenizedStockSeries, tokenizedStockSeriesKey, type CrossMarketSeries, type CrossMarketView, type MarketClass, type NarrativeRadarEntry, type SignalDomain, type SourcedPoint
 } from "@aegix/sources";
 
 export interface MarketIntelligenceDeps {
@@ -71,6 +71,48 @@ function hoursParam(value: string | undefined, fallback: number, max: number): n
   return Number.isFinite(parsed) && parsed >= 1 ? Math.min(max, Math.floor(parsed)) : fallback;
 }
 
+/** The radar's reading of every topic at `at`, from the hourly counts on record. */
+export async function loadNarrativeRadar(repo: ObservationRepo, at: Date): Promise<NarrativeRadarEntry[]> {
+  const keys = new Map(NARRATIVE_TOPICS.map((topic) => [narrativeContextSeriesKey(topic.id), topic.id]));
+  const rows = await repo.pointsBetween([...keys.keys()], new Date(at.getTime() - NARRATIVE_RADAR_HORIZON_HOURS * HOUR_MS).toISOString(), new Date(at.getTime() + 1).toISOString());
+  const points = new Map<string, Array<{ eventTime: string; value: number }>>();
+  for (const row of rows) {
+    if (row.source !== NARRATIVE_CONTEXT_SOURCE) continue;
+    const topic = keys.get(row.series_key)!;
+    const list = points.get(topic) ?? [];
+    list.push({ eventTime: new Date(row.event_time).toISOString(), value: Number(row.value) });
+    points.set(topic, list);
+  }
+  return buildNarrativeRadar({ topics: NARRATIVE_TOPICS, points, at });
+}
+
+/** The cross-market view at `at`, over the classes whose price capture is on. */
+export async function loadCrossMarketView(repo: ObservationRepo, config: AppConfig, at: Date): Promise<CrossMarketView> {
+  const descriptors: Array<Omit<CrossMarketSeries, "points"> & { source?: string }> = [
+    ...(config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS ? CANONICAL_ASSETS.map((asset) => ({
+      key: marketSeriesKey(asset, "price_usd"), symbol: asset as string, label: `${asset} price (USD)`, marketClass: "CRYPTO" as const, session: false })) : []),
+    ...(config.ENABLE_TOKENIZED_STOCK_CAPTURE ? TOKENIZED_STOCKS.filter((s) => s.pool).map((s) => ({
+      key: tokenizedStockSeriesKey(s.symbol, "price_usdc"), symbol: s.symbol, label: `${s.symbol} — tokenized ${s.underlying}, price in one on-chain pool`,
+      marketClass: s.symbol === "GLDx" ? "TOKENIZED_GOLD" as const : "TOKENIZED_EQUITY" as const, session: false })) : []),
+    ...(config.ENABLE_SECTOR_CAPTURE ? QUOTED_FUNDS.map((fund) => ({
+      key: fundPriceSeriesKey(fund.symbol), symbol: fund.symbol, label: `${fund.symbol} — fund holding ${fund.holds}`,
+      marketClass: fund.group.startsWith("commodity:") ? "COMMODITY_FUND" as const : "SECTOR_FUND" as const, session: true, source: SECTOR_QUOTES_SOURCE })) : [])
+  ];
+  const rows = descriptors.length
+    ? await repo.pointsBetween(descriptors.map((d) => d.key), new Date(at.getTime() - CROSS_MARKET_HORIZON_HOURS * HOUR_MS).toISOString(), new Date(at.getTime() + 1).toISOString())
+    : [];
+  const points = new Map<string, SourcedPoint[]>();
+  for (const row of rows) {
+    const list = points.get(row.series_key) ?? [];
+    list.push({ eventTime: new Date(row.event_time).toISOString(), value: Number(row.value), source: row.source });
+    points.set(row.series_key, list);
+  }
+  return buildCrossMarketView({
+    at,
+    series: descriptors.map(({ source, ...d }) => ({ ...d, points: (points.get(d.key) ?? []).filter((p) => !source || p.source === source) }))
+  });
+}
+
 /**
  * D15 read APIs: Narrative Radar, Anomaly Detection, the Signal Engine and
  * Cross-Market Intelligence. See docs/milestone-d15-market-intelligence-engines.md.
@@ -98,19 +140,10 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
     if (!(await admit(config.ENABLE_NARRATIVE_RADAR, req, reply))) return;
     const at = now();
     const before = new Date(at.getTime() + 1).toISOString();
-    const keys = new Map(NARRATIVE_TOPICS.map((topic) => [narrativeContextSeriesKey(topic.id), topic.id]));
-    const [rows, stored] = await Promise.all([
-      repo.pointsBetween([...keys.keys()], new Date(at.getTime() - NARRATIVE_RADAR_HORIZON_HOURS * HOUR_MS).toISOString(), before),
+    const [radar, stored] = await Promise.all([
+      loadNarrativeRadar(repo, at),
       repo.latestSignalledCaptures(["NARRATIVE", "ANOMALY"], new Date(at.getTime() - NARRATIVE_SIGNALS_DAYS * 24 * HOUR_MS).toISOString(), before, FEED_CAPTURES_LIMIT)
     ]);
-    const points = new Map<string, Array<{ eventTime: string; value: number }>>();
-    for (const row of rows) {
-      if (row.source !== NARRATIVE_CONTEXT_SOURCE) continue;
-      const topic = keys.get(row.series_key)!;
-      const list = points.get(topic) ?? [];
-      list.push({ eventTime: new Date(row.event_time).toISOString(), value: Number(row.value) });
-      points.set(topic, list);
-    }
     const signalsFor = (topic: string) => stored
       .filter((row) => (row.domain === "NARRATIVE" && row.subject === topic) || (row.domain === "ANOMALY" && row.subject === narrativeContextSeriesKey(topic)))
       .slice(0, 10)
@@ -121,7 +154,7 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
       recentHours: NARRATIVE_RECENT_HOURS,
       baselineHours: NARRATIVE_BASELINE_HOURS,
       capture: { mentions: config.ENABLE_NARRATIVE_CONTEXT_CAPTURE, signals: config.ENABLE_CONTEXT_SIGNAL_CAPTURE, anomalies: config.ENABLE_ANOMALY_CAPTURE },
-      topics: buildNarrativeRadar({ topics: NARRATIVE_TOPICS, points, at }).map((entry) => ({ ...entry, storedSignals: signalsFor(entry.topic) })),
+      topics: radar.map((entry) => ({ ...entry, storedSignals: signalsFor(entry.topic) })),
       limitations: [
         "A topic's count is the distinct articles GDELT's Context index saw mentioning it in an hour. It measures how much was published: not sentiment, not social media, and not whether the coverage was accurate.",
         "An hour with no article and an hour that was not read are both absent from the record, and both are left out of the averages.",
@@ -203,34 +236,9 @@ export function registerMarketIntelligence(deps: MarketIntelligenceDeps): void {
   // ---- Cross-Market Intelligence ----
   app.get("/v1/cross-market", { config: rate }, async (req, reply) => {
     if (!(await admit(config.ENABLE_CROSS_MARKET, req, reply))) return;
-    const at = now();
-    const marketOn = config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS;
-    const descriptors: Array<Omit<CrossMarketSeries, "points"> & { source?: string }> = [
-      ...(marketOn ? CANONICAL_ASSETS.map((asset) => ({
-        key: marketSeriesKey(asset, "price_usd"), symbol: asset as string, label: `${asset} price (USD)`, marketClass: "CRYPTO" as const, session: false })) : []),
-      ...(config.ENABLE_TOKENIZED_STOCK_CAPTURE ? TOKENIZED_STOCKS.filter((s) => s.pool).map((s) => ({
-        key: tokenizedStockSeriesKey(s.symbol, "price_usdc"), symbol: s.symbol, label: `${s.symbol} — tokenized ${s.underlying}, price in one on-chain pool`,
-        marketClass: s.symbol === "GLDx" ? "TOKENIZED_GOLD" as const : "TOKENIZED_EQUITY" as const, session: false })) : []),
-      ...(config.ENABLE_SECTOR_CAPTURE ? QUOTED_FUNDS.map((fund) => ({
-        key: fundPriceSeriesKey(fund.symbol), symbol: fund.symbol, label: `${fund.symbol} — fund holding ${fund.holds}`,
-        marketClass: fund.group.startsWith("commodity:") ? "COMMODITY_FUND" as const : "SECTOR_FUND" as const, session: true, source: SECTOR_QUOTES_SOURCE })) : [])
-    ];
-    const rows = descriptors.length
-      ? await repo.pointsBetween(descriptors.map((d) => d.key), new Date(at.getTime() - CROSS_MARKET_HORIZON_HOURS * HOUR_MS).toISOString(), new Date(at.getTime() + 1).toISOString())
-      : [];
-    const points = new Map<string, SourcedPoint[]>();
-    for (const row of rows) {
-      const list = points.get(row.series_key) ?? [];
-      list.push({ eventTime: new Date(row.event_time).toISOString(), value: Number(row.value), source: row.source });
-      points.set(row.series_key, list);
-    }
-    const view = buildCrossMarketView({
-      at,
-      series: descriptors.map(({ source, ...d }) => ({ ...d, points: (points.get(d.key) ?? []).filter((p) => !source || p.source === source) }))
-    });
     return {
-      ...view,
-      capture: { crypto: marketOn, tokenizedStocks: config.ENABLE_TOKENIZED_STOCK_CAPTURE, funds: config.ENABLE_SECTOR_CAPTURE },
+      ...(await loadCrossMarketView(repo, config, now())),
+      capture: { crypto: config.ENABLE_REWIND_CAPTURE && config.ENABLE_MARKETS, tokenizedStocks: config.ENABLE_TOKENIZED_STOCK_CAPTURE, funds: config.ENABLE_SECTOR_CAPTURE },
       limitations: [
         "Everything here is measured on prices AEGIX already stored. A class is the members AEGIX captures, listed under it, not the market it is named after.",
         "A tokenized stock's price is the token's price in one on-chain pool. It follows the underlying equity only as far as arbitrage holds it there, and it trades while the stock market is closed.",

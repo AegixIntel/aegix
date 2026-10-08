@@ -232,6 +232,10 @@ const envSchema = z.object({
   ENABLE_NARRATIVE_RADAR: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_SIGNAL_ENGINE: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_CROSS_MARKET: z.preprocess(boolEnv, z.boolean()).default(false),
+  // D16: one question over the record of every product that is switched on,
+  // answered by the provider Ask AEGIX uses and metered against the same
+  // daily limit. See docs/milestone-d16-ai-copilot.md.
+  ENABLE_AI_COPILOT: z.preprocess(boolEnv, z.boolean()).default(false),
   NARRATIVE_BASE_URL: z.string().url().default("https://api.gdeltproject.org/api/v2"),
   OPTIONS_BASE_URL: z.string().url().default("https://cdn.cboe.com/api/global"),
   SERIES_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),

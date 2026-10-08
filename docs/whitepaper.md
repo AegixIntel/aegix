@@ -213,10 +213,16 @@ answering. Answers are validated against the supplied evidence and citations
 are enforced, so the model explains findings and decides none of them.
 
 The wider **AI Intelligence Copilot** — explaining an anomaly, "what changed
-today", portfolio-level reasoning — is **PLANNED**. `packages/explanation`
-additionally produces deterministic, template-based explanations for every
-signal and path today; that is not an AI layer and must not be described as
-one. No score or signal depends on an LLM.
+today", portfolio-level reasoning — has a first version (D16,
+`POST /v1/copilot/ask`), switched off by default and not on in production:
+one question answered from the signals, anomalies, discoveries, news coverage
+and cross-market view already on record, plus one wallet's analysis when the
+caller names it. It is the same grounded machinery as Ask AEGIX over a wider
+evidence block. There is no portfolio-level reasoning and no memory between
+questions. `packages/explanation` additionally produces deterministic,
+template-based explanations for every signal and path today; that is not an
+AI layer and must not be described as one. No score or signal depends on an
+LLM.
 
 ---
 
@@ -292,8 +298,8 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 |---|---|
 | SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
-| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence |
-| LATER | AI Intelligence Copilot, Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
+| NEXT | Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market Intelligence, AI Intelligence Copilot |
+| LATER | Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
 
 ---
 

@@ -28,8 +28,9 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
 - **In development:** Narrative Radar, Anomaly Detection, Signal Engine, Cross-Market
   Intelligence — each has a first engine, default off and not switched on in production
   (`docs/milestone-d15-market-intelligence-engines.md`). There is still no licensed
-  market data source.
-- **Planned:** AI Intelligence Copilot, Wallet Reputation, $AEX economic layer,
+  market data source. AI Intelligence Copilot — built, default off, needs an LLM
+  provider (`docs/milestone-d16-ai-copilot.md`).
+- **Planned:** Wallet Reputation, $AEX economic layer,
   multi-chain. **Research:** Intelligence Network.
 
 ### Network ingestion
