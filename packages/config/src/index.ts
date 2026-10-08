@@ -13,6 +13,9 @@ function urlOrUndefined(v: unknown): unknown {
   return typeof v === "string" && v.trim() === "" ? undefined : v;
 }
 
+/** The same for any optional text: Compose passes an unset variable as "". */
+const blankAsUnset = urlOrUndefined;
+
 const envSchema = z.object({
   ENABLE_NETWORK_API: z.preprocess(boolEnv, z.boolean()).default(false),
   ENABLE_INDEXED_TRANSACTIONS: z.preprocess(boolEnv, z.boolean()).default(false),
@@ -43,10 +46,10 @@ const envSchema = z.object({
   RPC_CIRCUIT_COOLDOWN_MS: z.coerce.number().int().positive().default(30000),
   RPC_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(2),
 
-  LLM_API_KEY: z.string().optional(),
-  GROQ_API_KEY: z.string().optional(),
-  LLM_BASE_URL: z.string().url().optional(),
-  LLM_MODEL: z.string().default("gpt-4o-mini"),
+  LLM_API_KEY: z.preprocess(blankAsUnset, z.string().optional()),
+  GROQ_API_KEY: z.preprocess(blankAsUnset, z.string().optional()),
+  LLM_BASE_URL: z.preprocess(urlOrUndefined, z.string().url().optional()),
+  LLM_MODEL: z.preprocess(blankAsUnset, z.string().default("gpt-4o-mini")),
 
   JWT_SECRET: z.string().min(16).default("development-only-secret-change-me"),
 
@@ -335,8 +338,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const config = parsed.data;
   if (config.GROQ_API_KEY && !config.LLM_API_KEY) {
     config.LLM_API_KEY = config.GROQ_API_KEY;
-    config.LLM_BASE_URL = env.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
-    config.LLM_MODEL = env.LLM_MODEL ?? "llama-3.3-70b-versatile";
+    config.LLM_BASE_URL = config.LLM_BASE_URL ?? "https://api.groq.com/openai/v1";
+    config.LLM_MODEL = env.LLM_MODEL?.trim() ? config.LLM_MODEL : "llama-3.3-70b-versatile";
   }
 
   // Fail fast in production: never silently run with unsafe defaults, see
