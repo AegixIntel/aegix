@@ -490,6 +490,37 @@ GDELT itself has published nothing after 2 October 08:00 UTC, as read on
 Capture is on and its sweeps add nothing until GDELT resumes, and each scan
 until then has that many fewer narrative hours in its window.
 
+Read again on 6 October 2026 at 21:20 UTC: a request for the last three days
+answers HTTP 200 with an empty `timeline`, which the source reports as
+`GDELT timeline is missing`. Nothing on AEGIX's side changes that. The
+Context reading (§4a) is still answered and still written.
+
+## 4c. Relationships across more than two series
+
+The engine tests pairs, and that does not change. A **cluster** is a reading
+of the discoveries already on record: those one run stamped that are joined
+by a shared series. "A and B" and "B and C", first found by the same scan,
+are one cluster over A, B and C.
+
+```text
+joined      discoveries of the same run that share a series, in a group of
+            at least three series
+not joined  discoveries of different runs, and a discovery whose latest
+            event is NOT_CONFIRMED
+identity    none of its own. It is named by the Discovery ID of its earliest
+            link, and every link keeps its own ID, stamp and confirmation
+where       GET /v1/discoveries returns `clusters` beside `discoveries`,
+            read over the newest 200 discoveries; /app/discoveries shows
+            them first, with every series on one drawing
+```
+
+It is not a joint test. Each line passed its own test in the same run, and
+nothing says the series move as one. It adds no hypothesis, so it does not
+touch the false discovery rate, and it stores nothing: the same rows always
+give the same clusters. A series that many others relate to, such as a broad
+index, puts them all in one cluster; that is a fact about that series, and
+the drawing shows it as the most connected.
+
 ## 5. Discovery ID
 
 ```text

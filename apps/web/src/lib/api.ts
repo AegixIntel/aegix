@@ -1197,7 +1197,16 @@ export interface DiscoveryRunSummary {
   epochEnd: string; completedAt: string; engineVersion: string; method: string; fdrLevel: number;
   seriesCount: number; hypothesesConsidered: number; hypothesesTested: number; rejections: number;
 }
-export interface DiscoveryListResponse { discoveries: DiscoverySummary[]; latestRun: DiscoveryRunSummary | null }
+/** Discoveries one scan stamped that share a series: a relationship across more than two. */
+export interface DiscoveryCluster {
+  /** The Discovery ID of its earliest link; a cluster has no ID of its own. */
+  key: string;
+  firstDetectedAt: string;
+  lastDetectedAt: string;
+  series: Array<{ key: string; label: string; group: string }>;
+  links: Array<{ id: string; seriesA: string; seriesB: string; lagHours: number; direction: string; status: string; detectedAt: string; r: number | null }>;
+}
+export interface DiscoveryListResponse { discoveries: DiscoverySummary[]; clusters: DiscoveryCluster[]; latestRun: DiscoveryRunSummary | null }
 export interface DiscoveryDetailResponse {
   discovery: DiscoverySummary;
   run: DiscoveryRunSummary | null;

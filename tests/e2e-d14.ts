@@ -251,6 +251,8 @@ async function main() {
     const list = await app.inject({ url: "/v1/discoveries?limit=100", headers });
     assert.equal(list.statusCode, 200);
     assert.ok(list.json().discoveries.some((d: { id: string }) => d.id === `AEX-${discoveryId}`));
+    assert.ok(Array.isArray(list.json().clusters), "the list carries the clusters read from it");
+    assert.ok(!list.json().clusters.some((c: { links: Array<{ id: string }> }) => c.links.some((l) => l.id === `AEX-${discoveryId}`)), "a lone pair is not a cluster");
     assert.equal((await app.inject({ url: "/v1/discoveries/not-an-id", headers })).statusCode, 400);
     assert.equal((await app.inject({ url: "/v1/discoveries/AEX-999999999999", headers })).statusCode, 404);
     assert.equal((await app.inject({ url: "/v1/discoveries" })).statusCode, 401);

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppConfig } from "@aegix/config";
 import { createDiscoveryRepo, type DiscoveryAnchorRow, type DiscoveryRow, type DiscoveryRunRow, type Sql } from "@aegix/database";
-import { OTS_CONTENT_TYPE, otsFile } from "@aegix/discovery";
+import { OTS_CONTENT_TYPE, otsFile, relationshipClusters } from "@aegix/discovery";
 
 export interface DiscoveryDeps {
   app: FastifyInstance;
@@ -35,6 +35,41 @@ function view(row: DiscoveryRow) {
     chainHash: row.chain_hash,
     card: row.card
   };
+}
+
+/** Discoveries read when clusters are built; a cluster is within one run, so the newest runs are whole. */
+const CLUSTER_READ_LIMIT = 200;
+
+type CardSeries = { key?: unknown; label?: unknown; group?: unknown };
+
+/**
+ * Relationships across more than two series: the discoveries one scan stamped
+ * that share a series. A reading of the rows above, with no ID of its own.
+ */
+function clustersView(rows: DiscoveryRow[]) {
+  const labels = new Map<string, { key: string; label: string; group: string }>();
+  const links = rows.map((row) => {
+    const card = row.card as { seriesA?: CardSeries; seriesB?: CardSeries; effect?: { r?: unknown } } | null;
+    for (const [key, described] of [[row.series_a, card?.seriesA], [row.series_b, card?.seriesB]] as const) {
+      labels.set(key, {
+        key,
+        label: typeof described?.label === "string" ? described.label : key,
+        group: typeof described?.group === "string" ? described.group : key
+      });
+    }
+    return {
+      id: discoveryDisplayId(row.id), runId: row.run_id, seriesA: row.series_a, seriesB: row.series_b, lagHours: row.lag_hours,
+      direction: row.direction, status: row.status, detectedAt: new Date(row.detected_at).toISOString(),
+      r: typeof card?.effect?.r === "number" ? card.effect.r : null
+    };
+  });
+  return relationshipClusters(links).map((cluster) => ({
+    key: cluster.key,
+    firstDetectedAt: cluster.firstDetectedAt,
+    lastDetectedAt: cluster.lastDetectedAt,
+    series: cluster.series.map((key) => labels.get(key)!),
+    links: cluster.links.map(({ runId: _run, ...link }) => link)
+  }));
 }
 
 /** One calendar's receipt for a chain head. The proof itself is the .ots file. */
@@ -83,10 +118,12 @@ export function registerDiscovery(deps: DiscoveryDeps): void {
   app.get<{ Querystring: { limit?: string } }>("/v1/discoveries", { config: rate }, async (req, reply) => {
     if (!(await admit(req, reply))) return;
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 25));
-    const [rows, latestRun] = await Promise.all([repo.list(limit), repo.latestRun()]);
+    // Clusters are read over more discoveries than the page shows, so one
+    // does not lose a link to the page size.
+    const [recent, latestRun] = await Promise.all([repo.list(Math.max(limit, CLUSTER_READ_LIMIT)), repo.latestRun()]);
     // The latest run is returned even when it found nothing: an empty list
     // with no run means the engine has not scanned, which is a different fact.
-    return { discoveries: rows.map(view), latestRun: runView(latestRun) };
+    return { discoveries: recent.slice(0, limit).map(view), clusters: clustersView(recent), latestRun: runView(latestRun) };
   });
 
   app.get<{ Params: { id: string } }>("/v1/discoveries/:id", { config: rate }, async (req, reply) => {
