@@ -124,8 +124,8 @@ export const products: Product[] = [
   },
   { id: "intelligence-core", name: "Intelligence Core", href: "/intelligence", status: "LIVE", surfaces: ["ROADMAP"] },
 
-  // Markets. The shipped half is price and volume for three assets; the
-  // sector, narrative and cross-market half has no engine and no data source.
+  // Markets. Price and volume for three assets; the narrative, cross-market,
+  // signal and anomaly views are separate products below.
   {
     id: "market-intelligence",
     name: "Market Intelligence",
@@ -133,7 +133,7 @@ export const products: Product[] = [
     status: "LIVE",
     surfaces: ["ROADMAP", "CATEGORY", "PRODUCT_LINE"],
     body: "BTC, ETH and SOL price, volume, bounded hourly history and deterministic signals.",
-    note: "BTC, ETH and SOL only, over a bounded hourly window. Sector, ETF, narrative and cross-market analysis are not built."
+    note: "BTC, ETH and SOL only, over a bounded hourly window. This is the crypto price and volume view; narrative, cross-market and fund analysis are separate products."
   },
   // D15. Switched on in production on 8 October 2026. Anomaly Detection stays
   // IN DEVELOPMENT, with no link, until its corrected engine has a record to show.
@@ -184,7 +184,7 @@ export const products: Product[] = [
     href: "/app/discoveries",
     status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News is read as hourly mention counts from 4 October 2026, which the scan can test once two weeks of them are stored. Options and sector funds are not captured, so there is no sector rotation and no commodity beyond tokenized gold."
+    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News is read as hourly mention counts from 4 October 2026, which the scan can test once two weeks of them are stored. Options and sector and commodity fund prices are captured from the Cboe delayed feed, which carries no redistribution licence."
   },
 
   // Later.
