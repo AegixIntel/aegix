@@ -249,9 +249,9 @@ hypothesis count, and its discoveries join the same Discovery ID chain. A lag
 is stored in hours in both, so a daily lag of two days is `48`. Nothing can
 be tested until a series has about four months of daily observations: capture
 began on 1 October 2026 for market and tokenized stock series, and begins for
-options and funds when their flags are set. Until then every hypothesis is
-recorded as `INSUFFICIENT_BASELINE`. The scan loads 125 days of ledger for
-every series in one read.
+options and funds on 6 October 2026, when their flags were set. Until then every
+hypothesis is recorded as `INSUFFICIENT_BASELINE`. The scan loads 125 days of
+ledger for every series in one read.
 
 The card's "confidence" is `1 − q`. It is not the heuristic confidence used by
 the wallet correlation engine, and it is not a probability that the
