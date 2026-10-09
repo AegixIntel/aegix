@@ -51,6 +51,30 @@ test("a valid structured response is parsed and returned", async () => {
   assert.equal(result.model, REQUEST.model);
 });
 
+test("a dense answer that cites many items is accepted, not refused", async () => {
+  // The copilot is offered up to 60 items across several products, and a
+  // broad question makes the model cite many of them in one statement. That
+  // is a well-formed answer; refusing it for exceeding an Ask AEGIX-sized
+  // bound is what left the copilot answering MALFORMED_RESPONSE in production.
+  const findings = Array.from({ length: 20 }, (_, i) => ({
+    statement: `statement ${i}`,
+    evidenceIds: Array.from({ length: 28 }, (_, j) => `ind:${i}:${j}`)
+  }));
+  const provider = createOpenAICompatibleProvider({
+    baseUrl: "https://example.invalid/v1",
+    apiKey: "k",
+    fetchImpl: async () => completion(JSON.stringify({
+      summary: "s",
+      findings,
+      limitations: Array.from({ length: 15 }, (_, i) => `limitation ${i}`)
+    }))
+  });
+
+  const result = await provider.generateStructuredResponse(REQUEST);
+  assert.equal(result.answer.findings.length, 20);
+  assert.equal(result.answer.findings[0]!.evidenceIds.length, 28);
+});
+
 test("the credential never leaves the module, even on rejection", async () => {
   const provider = createOpenAICompatibleProvider({
     baseUrl: "https://example.invalid/v1",

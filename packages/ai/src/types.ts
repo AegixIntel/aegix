@@ -37,16 +37,23 @@ export class AIError extends Error {
  * Every finding cites evidence by ID. A finding that cites nothing has
  * nothing behind it, and one that cites an ID AEGIX never issued is a
  * fabrication — both are removed before anything reaches a caller.
+ *
+ * The bounds are wide enough for the copilot, which is offered up to 60
+ * evidence items across several products: a statement may legitimately rest
+ * on many of them, and a question like "what changed today" produces more
+ * findings than one about a single wallet. A tighter bound refuses a
+ * well-formed answer the model had every reason to write, which reads to a
+ * caller as the model failing.
  */
 export const findingSchema = z.object({
   statement: z.string().min(1).max(600),
-  evidenceIds: z.array(z.string().min(1).max(120)).max(12)
+  evidenceIds: z.array(z.string().min(1).max(120)).max(60)
 });
 
 export const structuredAnswerSchema = z.object({
   summary: z.string().min(1).max(2000),
-  findings: z.array(findingSchema).max(12),
-  limitations: z.array(z.string().min(1).max(400)).max(12)
+  findings: z.array(findingSchema).max(24),
+  limitations: z.array(z.string().min(1).max(400)).max(16)
 });
 
 export type Finding = z.infer<typeof findingSchema>;
