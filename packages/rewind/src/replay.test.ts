@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildReplay, RewindError, type CaptureRecord, type CapturedSignal } from "./replay.js";
+import { reconstructCaptures } from "./reconstruct.js";
 import { marketSeries, marketSeriesKey } from "./series.js";
 
 const EVENT = "2026-09-20T12:00:00.000Z";
@@ -103,4 +104,37 @@ test("context captures are admitted under the same window and lock, one entry pe
   assert.equal(result.context[0]!.lastObservedAt, new Date(Date.parse(EVENT) - 6 * 3_600_000).toISOString());
   assert.equal(result.verdict, "NOTHING_OBSERVED", "what the news was doing is not a signal on the subject");
   assert.ok(result.limitations.some((l) => l.includes("surroundings")));
+});
+
+test("a reconstruction gives each hour only that hour and the ones before it, from one provider", () => {
+  const start = Date.parse("2026-09-20T00:00:00.000Z");
+  const point = (hour: number, value: number, source: string) => ({ eventTime: new Date(start + hour * 3_600_000 + 60_000).toISOString(), value, source });
+  const seen: Array<{ current: number; history: number[]; volume: number | null }> = [];
+  const result = reconstructCaptures({
+    from: new Date(start + 2 * 3_600_000).toISOString(),
+    to: new Date(start + 6 * 3_600_000).toISOString(),
+    price: [0, 1, 2, 3, 4, 5, 6, 7].map((h) => point(h, 100 + h, "a")).concat([point(4, 900, "b"), point(5, 901, "b")]),
+    volume: [point(3, 50, "a")],
+    engineVersion: "markets-test",
+    compute: (step) => {
+      seen.push({ current: step.currentPrice, history: step.history.map((h) => h.priceUsd), volume: step.currentVolume });
+      return step.currentPrice === 103 ? [signal("MOMENTUM")] : [];
+    }
+  });
+  assert.deepEqual(seen, [
+    { current: 102, history: [100, 101], volume: null },
+    { current: 103, history: [100, 101, 102], volume: 50 },
+    { current: 104, history: [100, 101, 102, 103], volume: null }
+  ], "the provider with more history behind the hour is read, and hours 5 and later are not stamped before the end");
+  assert.deepEqual(result.captures.map((c) => [c.observedAt, c.providerStatus, c.signals.length]), [
+    ["2026-09-20T03:00:00.000Z", "RECONSTRUCTED", 0], ["2026-09-20T04:00:00.000Z", "RECONSTRUCTED", 1], ["2026-09-20T05:00:00.000Z", "RECONSTRUCTED", 0]
+  ]);
+  assert.deepEqual(result.sources, ["a"]);
+  assert.equal(result.hours, 3);
+  assert.ok(result.captures.every((c) => c.id.startsWith("reconstructed:") && c.qualityGrade === "LOW"));
+});
+
+test("hours with no price are not reconstructed", () => {
+  const result = reconstructCaptures({ from: "2026-09-20T00:00:00.000Z", to: "2026-09-21T00:00:00.000Z", price: [], volume: [], engineVersion: "x", compute: () => [] });
+  assert.deepEqual(result, { captures: [], sources: [], hours: 0 });
 });

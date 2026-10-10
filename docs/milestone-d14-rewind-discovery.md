@@ -105,6 +105,44 @@ insert-only in the application but are **not** trigger-protected and still
 cascade on wallet deletion. A wallet replay says so in its limitations, and its
 coverage is irregular: an analysis exists only when someone asked for one.
 
+## 2a. Reconstruction: the hours with no capture
+
+A replay still has no backfill, and no capture is ever written for the past.
+What `ENABLE_REWIND_RECONSTRUCTION` adds is a second object beside the
+replay, for an asset whose window starts before its first stored capture:
+
+```text
+what        the signal engine, run when the replay is requested, once per
+            hour, over the ledger's price and 24h-volume history for that
+            asset
+which hours from the window start to the first stored capture, or to the
+            event when there is none; only hours the ledger holds a price for
+the rule    for each hour the engine is given that hour and up to 24 before
+it keeps    it, never anything later, and from one provider only: two
+            providers' volumes differ by a constant that would read as one
+            large move at the seam
+returned    `reconstruction`: its own answer, checkpoints, first signal and
+            convergence, the engine version, when it was computed, and the
+            providers it read. Null when there is nothing to reconstruct
+```
+
+It is the lookahead §2 describes, and it is labelled as that rather than
+hidden: the engine and its thresholds are today's, and ledger rows loaded
+after the fact are provider history, not observations AEGIX made. So:
+
+- It never changes `verdict`, `answer`, `timeline` or `coverage`. A window
+  with no capture is still `NO_COVERAGE`.
+- Nothing is stored. Asked again after an engine change, it can answer
+  differently; a replay cannot.
+- The page draws it apart from the replay, under "Reconstructed · not a
+  stored record", with different marks and its own limitations.
+- It reaches as far back as the ledger's history: in production 16 September
+  2026 for the market assets and tokenized stock prices (§4b). A tokenized
+  stock has no volume history, so no volume signal can appear.
+
+It answers "what does the engine say about that history". It does not answer
+"what did AEGIX know", and it is not evidence for any claim about that.
+
 ## 3. Rewind
 
 `POST /v1/rewind` with `{ subjectType, subject, eventTime, lookbackHours }`.
