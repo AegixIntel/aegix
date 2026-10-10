@@ -22,8 +22,10 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   API, Signed Webhooks, Population Commonality (flag off by default, and additionally
   gated on population sufficiency), Market Intelligence (BTC, ETH and SOL only),
   AEGIX Rewind and the AEGIX Discovery Engine (both default off). Their series are
-  BTC, ETH and SOL market data and tokenized stocks read from Solana; news volume by
-  topic and delayed options activity are built but not captured in production
+  BTC, ETH and SOL market data, tokenized stocks read from Solana and news volume by
+  topic. Delayed options activity and sector and commodity fund prices are captured in
+  production since 6 October 2026 from a feed with no redistribution licence; only a
+  daily scan reads them, and it tests nothing before about February 2027
   (`docs/milestone-d14-rewind-discovery.md`). Narrative Radar, Signal Engine and
   Cross-Market Intelligence (first engines, default off;
   `docs/milestone-d15-market-intelligence-engines.md`), and the AI Intelligence

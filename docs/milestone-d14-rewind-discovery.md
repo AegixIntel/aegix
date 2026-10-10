@@ -31,7 +31,9 @@ signal captures        signal_captures + signal_snapshots: what the market
                        signal engine reported at capture time, with its version
 capture sweep          worker interval, one capture per asset per time bucket
 Rewind                 POST /v1/rewind, /app/rewind — replay of stored captures
-                       for BTC, ETH, SOL and for completed wallet analyses
+                       for BTC, ETH, SOL, tokenized stocks and completed
+                       wallet analyses, with the Discovery IDs that were
+                       already on record for an asset (§3)
 series sources         tokenized stocks over Solana RPC, GDELT news volume,
                        Cboe delayed options, Cboe delayed sector and
                        commodity fund prices — each behind its own flag (§4a)
@@ -69,12 +71,15 @@ anchor upgrade              receipts are stored as the calendar returned them,
 The product concept describes a relationship between on-chain AI-infrastructure
 activity, power-sector options, copper and narrative velocity. Of those, what
 the engine can actually read today is: NVDAx and other tokenized equities
-on-chain, options activity for XLU and five other underlyings, and news volume
-for "data center", "AI infrastructure", "power grid", "copper" and "uranium".
-Copper and uranium exist only as news topics, not as prices. Adding a series
+on-chain, options activity for XLU and five other underlyings, the prices of
+sixteen sector and commodity funds, and news volume for "data center", "AI
+infrastructure", "power grid", "copper" and "uranium". Copper and uranium
+are news topics and two funds (CPER, URA), not spot prices. Adding a series
 is adding a source and a descriptor; the statistics do not change. Capture
 started in production on 1 October 2026, and both products are LIVE from that
-date with the limits §2 and §4b describe.
+date with the limits §2 and §4b describe. Options and funds have been
+captured in production since 6 October 2026 (§4a); only the daily scan reads
+them, and it tests nothing before about February 2027.
 
 ## 2. The no-hindsight rule
 
@@ -417,6 +422,16 @@ commodities   CPER (copper futures), URA (uranium miners),
   not written.
 - The list is part of the hypothesis set, like the narrative topics: a fund is
   not added because its sector is already in the news.
+
+**In production both Cboe sources and the daily scan are on**, since
+6 October 2026 at 18:03 UTC (`ENABLE_OPTIONS_CAPTURE`,
+`ENABLE_SECTOR_CAPTURE`, `ENABLE_DISCOVERY_DAILY`). The feed's standing has
+not changed: it is delayed and carries no redistribution licence. It was
+switched on so that the daily scan's four months start counting, and nothing
+read from it backs a public claim until a licensed feed replaces it. The
+hourly scan counts these series from its run of 7 October and cannot test
+them, so its hypothesis count rises from that run while its tested count does
+not.
 
 **Session sources ask only while the US market is open** — weekdays from 09:30
 to 17:00 New York time, which includes one read after the close. The feed
