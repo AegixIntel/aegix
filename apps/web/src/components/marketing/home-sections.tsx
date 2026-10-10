@@ -257,7 +257,9 @@ export function NetworkAndRoadmap() {
                 <span className="font-mono text-[11px] tabular-nums text-muted-2">{String(g.items.length).padStart(2, "0")}</span>
               </div>
               <ul className="mt-6 space-y-2.5">
-                {g.items.map((item, ii) => (
+                {g.items.length === 0 ? (
+                  <li className="text-sm text-muted-2">Nothing at this stage right now.</li>
+                ) : g.items.map((item, ii) => (
                   <li
                     key={item.name}
                     title={item.note}

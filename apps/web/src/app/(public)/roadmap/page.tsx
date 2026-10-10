@@ -29,7 +29,9 @@ export default function RoadmapPage() {
               <StatusBadge label={g.label} />
             </div>
             <ul className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
-              {g.items.map((i) => (
+              {g.items.length === 0 ? (
+                <li className="text-sm text-muted-2">Nothing at this stage right now.</li>
+              ) : g.items.map((i) => (
                 <li key={i.name} className="flex items-start gap-2 text-sm text-muted-foreground">
                   <span className="mt-1.5 h-1 w-1 flex-none rounded-full bg-muted-2" aria-hidden="true" />
                   <span>
