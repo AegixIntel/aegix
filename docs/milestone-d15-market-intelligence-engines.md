@@ -245,6 +245,13 @@ The pages are in the signed-in app's navigation whether or not the flags are
 set; a page whose flag is off says so. The public product status does not
 change with this milestone.
 
+**Amended 10 October 2026**: Anomaly Detection was raised from `IN DEVELOPMENT`
+to `LIVE`, the one status this milestone left open. Its condition — that the
+corrected engine have a record to show — was met: production held 1,419 anomaly
+captures over 28 subjects from 8 October, 175 of them holding a signal, and the
+read API listed readings of `anomaly-v1.1.0` alone. The other three products
+were already `LIVE` at the time of the milestone.
+
 ## 7. Verification
 
 ```text

@@ -135,8 +135,9 @@ export const products: Product[] = [
     body: "BTC, ETH and SOL price, volume, bounded hourly history and deterministic signals.",
     note: "BTC, ETH and SOL only, over a bounded hourly window. This is the crypto price and volume view; narrative, cross-market and fund analysis are separate products."
   },
-  // D15. Switched on in production on 8 October 2026. Anomaly Detection stays
-  // IN DEVELOPMENT, with no link, until its corrected engine has a record to show.
+  // D15. Switched on in production on 8 October 2026. Anomaly Detection was
+  // raised to LIVE on 10 October 2026: the corrected engine had a record to
+  // show by then, and the page lists it.
   {
     id: "narrative-radar",
     name: "Narrative Radar",
@@ -148,9 +149,10 @@ export const products: Product[] = [
   {
     id: "anomaly-detection",
     name: "Anomaly Detection",
-    status: "IN DEVELOPMENT",
+    href: "/app/anomalies",
+    status: "LIVE",
     surfaces: ["ROADMAP"],
-    note: "Switched on for capture on 8 October 2026, and its first engine version was replaced the same day: it scored thinly traded series against a spread near zero. Measures each hourly change of a crypto, tokenized stock or news series against that series' own two weeks before. Series priced only in the US session are not read."
+    note: "Measures each hourly change of a crypto, tokenized stock or news series against that series' own two weeks before; a series priced only in the US session is not read. Capture began on 8 October 2026, and the first engine version was replaced the same day, having scored thinly traded series against a spread near zero. Its readings stay stored and are not listed; only the corrected engine's readings are shown."
   },
   {
     id: "signal-engine",

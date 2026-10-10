@@ -28,11 +28,11 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   daily scan reads them, and it tests nothing before about February 2027
   (`docs/milestone-d14-rewind-discovery.md`). Narrative Radar, Signal Engine and
   Cross-Market Intelligence (first engines, default off;
-  `docs/milestone-d15-market-intelligence-engines.md`), and the AI Intelligence
-  Copilot (default off, needs an LLM provider; `docs/milestone-d16-ai-copilot.md`).
+  `docs/milestone-d15-market-intelligence-engines.md`), the AI Intelligence
+  Copilot (default off, needs an LLM provider; `docs/milestone-d16-ai-copilot.md`),
+  and Anomaly Detection (capturing since 8 October 2026; its first engine version
+  was replaced the same day, and only the corrected one's readings are shown).
   There is still no licensed market data source.
-- **In development:** Anomaly Detection — capturing since 8 October 2026; its first
-  engine version was replaced the same day and the corrected one has no record yet.
 - **Planned:** Wallet Reputation, $AEX economic layer,
   multi-chain. **Research:** Intelligence Network.
 
