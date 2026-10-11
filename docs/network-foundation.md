@@ -130,6 +130,13 @@ workspace release checks and sustained live RPC ingestion were not run.
 
 ## Remaining production work
 
+**Amended 11 October 2026**: production now runs the read APIs over a bounded
+window of finalized Solana blocks. Item 1 is partly done — the per-block cost and
+rate are measured (6.38 MB from the RPC, 19.75 MB stored, 3.33 s per block) and
+`network:prune` exists — but partitioning and an automatic retention window do
+not, so coverage cannot be kept fresh. Items 2, 3 and 5 remain open. Item 4 is a
+product and legal decision, not engineering work, and is not planned here.
+
 1. Size/archive storage, partitions, pruning policy, ingestion metrics, provider
    redundancy, rate limiting and sustained mainnet throughput/load validation.
 2. Extend signature discovery to the index once coverage/freshness admission is

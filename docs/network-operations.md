@@ -62,6 +62,43 @@ the explicit indexer variables. Reviewer policy files must be mounted read-only
 at the path configured in the API environment; no private signing key belongs
 in the API container.
 
+## Deployed configuration (11 October 2026)
+
+The read APIs are **on** in production. Ingestion is a bounded window rather than
+a follower, and the measurements below are the reason:
+
+```text
+ENABLE_NETWORK_API=true, ENABLE_INDEXED_TRANSACTIONS=true
+                                   production.env, passed through by
+                                   docker-compose.production.yml — without that
+                                   pass-through the flags never reach the
+                                   container and every route answers 403
+INDEXER_CHAIN=solana:mainnet
+INDEXER_RPC_URLS                   the existing production RPC endpoint
+window                             a fixed range of finalized blocks; the exact
+                                   heights are recorded in architecture.md
+reputation                         NOT_CONFIGURED; no reviewed policy is mounted
+EVM chains                         not indexed
+
+one Solana mainnet block           6.38 MB from the RPC, 19.75 MB stored,
+                                   3.33 s to index
+the head                           2.5 blocks/s
+```
+
+No follower on this host can keep up: the indexer needs 3.33 s per block while
+the head produces 2.5 a second, which is what the 85-minute run in
+`milestone-d13-network-hardening.md` already showed. So the operator indexes a
+fixed range, stops, and the API reports exactly that range — `coverage`,
+`retained_floor` and the `limitations` on every answer.
+
+`INDEXER_START_HEIGHT` is written once into `network_checkpoints.start_height`
+and only compared afterwards, so it is a one-way door: a smaller start height
+cannot be set later for the same chain. Choose it deliberately.
+
+Extending coverage means running the CLI again from the stored `next_height`.
+Keeping coverage *fresh* needs partitioning and an automatic retention window,
+neither of which exists yet — that is the milestone, not a flag.
+
 ## API
 
 Session tokens use the existing `Authorization: Bearer ...` header. Developer

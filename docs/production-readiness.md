@@ -277,6 +277,9 @@ change, and no score dimension was added or removed.
 
 - No global Solana indexer; transaction history is bounded by disclosed
   signature, transaction, RPC-call, history-day, and execution-time budgets.
+  The Intelligence Network serves a bounded window of finalized Solana blocks
+  ingested by an operator-run CLI, and reports that covered range, its cursor
+  and its retained floor with every answer.
 - Entity registry and protocol/NFT semantic coverage are incomplete. Program
   identity is consolidated in a single verified catalog — see
   `docs/program-catalog.md` and `docs/intelligence-coverage-audit.md`.

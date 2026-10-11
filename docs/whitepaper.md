@@ -299,10 +299,10 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 
 | Status | Capability |
 |---|---|
-| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026) and Anomaly Detection (capturing since 8 October 2026) |
+| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026), Anomaly Detection (capturing since 8 October 2026) and Intelligence Network (Solana mainnet, over a bounded window of finalized blocks it actually ingested) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
 | NEXT | Nothing in development. |
-| LATER | Wallet Reputation, Intelligence Network, $AEX economic layer, multi-chain |
+| LATER | Wallet Reputation, $AEX economic layer, multi-chain |
 
 ---
 
