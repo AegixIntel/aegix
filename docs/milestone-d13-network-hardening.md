@@ -15,6 +15,12 @@ The safety property from D12 still holds:
 > defaults, and ingestion is still a CLI an operator starts. Nothing here changes
 > an existing deployment.**
 
+**Amended 11 October 2026**: production sets both flags and serves a bounded
+window of finalized Solana blocks. The paragraph above is still true of the code,
+and the measurement it shares is why the deployment stays bounded: 3.33 s per
+block indexed against a head that moves at 2.5 blocks/s means a follower cannot
+catch up, so the operator indexes a fixed range and stops.
+
 The one schema change is additive (indexes only).
 
 ---

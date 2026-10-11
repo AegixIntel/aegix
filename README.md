@@ -33,20 +33,22 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   and Anomaly Detection (capturing since 8 October 2026; its first engine version
   was replaced the same day, and only the corrected one's readings are shown).
   There is still no licensed market data source.
-- **Planned:** Wallet Reputation, $AEX economic layer,
-  multi-chain. **Research:** Intelligence Network.
+- **Planned:** Wallet Reputation, $AEX economic layer, multi-chain.
 
 ### Network ingestion
 
-Finalized-block ingestion for Solana, Ethereum and Base, the wallet history read APIs and
-`/app/network`, persisted signed reputation evidence, indexed Solana transaction reuse and
-internal $AEX accounting are implemented in `packages/network`. They are not deployed
-infrastructure: network reads are off by default (`ENABLE_NETWORK_API=false`), ingestion is
-an operator-run CLI rather than a continuously synchronised indexer, and an 85-minute live
-run fell behind mainnet without recovering on a free endpoint
-([docs/milestone-d13-network-hardening.md](docs/milestone-d13-network-hardening.md)).
-Public reputation scores, an issued token and EVM privacy scoring still require inputs the
-repository does not have. See [setup and operator commands](docs/network-operations.md).
+Finalized-block ingestion for Solana, the wallet history read APIs and `/app/network` are on
+in production over a **bounded window** of Solana mainnet blocks: the read APIs return the
+covered range, the cursor and the retained floor with every answer, so the product claims
+nothing about a height outside that window. Ingestion is an operator-run CLI rather than a
+continuously synchronised follower, and it is bounded for a measured reason: one block costs
+6.38 MB from the RPC and 19.75 MB stored, and the indexer runs at 3.33 s per block against a
+head that moves at 2.5 blocks/s, so no follower on this host can keep up
+([docs/milestone-d13-network-hardening.md](docs/milestone-d13-network-hardening.md),
+[docs/network-operations.md](docs/network-operations.md)). Persisted signed reputation
+evidence, indexed Solana transaction reuse and internal $AEX accounting are implemented in
+`packages/network`; public reputation scores, an issued token and EVM privacy scoring still
+require inputs the repository does not have, and the EVM chains are not indexed.
 
 ## Repository layout
 

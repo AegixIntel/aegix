@@ -206,7 +206,18 @@ export const products: Product[] = [
     surfaces: ["ROADMAP"],
     note: "No labelled reputation dataset exists. Only the evidence-verification infrastructure is built."
   },
-  { id: "intelligence-network", name: "Intelligence Network", status: "RESEARCH", surfaces: ["ROADMAP", "CATEGORY"] },
+  // D12/D13. Switched on in production on 11 October 2026 with a bounded
+  // indexed window: the read APIs serve exactly the finalized blocks that were
+  // ingested and disclose that range, so the product never implies coverage it
+  // does not have. Ingestion is an operator-run CLI, not a follower.
+  {
+    id: "intelligence-network",
+    name: "Intelligence Network",
+    href: "/app/network",
+    status: "LIVE",
+    surfaces: ["ROADMAP", "CATEGORY"],
+    note: "Solana mainnet, over a bounded window of finalized blocks that were actually ingested: the read APIs return the covered range, the cursor and the retained floor, and say nothing about a height outside it. Ingestion is an operator-run command rather than a continuously synchronised follower, so the window does not extend itself. Reviewed reputation evidence is not configured on this deployment, and the EVM chains are not indexed."
+  },
   { id: "aex-economic-layer", name: "$AEX Economic Layer", status: "PLANNED", surfaces: ["ROADMAP"] },
   { id: "multi-chain", name: "Multi-Chain", status: "PLANNED", surfaces: ["ROADMAP"] }
 ];

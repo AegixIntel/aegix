@@ -19,6 +19,12 @@ deployment behaves exactly as it did before D12 existed.**
 > every transaction over RPC exactly as before, and no ingestion process runs
 > unless an operator starts one.**
 
+**Amended 11 October 2026**: production now sets both flags, so `/v1/network` and
+`/app/network` are live over a bounded window of finalized Solana blocks. The
+code defaults above are unchanged — this stayed a deployment decision, exactly as
+this milestone intended — and the reasoning still holds that nothing runs unless
+an operator starts it.
+
 There is no automatic process: the indexer is a CLI an operator runs, per chain.
 Nothing in the API, worker or web app fetches outside the existing RPC path.
 

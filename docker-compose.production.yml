@@ -104,6 +104,14 @@ services:
       ENABLE_CROSS_MARKET: ${ENABLE_CROSS_MARKET:-false}
       # D16: see docs/milestone-d16-ai-copilot.md.
       ENABLE_AI_COPILOT: ${ENABLE_AI_COPILOT:-false}
+      # D12/D13: the indexed network read path. Without these two pass-throughs
+      # the flags could be set in production.env and never reach the container,
+      # which is what kept /v1/network answering 403 here. The API flag exposes
+      # /v1/network and /app/network; the worker flag reuses indexed parsed
+      # transactions instead of calling getTransaction. Ingestion itself is an
+      # operator-run CLI, never a compose service; see docs/network-operations.md.
+      ENABLE_NETWORK_API: ${ENABLE_NETWORK_API:-false}
+      ENABLE_INDEXED_TRANSACTIONS: ${ENABLE_INDEXED_TRANSACTIONS:-false}
       # The model provider Ask AEGIX and the copilot call. Empty means none is
       # configured: both answer 503 and nothing else changes.
       LLM_API_KEY: ${LLM_API_KEY:-}
