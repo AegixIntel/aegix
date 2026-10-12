@@ -185,8 +185,7 @@ export const products: Product[] = [
     name: "AEGIX Discovery Engine",
     href: "/app/discoveries",
     status: "LIVE",
-    surfaces: ["ROADMAP"],
-    note: "A daily scan of BTC, ETH and SOL market series and tokenized stocks read from Solana (token price in one on-chain pool, not the exchange price). Hourly history before 1 October 2026 was read back from CoinGecko and GeckoTerminal, not observed live. News is read as hourly mention counts from 4 October 2026, which the scan can test once two weeks of them are stored. Options and sector and commodity fund prices are captured from the Cboe delayed feed, which carries no redistribution licence."
+    surfaces: ["ROADMAP"]
   },
 
   // Later.
