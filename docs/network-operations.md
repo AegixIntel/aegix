@@ -75,8 +75,10 @@ ENABLE_NETWORK_API=true, ENABLE_INDEXED_TRANSACTIONS=true
                                    container and every route answers 403
 INDEXER_CHAIN=solana:mainnet
 INDEXER_RPC_URLS                   the existing production RPC endpoint
-window                             a fixed range of finalized blocks; the exact
-                                   heights are recorded in architecture.md
+window                             heights 455,766,744 to 455,768,999 —
+                                   2,256 blocks, about fifteen minutes of
+                                   chain, 2,462,374 transactions and
+                                   30,616,712 address memberships in 38 GB
 reputation                         NOT_CONFIGURED; no reviewed policy is mounted
 EVM chains                         not indexed
 
