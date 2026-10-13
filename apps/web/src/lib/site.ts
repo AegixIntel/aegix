@@ -217,6 +217,32 @@ export const products: Product[] = [
     surfaces: ["ROADMAP", "CATEGORY"],
     note: "Solana mainnet, over a bounded window of finalized blocks that were actually ingested: the read APIs return the covered range, the cursor and the retained floor, and say nothing about a height outside it. Ingestion is an operator-run command rather than a continuously synchronised follower, so the window does not extend itself. Reviewed reputation evidence is not configured on this deployment, and the EVM chains are not indexed."
   },
+  // Account and library surfaces. Live in the app today; listed under SHIPPED so
+  // the roadmap does not omit something a signed-in visitor can already use.
+  {
+    id: "saved-wallets-and-comparisons",
+    name: "Saved Wallets and Comparisons",
+    href: "/app/saved",
+    status: "LIVE",
+    surfaces: ["ROADMAP"],
+    note: "The account's own saved wallets and saved comparisons, kept over analyses the account already ran."
+  },
+  {
+    id: "notifications",
+    name: "Notifications",
+    href: "/app/notifications",
+    status: "LIVE",
+    surfaces: ["ROADMAP"],
+    note: "In-app notifications, filterable by severity and read state. Email is not enabled on this deployment, and a channel that is not configured never marks an event failed."
+  },
+  {
+    id: "plan-and-usage",
+    name: "Plan & Usage",
+    href: "/app/billing",
+    status: "LIVE",
+    surfaces: ["ROADMAP"],
+    note: "The limits the plan sets and the usage metered from the same records the product counts against. Provisioning is manual: an upgrade is requested in the app and granted by the operator, and self-service checkout is post-launch scope."
+  },
   { id: "aex-economic-layer", name: "$AEX Economic Layer", status: "PLANNED", surfaces: ["ROADMAP"] },
   { id: "multi-chain", name: "Multi-Chain", status: "PLANNED", surfaces: ["ROADMAP"] }
 ];

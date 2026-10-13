@@ -32,6 +32,10 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   Copilot (default off, needs an LLM provider; `docs/milestone-d16-ai-copilot.md`),
   and Anomaly Detection (capturing since 8 October 2026; its first engine version
   was replaced the same day, and only the corrected one's readings are shown).
+  Intelligence Network is live too, over a bounded window of finalized Solana
+  blocks — see Network ingestion below. The account surfaces are part of the live
+  product as well: Saved Wallets and Comparisons, Notifications (in-app) and
+  Plan & Usage (manual provisioning).
   There is still no licensed market data source.
 - **Planned:** Wallet Reputation, $AEX economic layer, multi-chain.
 
