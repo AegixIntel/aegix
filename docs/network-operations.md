@@ -122,8 +122,9 @@ History accepts `limit` from 1 to 100, and `beforeHeight` + `beforePosition`
 together. Use the returned `nextCursor` pair to load the next page. Coverage
 is bounded; no transactions is not a clean reputation or proof of an unused
 wallet. Solana account membership means involvement, not wallet ownership.
-EVM indexes outer sender/recipient and exact requested native value; receipts,
-internal calls and token logs are not indexed, so execution status is unknown.
+EVM indexes outer sender/recipient, the native value sent, and execution status
+from each block's receipts (see below). Internal calls are not indexed, and token
+transfers are stored on the block but not yet served.
 
 The worker uses only indexed **parsed** Solana transactions with a matching
 signature; older unparsed JSON, missing rows, and index errors fall back to RPC.
@@ -133,6 +134,46 @@ Both the block indexer and existing transaction reader opt into
 the entire block request to fail with `-32015`. Parsed message configuration
 is retained; this service does not construct/sign v1 transactions. See
 [Solana's versioned transaction documentation](https://solana.com/docs/core/transactions/versioned-transactions).
+
+## EVM receipts and what a block costs (measured 20 November 2026)
+
+For every EVM block the indexer also calls `eth_getBlockReceipts` and accepts
+the list only when it is exactly the block's: the same count, the same order,
+the same transaction hashes and the same block hash. A pre-Byzantium receipt
+(state root, no status) or a removed log fails the batch rather than being read
+as success or failure. What is kept, in `network_blocks.receipts` (migration
+`0019`): status, gas used, effective gas price, the sender, and the logs whose
+first topic is `Transfer(address,address,uint256)`. `logsBloom` and every other
+log are dropped. `network_transactions.success` comes from that receipt.
+
+A stored EVM block keeps transaction hashes only and no `raw_rpc`: each
+transaction is stored whole in `network_transactions` in the same database
+transaction, and EVM quantities are hex strings that JSON cannot round. Such a
+block cannot be re-projected by `--backfill`; it never needs to be, because it
+is projected when it is written.
+
+Measured on Ethereum mainnet through the public endpoint
+`https://ethereum-rpc.publicnode.com`, into a throwaway PostgreSQL 16 database
+on this host, heights 26,450,642–26,450,741:
+
+```text
+blocks               100
+transactions         27,945   every one with a matching receipt
+reverted             156      success = false
+unknown status       0
+Transfer logs kept   35,268
+RPC calls            221      block + receipts per height, plus batch checks
+time                 54 s     0.54 s per block; the chain makes one every 12 s
+network_blocks       9.2 MB   slim header + trimmed receipts
+network_transactions 44.5 MB  full transaction payloads
+memberships          32.9 MB
+total                0.825 MB per block
+5 GB budget          about 6,200 blocks, roughly 20.7 hours of chain
+```
+
+Unlike Solana (3.33 s per block against a head that moves every 0.4 s), the
+indexer runs some 22 times faster than Ethereum produces blocks, so a follower
+on this host could keep up. Ethereum is still not indexed in production.
 
 ## Import reputation evidence
 
