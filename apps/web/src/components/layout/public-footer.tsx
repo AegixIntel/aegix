@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AegixMark } from "@/components/aegix-logo";
+import { ContractAddress } from "@/components/contract-address";
 import { footerColumns, LEGAL_ENTITY, legalLinks, SITE_URL } from "@/lib/site";
 
 function FooterColumn({ title, links }: { title: string; links: { label: string; href: string }[] }) {
@@ -31,6 +32,7 @@ export function PublicFooter() {
             </div>
             <p className="mt-3 text-sm text-muted-foreground">Financial &amp; On-Chain Intelligence.</p>
             <p className="mt-1 font-display text-lg font-semibold text-ink">See What Others Don't.</p>
+            <ContractAddress className="mt-4" />
             <p className="mt-4 text-xs leading-relaxed text-muted-2">
               Correlation ≠ Ownership ≠ Identity. AEGIX reports observable relationships and confidence — it
               never asserts real-world identity.

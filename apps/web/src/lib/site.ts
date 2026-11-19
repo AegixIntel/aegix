@@ -3,6 +3,9 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aegixintell
 
 export const NAV_BRAND = "AEGIX";
 
+/** The AEGIX token's Solana mint (contract address), shown on the landing hero and in the footer. */
+export const TOKEN_CA = "8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump";
+
 /** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
 export const LEGAL_ENTITY = "AEGIX Developer";
 export const LEGAL_EFFECTIVE_DATE = "14 September 2026";
