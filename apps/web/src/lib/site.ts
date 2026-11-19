@@ -9,6 +9,9 @@ export const TOKEN_CA = "8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump";
 export const TOKEN_URL = `https://pump.fun/coin/${TOKEN_CA}`;
 /** The public source repository, linked from the top bar and the footer. */
 export const GITHUB_URL = "https://github.com/AegixIntel/aegix";
+/** Official community channels, linked beside GitHub in the top bar and the footer. */
+export const TELEGRAM_URL = "https://t.me/AegixIntel";
+export const X_URL = "https://x.com/AegixData";
 
 /** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
 export const LEGAL_ENTITY = "AEGIX Developer";
