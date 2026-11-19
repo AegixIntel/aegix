@@ -5,6 +5,8 @@ export const NAV_BRAND = "AEGIX";
 
 /** The AEGIX token's Solana mint (contract address), shown on the landing hero and in the footer. */
 export const TOKEN_CA = "8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump";
+/** The token's pump.fun page, linked beside the contract address on the landing hero. */
+export const TOKEN_URL = `https://pump.fun/coin/${TOKEN_CA}`;
 
 /** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
 export const LEGAL_ENTITY = "AEGIX Developer";
