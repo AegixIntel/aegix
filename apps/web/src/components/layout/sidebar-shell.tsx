@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { AegixLogo } from "@/components/aegix-logo";
 import { NavDropdown } from "@/components/layout/nav-dropdown";
 import WalletAuthButton from "@/components/wallet-auth-button";
+import { GithubLink } from "@/components/github-link";
 import { cn } from "@/lib/cn";
 import { primaryNav, docsNavLink, roadmapNavLink, siteMenu, siteRail } from "@/lib/site";
 
@@ -126,6 +127,7 @@ export function SidebarShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <GithubLink className="p-2 [&>svg]:h-5 [&>svg]:w-5" />
             <WalletAuthButton compact buttonClassName="w-[9.5rem]" />
             <Link prefetch={false} href="/app/analyze" className="btn-primary hidden w-[9.5rem] px-4 py-2 text-sm sm:inline-flex">
               Launch App <span className="btn-arrow text-inherit">→</span>
