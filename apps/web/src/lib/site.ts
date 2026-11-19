@@ -253,7 +253,13 @@ export const products: Product[] = [
     surfaces: ["ROADMAP"],
     note: "The limits the plan sets and the usage metered from the same records the product counts against. Provisioning is manual: an upgrade is requested in the app and granted by the operator, and self-service checkout is post-launch scope."
   },
-  { id: "aex-economic-layer", name: "$AEX Economic Layer", status: "PLANNED", surfaces: ["ROADMAP"] },
+  {
+    id: "aex-economic-layer",
+    name: "$AGX Economic Layer",
+    status: "PLANNED",
+    surfaces: ["ROADMAP"],
+    note: "The $AGX token is issued on Solana; staking, verification, bounties, incentives and governance are not built, and no product reads or requires the token."
+  },
   { id: "multi-chain", name: "Multi-Chain", status: "PLANNED", surfaces: ["ROADMAP"] }
 ];
 

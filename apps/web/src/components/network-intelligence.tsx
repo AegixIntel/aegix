@@ -77,7 +77,7 @@ export default function NetworkIntelligence() {
       <p>{reputation.status.replaceAll("_", " ").toLowerCase()}</p><p className="text-sm text-muted-foreground">{reputation.reason}</p>
       {reputation.accepted.map(({ claim, reviewers }) => <div key={claim.id}><a className="underline" href={claim.sourceUrl} target="_blank" rel="noreferrer">{claim.label.replaceAll("_", " ")}</a><p className="text-sm">Reviewed by {reviewers.length} trusted reviewers.</p></div>)}
     </section>}
-    {economics && <section className="space-y-3 rounded border border-ink/10 p-5"><h2 className="text-xl">Your $AEX accounting</h2>
+    {economics && <section className="space-y-3 rounded border border-ink/10 p-5"><h2 className="text-xl">Your internal accounting (not $AGX)</h2>
       <p className="text-2xl">{economics.balanceAtomic} internal units</p><p className="text-sm text-muted-foreground">{economics.explanation}</p>
       {economics.events.length ? <ul>{economics.events.map(event => <li key={event.event_key}>{event.direction === "CREDIT" ? "+" : "−"}{event.amount} · {event.purpose.replaceAll("_", " ")}</li>)}</ul> : <p>No accounting activity yet.</p>}
     </section>}

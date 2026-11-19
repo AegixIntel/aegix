@@ -196,7 +196,7 @@ clean performance baseline.
   implementation was added.
 - **Webhook SDK:** current signed webhook contract is testable, but no package
   is published and it is not a freeze blocker.
-- **$AEX:** planned only and not required by any live product.
+- **$AGX:** the token is issued on Solana; its economic layer is planned only and no live product reads or requires it.
 
 
 ## Correction found after this audit: `jsonParsed` field names

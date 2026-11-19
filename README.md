@@ -37,7 +37,9 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   product as well: Saved Wallets and Comparisons, Notifications (in-app) and
   Plan & Usage (manual provisioning).
   There is still no licensed market data source.
-- **Planned:** Wallet Reputation, $AEX economic layer, multi-chain.
+- **Planned:** Wallet Reputation, $AGX economic layer, multi-chain. The $AGX token
+  itself is issued (Solana mint `8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump`);
+  no product reads or requires it yet.
 
 ### Network ingestion
 
@@ -50,8 +52,9 @@ continuously synchronised follower, and it is bounded for a measured reason: one
 head that moves at 2.5 blocks/s, so no follower on this host can keep up
 ([docs/milestone-d13-network-hardening.md](docs/milestone-d13-network-hardening.md),
 [docs/network-operations.md](docs/network-operations.md)). Persisted signed reputation
-evidence, indexed Solana transaction reuse and internal $AEX accounting are implemented in
-`packages/network`; public reputation scores, an issued token and EVM privacy scoring still
+evidence, indexed Solana transaction reuse and an internal accounting ledger (bookkeeping
+units, not $AGX) are implemented in `packages/network`; public reputation scores, $AGX
+utilities and EVM privacy scoring still
 require inputs the repository does not have, and the EVM chains are not indexed.
 
 ## Repository layout

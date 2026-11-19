@@ -257,20 +257,28 @@ that input exists.
 
 ---
 
-## 8. $AEX token — PLANNED
+## 8. $AGX token — issued; economic layer PLANNED
 
-The intended economic layer of AEGIX, coordinating verification, staking,
-network security, research incentives, ecosystem participation and
-governance, across five utilities: validator staking, data verification,
-research bounties, ecosystem incentives and governance. $AEX is not required
-for basic access to AEGIX's consumer products.
+**The token exists.** AEGIX ($AGX) is a Solana SPL Token-2022 mint,
+`8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump`, launched through pump.fun
+(<https://pump.fun/coin/8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump>). Read
+from the mint on 20 November 2026: name `AEGIX`, symbol `AGX`, 6 decimals, a
+supply of about 1 billion. It replaces the earlier working name $AEX.
 
-**Current state: internal accounting foundation only.** `packages/network`
-provides atomic, replay-protected transfers between pre-funded internal accounts.
-This is not an on-chain token implementation. No token, no contract, no staking
-or slashing logic, no verification market, no governance mechanism, and no
-tokenomics document. Treat token utility statements in this section as intent, and do not present
-$AEX as operational anywhere in public copy.
+**The economic layer is not built.** The intent is for $AGX to coordinate
+verification, staking, network security, research incentives, ecosystem
+participation and governance, across five utilities: validator staking, data
+verification, research bounties, ecosystem incentives and governance. None of
+them exists. No AEGIX product reads, requires, charges or rewards $AGX: there
+is no staking or slashing logic, no verification market, no governance
+mechanism and no tokenomics document, and basic access to the consumer products
+will not require the token.
+
+`packages/network` keeps an internal, pre-funded accounting ledger with atomic,
+replay-protected transfers. Its units are bookkeeping, not $AGX: nothing moves
+between that ledger and the mint. Treat the utility statements in this section
+as intent, and present $AGX in public copy only as an issued token with no
+in-product utility yet.
 
 ---
 
@@ -302,7 +310,7 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 | SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026), Anomaly Detection (capturing since 8 October 2026) and Intelligence Network (Solana mainnet, over a bounded window of finalized blocks it actually ingested), Saved Wallets and Comparisons, Notifications (in-app) and Plan & Usage (manual provisioning) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
 | NEXT | Nothing in development. |
-| LATER | Wallet Reputation, $AEX economic layer, multi-chain |
+| LATER | Wallet Reputation, $AGX economic layer (the token is issued; no utility is built), multi-chain |
 
 ---
 

@@ -12,7 +12,7 @@ engines. Existing analysis is wallet-scoped and bounded; `Chain = "solana"`
 describes the privacy engine, not a universal chain capability.
 
 The whitepaper requires labelled validation data before reputation scoring and
-keeps $AEX outside basic product access. This implementation preserves those
+keeps the token ($AGX, formerly $AEX) outside basic product access. This implementation preserves those
 requirements and adds `@aegix/network` as an independent infrastructure package.
 
 ## Implemented
@@ -22,7 +22,7 @@ requirements and adds `@aegix/network` as an independent infrastructure package.
 | Global Solana ingestion | Continuous finalized block scan, exact RPC archive, transaction/address projections, PostgreSQL cursor, atomic batch commits, archive floor checks, parent continuity, network verification | Bounded start and provider throughput; no promise of a complete lifetime archive |
 | Multi-chain | Solana mainnet, Ethereum and Base ingestion adapters; chain-qualified wallet history API and UI | No EVM privacy scoring, token/log normalization, receipt processing, traces or cross-chain ownership inference |
 | Reputation | Evidence import/storage, digest verification, versioned signed claims, distinct trusted Ed25519 reviewers, quorum, expiry/revocation, API and UI | No supplied labelled dataset or calibrated model; score, risk band and confidence remain null |
-| $AEX | Internal atomic-unit transfer ledger, purpose/evidence references, replay protection, locked balances and atomic journal writes | Pre-funded internal accounting only; no issued token, on-chain custody, mint/deposit/withdrawal, staking lockups/slashing or governance |
+| Internal accounting (not $AGX) | Internal atomic-unit transfer ledger, purpose/evidence references, replay protection, locked balances and atomic journal writes | Pre-funded internal accounting only; no link to the issued $AGX mint, no on-chain custody, mint/deposit/withdrawal, staking lockups/slashing or governance |
 
 Migrations 0012 and 0013 add network/evidence/accounting tables; 0014 adds the
 indexes retention deletes and foreign-key checks depend on. The existing
@@ -95,7 +95,7 @@ the prediction target/time window, split evaluation by wallet and time, measure
 calibration and false positives, publish limits, and version the approved model.
 Privacy exposure scores are not inputs masquerading as fraud labels.
 
-## Internal $AEX accounting
+## Internal accounting ledger (not $AGX)
 
 `createAexLedger(sql).transfer(...)` moves pre-funded balances with a unique
 event key. Reusing the key with identical fields returns a replay; changing
@@ -103,9 +103,10 @@ any field rejects it. Missing accounts, overdrafts, self transfers, fractional
 amounts and overflow reject the entire transaction. Account row locks serialize
 competing transfers and the transfer record is written in the same transaction.
 
-Operators must supply the eventual official mint, decimals, issuance model,
-funding reconciliation, approved utilities and treasury authority before this
-can represent real $AEX. Account funding is not exposed by this library. Purpose
+The official mint now exists ($AGX, `8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump`,
+6 decimals), but this ledger is not connected to it. Operators must still supply
+the funding reconciliation, approved utilities and treasury authority before it
+can represent real $AGX. Account funding is not exposed by this library. Purpose
 labels such as `STAKE` describe bookkeeping intent, not enforced staking rules.
 There is no dependency from consumer access to these balances.
 
