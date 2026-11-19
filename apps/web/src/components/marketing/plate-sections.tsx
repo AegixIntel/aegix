@@ -2,11 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import LiveStatsPanel from "@/components/live-stats-panel";
 import { ContractAddress } from "@/components/contract-address";
-import { TOKEN_URL } from "@/lib/site";
 import { Reveal } from "@/components/motion/reveal";
 import { PlateVideo } from "@/components/marketing/plate-video";
 import { cn } from "@/lib/cn";
-import { products } from "@/lib/site";
+import { products, TOKEN_URL } from "@/lib/site";
 
 /** Stagger index consumed by the landing motion CSS (`--i`). */
 function at(i: number) {
