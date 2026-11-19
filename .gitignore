@@ -34,3 +34,10 @@ Thumbs.db
 data/
 postgres-data/
 redis-data/
+
+# Local-only: agent settings, internal notes and access details stay on the workstation
+.commandcode/
+.claude/
+CLAUDE.md
+architecture.md
+infra/access/
