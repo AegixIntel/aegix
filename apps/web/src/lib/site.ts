@@ -7,6 +7,8 @@ export const NAV_BRAND = "AEGIX";
 export const TOKEN_CA = "8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump";
 /** The token's pump.fun page, linked beside the contract address on the landing hero. */
 export const TOKEN_URL = `https://pump.fun/coin/${TOKEN_CA}`;
+/** The public source repository, linked from the top bar and the footer. */
+export const GITHUB_URL = "https://github.com/AegixIntel/aegix";
 
 /** The operator named in the Terms of Service, Privacy Policy and Refund Policy. */
 export const LEGAL_ENTITY = "AEGIX Developer";
