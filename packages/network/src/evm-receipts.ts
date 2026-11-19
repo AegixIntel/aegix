@@ -75,16 +75,17 @@ function trimLog(value: unknown): EvmTransferLog | null {
 }
 
 export function trimReceipts(block: Record<string, unknown>, raw: unknown): EvmReceipt[] {
+  const transactions: unknown[] = Array.isArray(block.transactions) ? block.transactions : [];
   if (!Array.isArray(block.transactions)) throw new Error("Missing block transactions");
   if (!Array.isArray(raw)) throw new Error("Invalid EVM receipt list");
-  if (raw.length !== block.transactions.length) {
-    throw new Error(`Receipt count ${raw.length} does not match ${block.transactions.length} block transactions`);
+  if (raw.length !== transactions.length) {
+    throw new Error(`Receipt count ${raw.length} does not match ${transactions.length} block transactions`);
   }
   const blockHash = matching(block.hash, HASH, "block hash");
   return raw.map((value, position) => {
     const receipt = object(value, "receipt");
     const transactionHash = matching(receipt.transactionHash, HASH, "receipt transaction hash");
-    if (transactionHash !== transactionHashOf(block.transactions[position as number])) {
+    if (transactionHash !== transactionHashOf(transactions[position])) {
       throw new Error(`Receipt ${position} belongs to a different transaction`);
     }
     if (matching(receipt.blockHash, HASH, "receipt block hash") !== blockHash) throw new Error(`Receipt ${position} belongs to a different block`);
