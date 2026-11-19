@@ -5,7 +5,7 @@ import { ContractAddress } from "@/components/contract-address";
 import { Reveal } from "@/components/motion/reveal";
 import { PlateVideo } from "@/components/marketing/plate-video";
 import { cn } from "@/lib/cn";
-import { products } from "@/lib/site";
+import { products, TOKEN_URL } from "@/lib/site";
 
 /** Stagger index consumed by the landing motion CSS (`--i`). */
 function at(i: number) {
@@ -89,7 +89,17 @@ export function HeroStatement() {
               Explore the intelligence layer
             </Link>
           </div>
-          <ContractAddress className="hero-fade mt-6" style={at(6)} />
+          <div className="hero-fade mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center" style={at(6)}>
+            <ContractAddress />
+            <a
+              href={TOKEN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[11px] uppercase tracking-[0.16em] text-accent transition hover:text-ink"
+            >
+              View on pump.fun <span aria-hidden>↗</span>
+            </a>
+          </div>
         </div>
         <div className="hero-fade" style={at(2)}>
           <Plate
