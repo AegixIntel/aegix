@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import LiveStatsPanel from "@/components/live-stats-panel";
+import { ContractAddress } from "@/components/contract-address";
 import { Reveal } from "@/components/motion/reveal";
 import { PlateVideo } from "@/components/marketing/plate-video";
 import { cn } from "@/lib/cn";
@@ -88,6 +89,7 @@ export function HeroStatement() {
               Explore the intelligence layer
             </Link>
           </div>
+          <ContractAddress className="hero-fade mt-6" style={at(6)} />
         </div>
         <div className="hero-fade" style={at(2)}>
           <Plate
