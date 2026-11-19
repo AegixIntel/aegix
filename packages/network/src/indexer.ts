@@ -1,4 +1,5 @@
 import type { NetworkChain } from "./chains.js";
+import type { EvmReceipt } from "./evm-receipts.js";
 
 export interface IndexedBlock {
   chain: NetworkChain;
@@ -8,9 +9,13 @@ export interface IndexedBlock {
   parentHash: string;
   raw: unknown;
   rawRpc?: string;
+  /** EVM only: the block's checked, trimmed receipts, in transaction order. */
+  receipts?: EvmReceipt[];
 }
 export interface BlockSource {
   chain: NetworkChain;
+  /** RPC calls one `block()` makes; EVM fetches the block and its receipts. Defaults to 1. */
+  callsPerBlock?: number;
   verifyNetwork(): Promise<void>;
   finalizedHeight(): Promise<number>;
   firstAvailableHeight(): Promise<number>;
@@ -80,7 +85,7 @@ export async function indexBatch(source: BlockSource, store: IndexStore, start: 
   for (const slot of heights) {
     height(slot);
     if (slot < from || slot > to || slot <= previous) throw new Error("Invalid block range ordering");
-    rpcCalls += 1;
+    rpcCalls += source.callsPerBlock ?? 1;
     const block = await source.block(slot);
     if (block.chain !== source.chain || block.height !== slot || !block.hash || !block.parentHash) throw new Error("Invalid block identity");
     height(block.parentHeight);

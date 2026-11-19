@@ -1,5 +1,6 @@
 import { CHAINS, parseChain, type NetworkChain } from "./chains.js";
 import { height, type BlockSource, type IndexedBlock } from "./indexer.js";
+import { trimReceipts } from "./evm-receipts.js";
 import { setTimeout as sleep } from "node:timers/promises";
 
 export type RpcCall = (method: string, params: unknown[]) => Promise<unknown>;
@@ -183,6 +184,7 @@ export function createBlockSource(chain: NetworkChain, rpc: RpcCall): BlockSourc
   const solana = spec.family === "solana";
   return {
     chain,
+    callsPerBlock: solana ? 1 : 2,
     async verifyNetwork() {
       const actual = await rpc(solana ? "getGenesisHash" : "eth_chainId", []);
       if (actual !== spec.networkId) throw new Error("RPC network does not match configured chain");
@@ -209,11 +211,18 @@ export function createBlockSource(chain: NetworkChain, rpc: RpcCall): BlockSourc
       const block = object(raw); // Null is unavailable, never silently skipped.
       if (!Array.isArray(block.transactions)) throw new Error("Missing block transactions");
       if (!solana && quantity(block.number) !== requested) throw new Error("Wrong EVM block returned");
+      if (!solana) {
+        // Receipts are requested by height, so they are checked against this
+        // block's own hash and transactions before anything is kept.
+        const receipts = trimReceipts(block, await rpc("eth_getBlockReceipts", [`0x${requested.toString(16)}`]));
+        return { chain, height: requested, hash: string(block.hash), parentHeight: Math.max(0, requested - 1),
+          parentHash: string(block.parentHash), raw, receipts };
+      }
       return {
         chain, height: requested,
-        hash: string(solana ? block.blockhash : block.hash),
-        parentHeight: solana ? height(block.parentSlot) : Math.max(0, requested - 1),
-        parentHash: string(solana ? block.previousBlockhash : block.parentHash), raw,
+        hash: string(block.blockhash),
+        parentHeight: height(block.parentSlot),
+        parentHash: string(block.previousBlockhash), raw,
         rawRpc: (block as Record<symbol, string | undefined>)[RAW_RPC]
       };
     }
