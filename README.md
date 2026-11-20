@@ -32,11 +32,11 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   Copilot (default off, needs an LLM provider; `docs/milestone-d16-ai-copilot.md`),
   and Anomaly Detection (capturing since 8 October 2026; its first engine version
   was replaced the same day, and only the corrected one's readings are shown).
-  Intelligence Network is live too, over a bounded window of finalized Solana
-  blocks — see Network ingestion below. The account surfaces are part of the live
+  Intelligence Network and Multi-Chain are live too, over rolling windows of recent
+  finalized Ethereum and Base blocks (history, transfers and wallet signals) — see
+  Network ingestion below. The account surfaces are part of the live
   product as well: Saved Wallets and Comparisons, Notifications (in-app) and
-  Plan & Usage (manual provisioning). Multi-Chain is live for Ethereum mainnet only,
-  over a rolling window of recent finalized blocks (transfers and wallet signals).
+  Plan & Usage (manual provisioning).
   There is still no licensed market data source.
 - **Planned:** Wallet Reputation and the $AGX economic layer. The $AGX token
   itself is issued (Solana mint `8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump`);
@@ -44,19 +44,20 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
 
 ### Network ingestion
 
-Finalized-block ingestion for Solana, the wallet history read APIs and `/app/network` are on
-in production over a **bounded window** of Solana mainnet blocks: the read APIs return the
+Continuous followers index Ethereum mainnet (about the last 4,300 finalized blocks) and Base
+(about the last 43,200) in production, and `/app/network` reads them: the read APIs return the
 covered range, the cursor and the retained floor with every answer, so the product claims
-nothing about a height outside that window. Ingestion is an operator-run CLI rather than a
-continuously synchronised follower, and it is bounded for a measured reason: one block costs
-6.38 MB from the RPC and 19.75 MB stored, and the indexer runs at 3.33 s per block against a
-head that moves at 2.5 blocks/s, so no follower on this host can keep up
+nothing about a height outside that window. An EVM block costs 1.18 MB (Ethereum) or 0.095 MB
+(Base) stored, and the indexer runs well ahead of both chains' block times. Solana is not
+followed, for a measured reason: one block costs 6.38 MB from the RPC and 19.75 MB stored, and
+the indexer runs at 3.33 s per block against a head that moves at 2.5 blocks/s. The bounded
+Solana window ingested in October 2026 was retired on 20 November 2026 to free disk
 ([docs/milestone-d13-network-hardening.md](docs/milestone-d13-network-hardening.md),
 [docs/network-operations.md](docs/network-operations.md)). Persisted signed reputation
 evidence, indexed Solana transaction reuse and an internal accounting ledger (bookkeeping
 units, not $AGX) are implemented in `packages/network`; public reputation scores, $AGX
 utilities and EVM privacy scoring still
-require inputs the repository does not have, and the EVM chains are not indexed.
+require inputs the repository does not have.
 
 ## Repository layout
 
