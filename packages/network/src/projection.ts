@@ -28,6 +28,11 @@ export function projectBlock(block: IndexedBlock): ProjectedTransaction[] {
     walletIdentity(block.chain, address);
     return solana ? address : address.toLowerCase();
   };
+  if (!solana && raw.transactions.some(entry => typeof entry === "string")) {
+    // A stored EVM block keeps hashes only; it was projected when it was written.
+    throw new Error("A stored EVM block keeps transaction hashes only and cannot be re-projected");
+  }
+  if (!solana && block.receipts && block.receipts.length !== raw.transactions.length) throw new Error("Receipts do not match block transactions");
   return raw.transactions.map((entry: unknown, position: number) => {
     const item = record(entry);
     if (solana) {
@@ -48,9 +53,12 @@ export function projectBlock(block: IndexedBlock): ProjectedTransaction[] {
     const recipient = item.to === null ? null : canonical(item.to);
     const value = text(item.value);
     if (!/^0x[0-9a-f]+$/i.test(value)) throw new Error("Invalid EVM value");
-    // A transaction in a block has no receipt status. Never claim it succeeded.
-    return { tx_id: text(item.hash), height: block.height, position, block_time: blockTime,
-      success: null, sender, recipient, value_atomic: BigInt(value).toString(),
+    // Only a receipt says whether it executed; without one, never claim it did.
+    const receipt = block.receipts?.[position];
+    const txId = text(item.hash);
+    if (receipt && receipt.transactionHash !== txId.toLowerCase()) throw new Error("Receipt does not match its transaction");
+    return { tx_id: txId, height: block.height, position, block_time: blockTime,
+      success: receipt ? receipt.status === 1 : null, sender, recipient, value_atomic: BigInt(value).toString(),
       addresses: [...new Set([sender, ...(recipient ? [recipient] : [])])], raw: item };
   });
 }

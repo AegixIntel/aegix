@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/network.test.ts src/projection.test.ts",
+    "test": "node --import tsx --test src/network.test.ts src/projection.test.ts src/evm-receipts.test.ts",
     "indexer": "node --import tsx src/cli.ts",
     "operator": "node --import tsx src/operator.ts",
     "test:integration": "node --import tsx src/database.integration.ts"

@@ -1,4 +1,6 @@
 import type postgres from "postgres";
+import { CHAINS } from "./chains.js";
+import { slimEvmBlock } from "./evm-receipts.js";
 import type { IndexCheckpoint, IndexStore } from "./indexer.js";
 import { height } from "./indexer.js";
 import { jsonbSafe } from "./jsonb.js";
@@ -27,9 +29,14 @@ export function createIndexStore(sql: postgres.Sql): IndexStore {
           throw new Error("Checkpoint changed; retry batch");
         }
         for (const block of blocks) {
-          await tx`insert into network_blocks (chain, height, hash, parent_height, parent_hash, raw, raw_rpc)
+          const evm = CHAINS[chain].family === "evm";
+          // EVM: the block keeps hashes only (transactions are stored whole in
+          // network_transactions below) and needs no raw_rpc, because EVM
+          // quantities are hex strings that JSON cannot round.
+          await tx`insert into network_blocks (chain, height, hash, parent_height, parent_hash, raw, raw_rpc, receipts)
             values (${chain}, ${block.height}, ${block.hash}, ${block.parentHeight}, ${block.parentHash},
-              ${tx.json(jsonbSafe(block.raw))}, ${block.rawRpc ?? null})`;
+              ${tx.json(jsonbSafe(evm ? slimEvmBlock(block.raw) : block.raw))}, ${evm ? null : block.rawRpc ?? null},
+              ${block.receipts ? tx.json(jsonbSafe(block.receipts)) : null})`;
           await persistProjection(tx, block);
         }
         const last = blocks.at(-1);

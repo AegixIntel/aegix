@@ -46,7 +46,9 @@ export function createNetworkQuery(sql: postgres.Sql) {
             ? "Every indexed block has been pruned by retention; history is unavailable."
             : `Blocks below height ${floor} were pruned by retention; earlier history is unavailable.`] : []),
           "Address involvement does not establish ownership.",
-          ...(CHAINS[chain].family === "evm" ? ["EVM success is unknown without receipts; value is the requested native amount, not a confirmed transfer.", "Internal calls and token logs are not included."] : [])] };
+          ...(CHAINS[chain].family === "evm" ? ["Execution comes from each block's receipts; a transaction indexed without a receipt shows success as unknown.",
+            "Value is the native amount the transaction sent; a reverted transaction moved nothing.",
+            "Internal calls and token transfers are not included."] : [])] };
     },
     async transaction(chain: NetworkChain, id: string) {
       parseChain(chain);

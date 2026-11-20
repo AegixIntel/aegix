@@ -120,20 +120,37 @@ test("invalid batch bounds are rejected before fetching", async () => {
   await assert.rejects(indexBatch(f.source, f.store, 10, 257));
   await assert.rejects(indexBatch(f.source, f.store, Number.MAX_SAFE_INTEGER + 1));
 });
-test("EVM source verifies chain ID and fetches full finalized blocks", async () => {
+test("EVM source verifies chain ID and fetches full finalized blocks with their receipts", async () => {
   const calls: string[] = [];
+  const blockHash = `0x${"b".repeat(64)}`;
+  const txHash = `0x${"1".repeat(64)}`;
   const source = createBlockSource("eip155:8453", async (method, params) => {
     calls.push(method);
     if (method === "eth_chainId") return "0x2105";
     if (params[0] === "finalized") return { number: "0xa" };
+    if (method === "eth_getBlockReceipts") {
+      assert.deepEqual(params, ["0xa"]);
+      return [{ transactionHash: txHash, transactionIndex: "0x0", blockHash, status: "0x0", from: `0x${"a".repeat(40)}`,
+        gasUsed: "0x5208", effectiveGasPrice: "0x1", logs: [] }];
+    }
     assert.deepEqual(params, ["0xa", true]);
-    return { number: "0xa", hash: "h10", parentHash: "h9", transactions: [] };
+    return { number: "0xa", hash: blockHash, parentHash: "h9", transactions: [{ hash: txHash }] };
   });
+  assert.equal(source.callsPerBlock, 2);
   await source.verifyNetwork();
   assert.equal(await source.finalizedHeight(), 10);
   assert.deepEqual(await source.heights(9, 10), [9, 10]);
-  assert.equal((await source.block(10)).parentHeight, 9);
-  assert.equal(calls.length, 3);
+  const block = await source.block(10);
+  assert.equal(block.parentHeight, 9);
+  assert.equal(block.receipts?.[0]?.status, 0, "the receipt's status is kept");
+  assert.equal(block.rawRpc, undefined, "EVM keeps no raw_rpc envelope");
+  assert.deepEqual(calls, ["eth_chainId", "eth_getBlockByNumber", "eth_getBlockByNumber", "eth_getBlockReceipts"]);
+});
+test("an EVM block whose receipts belong elsewhere is not returned", async () => {
+  const blockHash = `0x${"b".repeat(64)}`;
+  const source = createBlockSource("eip155:1", async (method) => method === "eth_getBlockReceipts" ? []
+    : { number: "0xa", hash: blockHash, parentHash: "h9", transactions: [{ hash: `0x${"1".repeat(64)}` }] });
+  await assert.rejects(source.block(10), /Receipt count 0 does not match 1/);
 });
 test("wrong network and null blocks are rejected", async () => {
   const source = createBlockSource("eip155:1", async () => null);

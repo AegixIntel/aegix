@@ -21,3 +21,17 @@ test("EVM preserves large amounts, chain-local addresses and unknown execution",
   assert.equal(txs[0]?.success, null);
   assert.equal(txs[0]?.recipient, null);
 });
+test("EVM execution comes from the receipt at the same position", () => {
+  const ok = `0x${"1".repeat(64)}`;
+  const reverted = `0x${"2".repeat(64)}`;
+  const from = `0x${"a".repeat(40)}`;
+  const receipt = (transactionHash: string, transactionIndex: number, status: 0 | 1) =>
+    ({ transactionHash, transactionIndex, status, from, gasUsed: "21000", effectiveGasPrice: "1", transferLogs: [] });
+  const base = { chain: "eip155:1" as const, height: 10, hash: "h10", parentHeight: 9, parentHash: "h9", raw: {
+    timestamp: "0x65", transactions: [{ hash: ok, from, to: from, value: "0x1" }, { hash: reverted, from, to: from, value: "0x1" }] } };
+  const txs = projectBlock({ ...base, receipts: [receipt(ok, 0, 1), receipt(reverted, 1, 0)] });
+  assert.deepEqual(txs.map(t => t.success), [true, false]);
+  assert.throws(() => projectBlock({ ...base, receipts: [receipt(reverted, 0, 1), receipt(ok, 1, 1)] }), /does not match its transaction/);
+  assert.throws(() => projectBlock({ ...base, receipts: [receipt(ok, 0, 1)] }), /do not match block transactions/);
+  assert.throws(() => projectBlock({ ...base, raw: { ...base.raw, transactions: [ok, reverted] } }), /cannot be re-projected/);
+});

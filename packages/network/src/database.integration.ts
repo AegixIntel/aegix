@@ -21,6 +21,7 @@ try {
   await isolated.unsafe(migration);
   await isolated.unsafe(await readFile(new URL("../../database/migrations/0013_network_operations.sql", import.meta.url), "utf8"));
   await isolated.unsafe(await readFile(new URL("../../database/migrations/0014_network_retention_indexes.sql", import.meta.url), "utf8"));
+  await isolated.unsafe(await readFile(new URL("../../database/migrations/0019_evm_receipts.sql", import.meta.url), "utf8"));
   const store = createIndexStore(isolated);
   const initial = await store.checkpoint("solana:mainnet", 10);
   const block = { chain: "solana:mainnet" as const, height: 10, hash: "h10", parentHeight: 9, parentHash: "h9", raw: { transactions: [] } };
@@ -86,6 +87,23 @@ try {
   // Ingestion continues past the block rather than stalling on it.
   await store.commit("solana:mainnet", await store.checkpoint("solana:mainnet", 10), 15, [withTransaction(14)]);
   assert.equal((await store.checkpoint("solana:mainnet", 10)).nextHeight, 15, "the next block commits");
+
+  // An EVM block is stored with hashes only and its trimmed receipts; the
+  // transaction keeps its full payload and takes its execution from the receipt.
+  const evmTx = `0x${"1".repeat(64)}`;
+  const evmFrom = `0x${"a".repeat(40)}`;
+  const evmBlock = { chain: "eip155:1" as const, height: 20, hash: `0x${"b".repeat(64)}`, parentHeight: 19, parentHash: `0x${"c".repeat(64)}`,
+    raw: { number: "0x14", timestamp: "0x65", transactions: [{ hash: evmTx, from: evmFrom, to: evmFrom, value: "0x1", input: "0x" }] },
+    receipts: [{ transactionHash: evmTx, transactionIndex: 0, status: 0 as const, from: evmFrom, gasUsed: "21000",
+      effectiveGasPrice: "1", transferLogs: [] }] };
+  await store.commit("eip155:1", await store.checkpoint("eip155:1", 20), 21, [evmBlock]);
+  const [evmStored] = await isolated`select raw, raw_rpc, receipts from network_blocks where chain = 'eip155:1' and height = 20`;
+  assert.deepEqual(evmStored?.raw.transactions, [evmTx], "the EVM block keeps transaction hashes only");
+  assert.equal(evmStored?.raw_rpc, null, "an EVM block needs no raw_rpc envelope");
+  assert.equal(evmStored?.receipts[0].status, 0, "the trimmed receipt is stored");
+  const [evmRow] = await isolated`select success, raw from network_transactions where chain = 'eip155:1' and tx_id = ${evmTx}`;
+  assert.equal(evmRow?.success, false, "a reverted transaction is recorded as failed");
+  assert.equal(evmRow?.raw.input, "0x", "the transaction keeps its full payload");
 
   await isolated`insert into aex_accounts (id, balance) values ('treasury', 100), ('alice', 0), ('bob', 0)`;
   const ledger = createAexLedger(isolated);
