@@ -4,7 +4,38 @@ import { height } from "./indexer.js";
 import { persistProjection } from "./projection.js";
 
 export interface HistoryCursor { height: number; position: number }
+/** Transfers order within a transaction by ordinal; the native amount is -1. */
+export interface TransferCursor extends HistoryCursor { ordinal: number }
+
+export type TransferDirection = "IN" | "OUT" | "SELF";
+
 export function createNetworkQuery(sql: postgres.Sql) {
+  /**
+   * What the index covers for a chain, and whether retention removed part of
+   * it. Storage is bounded by an operator retention floor; say so instead of
+   * letting a pruned range read as "this wallet has no older activity". An
+   * index that was populated and then fully pruned reports no floor at all,
+   * which is exactly the case that must not read as "never used".
+   */
+  async function coverageOf(chain: NetworkChain) {
+    const [coverage] = await sql`select start_height::text, next_height::text, last_height::text, finalized_height::text,
+      heartbeat_at, last_error,
+      (select min(height)::text from network_blocks b where b.chain = ${chain}) as retained_floor
+      from network_checkpoints where chain = ${chain}`;
+    const floor = coverage?.retained_floor == null ? null : Number(coverage.retained_floor);
+    const indexedSomething = coverage != null && Number(coverage.next_height) > Number(coverage.start_height);
+    const pruned = indexedSomething && (floor === null || floor > Number(coverage!.start_height));
+    const retention = pruned ? [floor === null
+      ? "Every indexed block has been pruned by retention; history is unavailable."
+      : `Blocks below height ${floor} were pruned by retention; earlier history is unavailable.`] : [];
+    return { coverage: coverage ?? null, retention };
+  }
+  function canonicalAddress(chain: NetworkChain, address: string, limit: number) {
+    walletIdentity(chain, address);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid history limit");
+    return CHAINS[chain].family === "evm" ? address.toLowerCase() : address;
+  }
+
   return {
     async status() {
       const rows = await sql`select chain, start_height::text, next_height::text, last_height::text,
@@ -15,10 +46,8 @@ export function createNetworkQuery(sql: postgres.Sql) {
         coverage: rows.find(row => row.chain === chain) ?? null }));
     },
     async history(chain: NetworkChain, address: string, limit = 50, before?: HistoryCursor) {
-      walletIdentity(chain, address);
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid history limit");
+      const canonical = canonicalAddress(chain, address, limit);
       if (before) { height(before.height); height(before.position); }
-      const canonical = CHAINS[chain].family === "evm" ? address.toLowerCase() : address;
       const cursor = before ? sql`and (a.height, a.position) < (${before.height}, ${before.position})` : sql``;
       const rows = await sql`select t.tx_id, t.height::text, t.position, t.block_time, t.success,
         t.sender, t.recipient, t.value_atomic from network_transaction_addresses a
@@ -28,27 +57,52 @@ export function createNetworkQuery(sql: postgres.Sql) {
       const more = rows.length > limit;
       const transactions = rows.slice(0, limit);
       const last = transactions.at(-1);
-      const [coverage] = await sql`select start_height::text, next_height::text, last_height::text, finalized_height::text,
-        heartbeat_at, last_error,
-        (select min(height)::text from network_blocks b where b.chain = ${chain}) as retained_floor
-        from network_checkpoints where chain = ${chain}`;
-      // Storage is bounded by an operator retention floor; say so instead of
-      // letting a pruned range read as "this wallet has no older activity". An
-      // index that was populated and then fully pruned reports no floor at all,
-      // which is exactly the case that must not read as "never used".
-      const floor = coverage?.retained_floor == null ? null : Number(coverage.retained_floor);
-      const indexedSomething = coverage != null && Number(coverage.next_height) > Number(coverage.start_height);
-      const pruned = indexedSomething && (floor === null || floor > Number(coverage!.start_height));
-      return { wallet: walletIdentity(chain, address), coverage: coverage ?? null, transactions,
+      const { coverage, retention } = await coverageOf(chain);
+      return { wallet: walletIdentity(chain, address), coverage, transactions,
         nextCursor: more && last ? { height: Number(last.height), position: Number(last.position) } : null,
-        limitations: ["History covers the indexed range only.",
-          ...(pruned ? [floor === null
-            ? "Every indexed block has been pruned by retention; history is unavailable."
-            : `Blocks below height ${floor} were pruned by retention; earlier history is unavailable.`] : []),
+        limitations: ["History covers the indexed range only.", ...retention,
           "Address involvement does not establish ownership.",
           ...(CHAINS[chain].family === "evm" ? ["Execution comes from each block's receipts; a transaction indexed without a receipt shows success as unknown.",
             "Value is the native amount the transaction sent; a reverted transaction moved nothing.",
-            "Internal calls and token transfers are not included."] : [])] };
+            "A transaction is listed when the wallet sent it, was its recipient, or was a party to an ERC-20 or ERC-721 transfer in it.",
+            "Internal calls are not included."] : [])] };
+    },
+    /**
+     * Native and token transfers where the wallet is sender or recipient,
+     * newest first. EVM only: Solana transfers are not decoded by this index.
+     */
+    async transfers(chain: NetworkChain, address: string, limit = 50, before?: TransferCursor) {
+      if (CHAINS[chain].family !== "evm") throw new Error("Transfers are recorded for EVM chains only");
+      const canonical = canonicalAddress(chain, address, limit);
+      if (before) {
+        height(before.height); height(before.position);
+        if (!Number.isSafeInteger(before.ordinal) || before.ordinal < -1) throw new Error("Invalid transfer cursor");
+      }
+      const cursor = before ? sql`and (height, position, ordinal) < (${before.height}, ${before.position}, ${before.ordinal})` : sql``;
+      // One index walk per side, each bounded, merged. UNION removes the
+      // duplicate a self-transfer would produce.
+      const side = (column: "sender" | "recipient") => sql`(select tx_id, ordinal, height, position, kind, token, sender,
+        recipient, amount_atomic, token_id from network_transfers
+        where chain = ${chain} and ${sql(column)} = ${canonical} ${cursor}
+        order by height desc, position desc, ordinal desc limit ${limit + 1})`;
+      const rows = await sql`select x.tx_id, x.ordinal, x.height::text, x.position, x.kind, x.token, x.sender, x.recipient,
+        x.amount_atomic, x.token_id, t.block_time
+        from (${side("sender")} union ${side("recipient")}) x
+        join network_transactions t on t.chain = ${chain} and t.tx_id = x.tx_id
+        order by x.height desc, x.position desc, x.ordinal desc limit ${limit + 1}`;
+      const more = rows.length > limit;
+      const transfers = rows.slice(0, limit).map(row => ({ ...row,
+        direction: (row.sender === row.recipient ? "SELF" : row.sender === canonical ? "OUT" : "IN") as TransferDirection }));
+      const last = transfers.at(-1);
+      const { coverage, retention } = await coverageOf(chain);
+      return { wallet: walletIdentity(chain, address), coverage, transfers,
+        nextCursor: more && last ? { height: Number(last.height), position: Number(last.position), ordinal: Number(last.ordinal) } : null,
+        limitations: ["Transfers cover the indexed range only.", ...retention,
+          "Only successful transactions are read; a reverted transaction moved nothing.",
+          "Native transfers are the amount a transaction sent directly; value moved by internal calls is not included.",
+          "Token transfers are ERC-20 and ERC-721 Transfer events. Any contract can emit one, so the token contract is not verified, and amounts are in the token's smallest unit.",
+          "ERC-1155 and other token standards are not included.",
+          "Zero-amount transfers and look-alike addresses are common in address poisoning; an incoming transfer does not show that the wallet chose to transact."] };
     },
     async transaction(chain: NetworkChain, id: string) {
       parseChain(chain);

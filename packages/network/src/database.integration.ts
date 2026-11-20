@@ -8,6 +8,7 @@ import { createIndexStore } from "./store.js";
 import { runIndexer } from "./runner.js";
 import { pruneIndex } from "./maintenance.js";
 import { createNetworkQuery } from "./query.js";
+import { TRANSFER_TOPIC } from "./evm-receipts.js";
 
 const url = process.env.NETWORK_TEST_DATABASE_URL;
 if (!url) throw new Error("NETWORK_TEST_DATABASE_URL required");
@@ -22,6 +23,7 @@ try {
   await isolated.unsafe(await readFile(new URL("../../database/migrations/0013_network_operations.sql", import.meta.url), "utf8"));
   await isolated.unsafe(await readFile(new URL("../../database/migrations/0014_network_retention_indexes.sql", import.meta.url), "utf8"));
   await isolated.unsafe(await readFile(new URL("../../database/migrations/0019_evm_receipts.sql", import.meta.url), "utf8"));
+  await isolated.unsafe(await readFile(new URL("../../database/migrations/0020_network_transfers.sql", import.meta.url), "utf8"));
   const store = createIndexStore(isolated);
   const initial = await store.checkpoint("solana:mainnet", 10);
   const block = { chain: "solana:mainnet" as const, height: 10, hash: "h10", parentHeight: 9, parentHash: "h9", raw: { transactions: [] } };
@@ -104,6 +106,38 @@ try {
   const [evmRow] = await isolated`select success, raw from network_transactions where chain = 'eip155:1' and tx_id = ${evmTx}`;
   assert.equal(evmRow?.success, false, "a reverted transaction is recorded as failed");
   assert.equal(evmRow?.raw.input, "0x", "the transaction keeps its full payload");
+  const [revertedTransfers] = await isolated`select count(*)::int as n from network_transfers where chain = 'eip155:1'`;
+  assert.equal(revertedTransfers?.n, 0, "a reverted transaction records no transfer");
+
+  // A successful transaction records its native amount and token events; a
+  // wallet reads them from either side, newest first, across pages.
+  const evmTo = `0x${"d".repeat(40)}`;
+  const tokenAddress = `0x${"e".repeat(40)}`;
+  const pad = (address: string) => `0x${"0".repeat(24)}${address.slice(2)}`;
+  const okTx = `0x${"2".repeat(64)}`;
+  const okBlock = { chain: "eip155:1" as const, height: 21, hash: `0x${"d".repeat(64)}`, parentHeight: 20, parentHash: evmBlock.hash,
+    raw: { number: "0x15", timestamp: "0x66", transactions: [{ hash: okTx, from: evmFrom, to: tokenAddress, value: "0x5", input: "0x" }] },
+    receipts: [{ transactionHash: okTx, transactionIndex: 0, status: 1 as const, from: evmFrom, gasUsed: "50000", effectiveGasPrice: "1",
+      transferLogs: [
+        { logIndex: 0, address: tokenAddress, topics: [TRANSFER_TOPIC, pad(evmFrom), pad(evmTo)], data: `0x${"0".repeat(63)}7` },
+        { logIndex: 1, address: tokenAddress, topics: [TRANSFER_TOPIC, pad(evmTo), pad(evmFrom)], data: `0x${"0".repeat(64)}` },
+        { logIndex: 2, address: tokenAddress, topics: [TRANSFER_TOPIC, pad(evmFrom), pad(evmFrom), `0x${"0".repeat(63)}9`], data: "0x" }] }] };
+  await store.commit("eip155:1", await store.checkpoint("eip155:1", 20), 22, [okBlock]);
+  const query = createNetworkQuery(isolated);
+  const firstPage = await query.transfers("eip155:1", evmFrom, 2);
+  assert.deepEqual(firstPage.transfers.map(t => [t.ordinal, t.kind, t.direction]), [[2, "ERC721", "SELF"], [1, "ERC20", "IN"]],
+    "a self-transfer is listed once, newest first");
+  assert.ok(firstPage.nextCursor);
+  const secondPage = await query.transfers("eip155:1", evmFrom, 2, firstPage.nextCursor!);
+  assert.deepEqual(secondPage.transfers.map(t => [t.ordinal, t.kind, t.direction, t.amount_atomic]),
+    [[0, "ERC20", "OUT", "7"], [-1, "NATIVE", "OUT", "5"]], "the cursor continues where the page ended");
+  assert.equal(secondPage.nextCursor, null);
+  assert.deepEqual((await query.transfers("eip155:1", evmTo, 10)).transfers.map(t => t.direction), ["OUT", "IN"]);
+  await assert.rejects(query.transfers("solana:mainnet", wallet, 10), /EVM chains only/);
+  const recipientHistory = await query.history("eip155:1", evmTo, 10);
+  assert.deepEqual(recipientHistory.transactions.map(t => t.tx_id), [okTx], "a token recipient sees the transaction in history");
+  const evmPrune = await pruneIndex(isolated, "eip155:1", { before: 22 });
+  assert.equal(evmPrune.deletedTransfers, 4, "retention removes transfers with their block");
 
   await isolated`insert into aex_accounts (id, balance) values ('treasury', 100), ('alice', 0), ('bob', 0)`;
   const ledger = createAexLedger(isolated);
@@ -136,7 +170,7 @@ try {
   assert.equal(health?.last_error, null);
   assert.ok(health?.heartbeat_at);
   assert.equal(health?.finalized_height, "10");
-  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "retention prune", "prune bound guard", "nul escape payload", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
+  console.log(JSON.stringify({ status: "passed", schema, checks: ["migration", "checkpoint CAS", "rollback", "start mismatch", "retention prune", "prune bound guard", "nul escape payload", "evm receipts", "evm transfers", "concurrent replay", "payload conflict", "concurrent overdraft", "conservation"] }));
 } finally {
   await isolated.end();
   await sql.end();

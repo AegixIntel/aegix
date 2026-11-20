@@ -29,13 +29,14 @@ async function main() {
       const chain = parseChain(process.env.INDEXER_CHAIN);
       let done = false;
       let batches = 0;
-      const totals = { deletedBlocks: 0, deletedTransactions: 0, deletedAddresses: 0, deletedProjections: 0 };
+      const totals = { deletedBlocks: 0, deletedTransactions: 0, deletedAddresses: 0, deletedTransfers: 0, deletedProjections: 0 };
       let floor: number | null = null;
       while (!done && batches < maxBatches) {
         const result = await pruneIndex(sql, chain, { before, batch, rowBudget });
         totals.deletedBlocks += result.deletedBlocks;
         totals.deletedTransactions += result.deletedTransactions;
         totals.deletedAddresses += result.deletedAddresses;
+        totals.deletedTransfers += result.deletedTransfers;
         totals.deletedProjections += result.deletedProjections;
         floor = result.retainedFloor;
         done = result.done;

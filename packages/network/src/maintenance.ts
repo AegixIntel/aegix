@@ -20,6 +20,7 @@ export interface PruneResult {
   deletedBlocks: number;
   deletedTransactions: number;
   deletedAddresses: number;
+  deletedTransfers: number;
   deletedProjections: number;
   /** Lowest height still retained, or null when nothing is left. */
   retainedFloor: number | null;
@@ -27,7 +28,7 @@ export interface PruneResult {
 }
 
 /**
- * Removes indexed blocks below a height. Projections, transactions and address
+ * Removes indexed blocks below a height. Projections, transactions, transfers and address
  * memberships follow, because they reference the block rows.
  *
  * This is the storage lever: a finalized Solana block is megabytes, so an
@@ -56,12 +57,13 @@ export async function pruneIndex(sql: postgres.Sql, chain: NetworkChain, options
     if (before > Number(checkpoint.next_height)) throw new Error("Refusing to prune above the indexed cursor");
 
     const candidates = await tx`select b.height::text as height,
-      (select count(*) from network_transaction_addresses a where a.chain = b.chain and a.height = b.height)::int as rows
+      ((select count(*) from network_transaction_addresses a where a.chain = b.chain and a.height = b.height)
+        + (select count(*) from network_transfers t where t.chain = b.chain and t.height = b.height))::int as rows
       from network_blocks b where b.chain = ${chain} and b.height < ${before}
       order by b.height limit ${batch}`;
     if (!candidates.length) {
       return { chain, before, deletedBlocks: 0, deletedTransactions: 0, deletedAddresses: 0,
-        deletedProjections: 0, retainedFloor: await floorOf(tx, chain), done: true };
+        deletedTransfers: 0, deletedProjections: 0, retainedFloor: await floorOf(tx, chain), done: true };
     }
     const heights: number[] = [];
     let rows = 0;
@@ -75,6 +77,8 @@ export async function pruneIndex(sql: postgres.Sql, chain: NetworkChain, options
     // height uses the 0014 indexes instead of a scan per parent row.
     const addresses = await tx`delete from network_transaction_addresses
       where chain = ${chain} and height = any(${heights}::bigint[])`;
+    const transfers = await tx`delete from network_transfers
+      where chain = ${chain} and height = any(${heights}::bigint[])`;
     const transactions = await tx`delete from network_transactions
       where chain = ${chain} and height = any(${heights}::bigint[])`;
     const projections = await tx`delete from network_projections
@@ -84,7 +88,7 @@ export async function pruneIndex(sql: postgres.Sql, chain: NetworkChain, options
     return {
       chain, before,
       deletedBlocks: blocks.count, deletedTransactions: transactions.count,
-      deletedAddresses: addresses.count, deletedProjections: projections.count,
+      deletedAddresses: addresses.count, deletedTransfers: transfers.count, deletedProjections: projections.count,
       retainedFloor: await floorOf(tx, chain),
       done
     };
