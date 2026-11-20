@@ -213,7 +213,7 @@ export const products: Product[] = [
     name: "Wallet Reputation",
     status: "PLANNED",
     surfaces: ["ROADMAP"],
-    note: "No labelled reputation dataset exists. Only the evidence-verification infrastructure is built."
+    note: "No labelled reputation dataset exists. The evidence-verification infrastructure and an offline reviewer CLI (keys, drafting, signing, verification) are built; a reviewed dataset and at least two reviewers are needed."
   },
   // D12/D13. Switched on in production on 11 October 2026 with a bounded
   // indexed window: the read APIs serve exactly the finalized blocks that were

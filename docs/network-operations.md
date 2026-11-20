@@ -298,6 +298,38 @@ processes. The import envelope is `{ "item": { "claim": {...}, "reviews": [...] 
 reviewer signs. See the exported `ReputationClaim` and `SignedClaim` interfaces.
 Evidence is limited to 1 MiB per claim; source URLs are not fetched by the API.
 
+### Reviewer CLI
+
+Reviewers do not need to write code. `pnpm --filter @aegix/network reviewer`
+runs offline, with no database and no credentials. Private keys stay on the
+reviewer's machine, and existing files are never overwritten.
+
+```sh
+# Once per reviewer. Send only <id>.pub.pem to the operator.
+pnpm --filter @aegix/network reviewer keygen --id alice --out ~/aegix-review/keys
+
+# Draft a claim. The evidence digest is computed from the file, never typed.
+# The command checks what the importer checks: label, HTTPS source, address,
+# dates, 1 MiB limit.
+pnpm --filter @aegix/network reviewer draft --id case-2026-001 --chain eip155:1 \
+  --address 0x... --label CONFIRMED_FRAUD --source-url https://... \
+  --evidence ./case-2026-001.pdf --dataset reviewed-v1 --expires 2027-11-20T00:00:00Z \
+  --out case-2026-001.json
+
+# Each reviewer signs the same file, in turn. With --policy, earlier
+# signatures are checked first, so a claim edited after someone signed it is
+# refused.
+pnpm --filter @aegix/network reviewer sign case-2026-001.json --reviewer alice \
+  --key ~/aegix-review/keys/alice.key.pem --policy policy.json
+
+# Operator: check against the policy, then build the import envelope.
+pnpm --filter @aegix/network reviewer verify case-2026-001.json --evidence ./case-2026-001.pdf --policy policy.json
+pnpm --filter @aegix/network reviewer envelope case-2026-001.json --evidence ./case-2026-001.pdf --out case-2026-001.import.json
+```
+
+The policy's `reviewers` map takes the `policyEntry` that `keygen` prints. A
+claim needs signatures from `quorum` distinct reviewers, at least two.
+
 ```sh
 pnpm --filter @aegix/network operator reputation:import /secure/reviewed-claim.json
 pnpm --filter @aegix/network operator reputation:revoke case-id "Reason for revocation"
