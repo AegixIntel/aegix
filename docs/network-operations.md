@@ -216,10 +216,10 @@ total                1.184 MB per block
 5 GB budget          about 4,300 blocks, roughly 14.4 hours of chain
 ```
 
-## Ethereum in production (switched on 20 November 2026)
+## Ethereum and Base in production (switched on 20 November 2026)
 
-A continuous Ethereum mainnet follower runs beside the production stack. It is
-operator-run, like the Solana window, not a compose service.
+Continuous Ethereum mainnet and Base followers run beside the production stack.
+They are operator-run, not compose services.
 
 - **Container:** `aegix-netindex-eth`, image `aegix-indexer:<sha>` built from
   `infra/docker/indexer.Dockerfile` at the production commit. It runs on network
@@ -230,12 +230,28 @@ operator-run, like the Solana window, not a compose service.
   public RPC `https://ethereum-rpc.publicnode.com`, batch 8, poll 4 s, an RPC
   interval of 150 ms, `--max-old-space-size=768`, and the production
   `DATABASE_URL`.
+- **Base:** container `aegix-netindex-base`, with the same flags and image.
+  `~/aegix-eth/indexer-base.env` sets `INDEXER_CHAIN=eip155:8453`, start height
+  59,780,340, the public RPC `https://base-rpc.publicnode.com`, batch 16 and
+  poll 2 s. Behind that endpoint's load balancer, one node reported a
+  `finalized` height about 2,000 blocks behind the others. The follower only
+  waits when it meets that node, because it never reads above the finalized
+  height it was given.
 - **Retention:** `~/aegix-eth/retention.sh` runs from cron every 15 minutes. It
-  keeps the newest 2,600 blocks (about 3 GB at 1.18 MB per block, roughly 8.7
-  hours) using `operator.js network:prune`. It also stops the follower if free
-  disk falls under 3 GB. It logs to `~/aegix-eth/retention.log`.
-- **Disk at switch-on:** 81% used, 19 GB free, after the Docker build cache
-  (9.9 GB) was cleared. The stopped Solana window still holds about 38 GB.
+  uses `operator.js network:prune` to keep the newest 4,300 Ethereum blocks
+  (about 5 GB at 1.18 MB per block, roughly 14 hours) and the newest 43,200 Base
+  blocks (about 4 GB at 0.095 MB per block, 24 hours). If free disk falls under
+  3 GB it stops both followers. It logs to `~/aegix-eth/retention.log`.
+- **Base cost:** measured on 200 blocks (59,777,645–59,777,844) at 0.095 MB per
+  block and 0.41 s per block, against a 2 s block time. That sample held 3,985
+  transactions (229 reverted, 0 unknown) and 5,809 transfers.
+- **Solana window retired:** the bounded Solana window from October 2026
+  (2,256 blocks, 2.46 million transactions, 30.6 million memberships) was pruned
+  with `network:prune`. `VACUUM FULL` then returned its space to the host, about
+  100 seconds with both followers stopped. The production database went from
+  39 GB to 1.6 GB, and free disk went from 13 GB to 51 GB (47% used). The Solana
+  checkpoint row stays, so Solana history reads report every block as pruned
+  rather than as a wallet with no activity.
 
 To upgrade after a deploy, build `aegix-indexer:<new sha>`, then recreate the
 container with the same flags and env file. Update the image tag in
