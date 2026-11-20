@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Sql } from "@aegix/database";
 import type { AppConfig } from "@aegix/config";
-import { createNetworkQuery, createReputationStore, parseChain, walletIdentity, readReputationPolicy } from "@aegix/network";
+import { CHAINS, createNetworkQuery, createReputationStore, parseChain, walletIdentity, readReputationPolicy } from "@aegix/network";
 import { requireUser } from "./auth.js";
 import { developerError, developerSuccess } from "./developer-api.js";
 import type { DeveloperIntelligenceDeps } from "./developer-intelligence.js";
@@ -15,15 +15,20 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
     limit: { type: "integer", minimum: 1, maximum: 100 }, beforeHeight: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
     beforePosition: { type: "integer", minimum: 0, maximum: 1000000 }
   }, dependencies: { beforeHeight: ["beforePosition"], beforePosition: ["beforeHeight"] } };
+  // Transfers page by (height, position, ordinal); -1 is a transaction's native amount.
+  const transferQuery = { ...historyQuery, properties: { ...historyQuery.properties,
+    beforeOrdinal: { type: "integer", minimum: -1, maximum: 1000000 } },
+  dependencies: { beforeHeight: ["beforePosition", "beforeOrdinal"], beforePosition: ["beforeHeight"], beforeOrdinal: ["beforeHeight"] } };
 
   // Same read service for session-based product users and metered developers.
   for (const developer of [false, true]) {
     const prefix = developer ? "/v1/developer/network" : "/v1/network";
-    for (const kind of ["status", "history", "reputation"] as const) {
+    for (const kind of ["status", "history", "transfers", "reputation"] as const) {
       const url = kind === "status" ? `${prefix}/status` : `${prefix}/${kind}/:chain/:address`;
-      app.get<{ Params: { chain: string; address: string }; Querystring: { limit?: number; beforeHeight?: number; beforePosition?: number } }>(url,
+      app.get<{ Params: { chain: string; address: string }; Querystring: { limit?: number; beforeHeight?: number; beforePosition?: number; beforeOrdinal?: number } }>(url,
         { config: { rateLimit: { max: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, timeWindow: "1 minute" } },
-          schema: kind === "status" ? {} : { params: walletParams, ...(kind === "history" ? { querystring: historyQuery } : {}) } },
+          schema: kind === "status" ? {} : { params: walletParams,
+            ...(kind === "history" ? { querystring: historyQuery } : kind === "transfers" ? { querystring: transferQuery } : {}) } },
         async (req, reply) => {
           const requestId = req.id;
           reply.header("cache-control", "no-store");
@@ -38,6 +43,9 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
           if (kind !== "status") {
             try { chain = parseChain(req.params.chain); walletIdentity(chain, req.params.address); }
             catch { return developerError(reply, "INVALID_REQUEST", "Invalid chain or address", 400, requestId); }
+            if (kind === "transfers" && CHAINS[chain!].family !== "evm") {
+              return developerError(reply, "INVALID_REQUEST", "Transfers are recorded for EVM chains only", 400, requestId);
+            }
           }
           if (identity) {
             const quota = await developerAuth.checkAndClaimQuota(identity, { units: 1 });
@@ -47,6 +55,10 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
             const data = kind === "status" ? await query.status() : kind === "history"
               ? await query.history(chain!, req.params.address, req.query.limit ?? 50,
                 req.query.beforeHeight === undefined ? undefined : { height: req.query.beforeHeight, position: req.query.beforePosition! })
+              : kind === "transfers"
+              ? await query.transfers(chain!, req.params.address, req.query.limit ?? 50,
+                req.query.beforeHeight === undefined ? undefined
+                  : { height: req.query.beforeHeight, position: req.query.beforePosition!, ordinal: req.query.beforeOrdinal! })
               : config.REPUTATION_POLICY_FILE
                 ? await createReputationStore(sql, await readReputationPolicy(config.REPUTATION_POLICY_FILE)).report(chain!, req.params.address)
                 : { wallet: walletIdentity(chain!, req.params.address), status: "NOT_CONFIGURED", score: null, riskBand: null,

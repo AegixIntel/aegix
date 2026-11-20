@@ -175,6 +175,47 @@ Unlike Solana (3.33 s per block against a head that moves every 0.4 s), the
 indexer runs some 22 times faster than Ethereum produces blocks, so a follower
 on this host could keep up. Ethereum is still not indexed in production.
 
+## EVM transfers and their cost (measured 20 November 2026)
+
+Migration `0020` adds `network_transfers`. Each successful EVM transaction
+records, at projection time:
+
+- its native amount (ordinal `-1`), when it has a recipient and a non-zero
+  value. A contract creation's value is not listed, because the created address
+  is not kept;
+- every receipt log that decodes as ERC-20 `Transfer` (three topics, a 32-byte
+  amount) or ERC-721 `Transfer` (four topics, empty data), at its log index.
+  Topics that are not zero-padded addresses, and any other shape, are skipped.
+
+A reverted transaction, or one without a receipt, records nothing. Internal
+calls (value moved by contract code) and ERC-1155 are not read. Any contract
+can emit `Transfer`, so the emitting contract is stored and never treated as
+verified. The parties of a token transfer also join
+`network_transaction_addresses`, so a token recipient sees the transaction in
+wallet history. The zero address (mints and burns) is left out of memberships;
+it would gather a row for every such event. Retention removes transfers with
+their block.
+
+Read path: `GET /v1/network/transfers/:chain/:address` (and the developer
+`/v1/developer/network/transfers/...`), EVM chains only, newest first, paged by
+`beforeHeight` + `beforePosition` + `beforeOrdinal`. Each row carries a
+direction (`IN`, `OUT`, `SELF`) relative to the requested wallet.
+
+Measured the same way as above, heights 26,453,321–26,453,420:
+
+```text
+blocks               100
+transactions         21,909   201 reverted, 0 unknown
+transfers            46,910   6,563 native, 40,023 ERC-20, 324 ERC-721
+time                 56 s     0.56 s per block (no extra RPC calls)
+network_blocks       8.5 MB
+network_transactions 37.0 MB
+memberships          45.3 MB  81,494 rows, now including token parties
+network_transfers    33.3 MB
+total                1.184 MB per block
+5 GB budget          about 4,300 blocks, roughly 14.4 hours of chain
+```
+
 ## Import reputation evidence
 
 Create an operator-controlled JSON policy, with actual Ed25519 public PEM keys:
