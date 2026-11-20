@@ -10,9 +10,10 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/network.test.ts src/projection.test.ts src/evm-receipts.test.ts src/evm-transfers.test.ts src/evm-signals.test.ts",
+    "test": "node --import tsx --test src/network.test.ts src/projection.test.ts src/evm-receipts.test.ts src/evm-transfers.test.ts src/evm-signals.test.ts src/reviewer-kit.test.ts",
     "indexer": "node --import tsx src/cli.ts",
     "operator": "node --import tsx src/operator.ts",
+    "reviewer": "node --import tsx src/reviewer.ts",
     "test:integration": "node --import tsx src/database.integration.ts"
   },
   "dependencies": { "bs58": "^6.0.0", "postgres": "^3.4.5" },
