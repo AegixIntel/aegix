@@ -8,6 +8,11 @@ export interface HistoryCursor { height: number; position: number }
 export interface TransferCursor extends HistoryCursor { ordinal: number }
 
 export type TransferDirection = "IN" | "OUT" | "SELF";
+interface TransferRow {
+  tx_id: string; ordinal: number; height: string; position: number; kind: "NATIVE" | "ERC20" | "ERC721";
+  token: string | null; sender: string; recipient: string; amount_atomic: string | null; token_id: string | null;
+  block_time: Date | null;
+}
 
 export function createNetworkQuery(sql: postgres.Sql) {
   /**
@@ -85,7 +90,7 @@ export function createNetworkQuery(sql: postgres.Sql) {
         recipient, amount_atomic, token_id from network_transfers
         where chain = ${chain} and ${sql(column)} = ${canonical} ${cursor}
         order by height desc, position desc, ordinal desc limit ${limit + 1})`;
-      const rows = await sql`select x.tx_id, x.ordinal, x.height::text, x.position, x.kind, x.token, x.sender, x.recipient,
+      const rows = await sql<TransferRow[]>`select x.tx_id, x.ordinal, x.height::text, x.position, x.kind, x.token, x.sender, x.recipient,
         x.amount_atomic, x.token_id, t.block_time
         from (${side("sender")} union ${side("recipient")}) x
         join network_transactions t on t.chain = ${chain} and t.tx_id = x.tx_id
