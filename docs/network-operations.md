@@ -216,6 +216,32 @@ total                1.184 MB per block
 5 GB budget          about 4,300 blocks, roughly 14.4 hours of chain
 ```
 
+## Ethereum in production (switched on 20 November 2026)
+
+A continuous Ethereum mainnet follower runs beside the production stack. It is
+operator-run, like the Solana window, not a compose service.
+
+- **Container:** `aegix-netindex-eth`, image `aegix-indexer:<sha>` built from
+  `infra/docker/indexer.Dockerfile` at the production commit. It runs on network
+  `aegix_default`, with `--memory 1g`, `--restart unless-stopped` and log
+  rotation (`max-size=10m`, `max-file=3`).
+- **Settings:** `~/aegix-eth/indexer.env` (mode 600) holds `INDEXER_CHAIN=eip155:1`,
+  the start height (5 blocks below finalized at switch-on: 26,453,578), the
+  public RPC `https://ethereum-rpc.publicnode.com`, batch 8, poll 4 s, an RPC
+  interval of 150 ms, `--max-old-space-size=768`, and the production
+  `DATABASE_URL`.
+- **Retention:** `~/aegix-eth/retention.sh` runs from cron every 15 minutes. It
+  keeps the newest 2,600 blocks (about 3 GB at 1.18 MB per block, roughly 8.7
+  hours) using `operator.js network:prune`. It also stops the follower if free
+  disk falls under 3 GB. It logs to `~/aegix-eth/retention.log`.
+- **Disk at switch-on:** 81% used, 19 GB free, after the Docker build cache
+  (9.9 GB) was cleared. The stopped Solana window still holds about 38 GB.
+
+To upgrade after a deploy, build `aegix-indexer:<new sha>`, then recreate the
+container with the same flags and env file. Update the image tag in
+`retention.sh`. The checkpoint keeps its start height, so the follower resumes
+where it stopped.
+
 ## EVM wallet signals
 
 `GET /v1/network/signals/:chain/:address` (and the developer equivalent), EVM

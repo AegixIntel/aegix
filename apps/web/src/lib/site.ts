@@ -225,7 +225,7 @@ export const products: Product[] = [
     href: "/app/network",
     status: "LIVE",
     surfaces: ["ROADMAP", "CATEGORY"],
-    note: "Solana mainnet, over a bounded window of finalized blocks that were actually ingested: the read APIs return the covered range, the cursor and the retained floor, and say nothing about a height outside it. Ingestion is an operator-run command rather than a continuously synchronised follower, so the window does not extend itself. Reviewed reputation evidence is not configured on this deployment, and the EVM chains are not indexed."
+    note: "Solana mainnet, over a bounded window of finalized blocks that were actually ingested: the read APIs return the covered range, the cursor and the retained floor, and say nothing about a height outside it. Ingestion is an operator-run command rather than a continuously synchronised follower, so the Solana window does not extend itself. Ethereum mainnet is followed continuously over a rolling window of recent finalized blocks (see Multi-Chain). Reviewed reputation evidence is not configured on this deployment, and Base is not indexed."
   },
   // Account and library surfaces. Live in the app today; listed under SHIPPED so
   // the roadmap does not omit something a signed-in visitor can already use.
@@ -260,7 +260,15 @@ export const products: Product[] = [
     surfaces: ["ROADMAP"],
     note: "The $AGX token is issued on Solana; staking, verification, bounties, incentives and governance are not built, and no product reads or requires the token."
   },
-  { id: "multi-chain", name: "Multi-Chain", status: "PLANNED", surfaces: ["ROADMAP"] }
+  // Ethereum switched on in production on 20 November 2026.
+  {
+    id: "multi-chain",
+    name: "Multi-Chain",
+    href: "/app/network",
+    status: "LIVE",
+    surfaces: ["ROADMAP"],
+    note: "Ethereum mainnet only, over a rolling window of about the last 2,600 finalized blocks (roughly nine hours); older blocks are pruned. Wallet history, ETH and ERC-20/ERC-721 transfers, and wallet signals with a look-alike address check, with no score. Base is not indexed, internal calls and ERC-1155 are not read, and the privacy analysis remains Solana only."
+  }
 ];
 
 const PRODUCT_BY_ID = new Map(products.map((p) => [p.id, p]));

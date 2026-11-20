@@ -288,9 +288,11 @@ High throughput, low transaction cost, large on-chain activity, a fast-moving
 ecosystem and a lot of real-time data — the right starting point for
 intelligence over high-frequency on-chain activity. Solana is where AEGIX
 starts; the architecture is designed with multi-chain expansion in mind, and
-multi-chain privacy analysis is **PLANNED**. An opt-in infrastructure package now
-supports finalized raw block ingestion for Solana mainnet, Ethereum and Base;
-EVM normalization and privacy analysis are not implemented.
+multi-chain privacy analysis is **PLANNED**. Multi-Chain intelligence is **LIVE**
+for Ethereum mainnet only: a continuous follower keeps a rolling window of about
+2,600 recent finalized blocks, with receipts, ETH and ERC-20/ERC-721 transfers,
+and wallet signals that carry no score. Base has an ingestion adapter but is not
+indexed, and EVM privacy analysis is not implemented.
 
 ---
 
@@ -307,10 +309,10 @@ it depends on — is in [capability-matrix.md](capability-matrix.md).
 
 | Status | Capability |
 |---|---|
-| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026), Anomaly Detection (capturing since 8 October 2026) and Intelligence Network (Solana mainnet, over a bounded window of finalized blocks it actually ingested), Saved Wallets and Comparisons, Notifications (in-app) and Plan & Usage (manual provisioning) |
+| SHIPPED | Intelligence core, Wallet X-Ray, Attack My Wallet, Compare Intelligence, Privacy Monitor, Wallet Context, Ask AEGIX (provider-gated), Developer Intelligence API, signed webhooks, population commonality (sufficiency-gated), Market Intelligence (BTC/ETH/SOL), AEGIX Rewind and AEGIX Discovery Engine (market assets and on-chain tokenized stocks; captures begin 1 October 2026, and the Discovery Engine's earlier hourly history was read back from providers), Narrative Radar, Signal Engine, Cross-Market Intelligence and AI Intelligence Copilot (first versions, on since 8 October 2026), Anomaly Detection (capturing since 8 October 2026) and Intelligence Network (Solana mainnet, over a bounded window of finalized blocks it actually ingested), Saved Wallets and Comparisons, Notifications (in-app), Plan & Usage (manual provisioning) and Multi-Chain (Ethereum mainnet over a rolling window of recent finalized blocks, with transfers and wallet signals) |
 | CURRENT | Public product launch, multi-user production hardening, documentation, infrastructure |
 | NEXT | Nothing in development. |
-| LATER | Wallet Reputation, $AGX economic layer (the token is issued; no utility is built), multi-chain |
+| LATER | Wallet Reputation, $AGX economic layer (the token is issued; no utility is built), Base and EVM privacy analysis |
 
 ---
 
