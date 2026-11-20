@@ -35,9 +35,10 @@ are in [docs/capability-matrix.md](docs/capability-matrix.md); the narrative ver
   Intelligence Network is live too, over a bounded window of finalized Solana
   blocks — see Network ingestion below. The account surfaces are part of the live
   product as well: Saved Wallets and Comparisons, Notifications (in-app) and
-  Plan & Usage (manual provisioning).
+  Plan & Usage (manual provisioning). Multi-Chain is live for Ethereum mainnet only,
+  over a rolling window of recent finalized blocks (transfers and wallet signals).
   There is still no licensed market data source.
-- **Planned:** Wallet Reputation, $AGX economic layer, multi-chain. The $AGX token
+- **Planned:** Wallet Reputation and the $AGX economic layer. The $AGX token
   itself is issued (Solana mint `8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump`);
   no product reads or requires it yet.
 

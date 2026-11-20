@@ -47,7 +47,7 @@ cannot keep.
 | Notifications | LIVE | In-app delivery, filterable by severity and read state. Email is out of public-beta scope (`EMAIL_ENABLED=false`), and an unconfigured optional channel never marks an event failed and never blocks in-app delivery. |
 | Plan & Usage | LIVE | `ENABLE_BILLING` with `BILLING_PROVIDER=manual`. Limits and metered usage are real and read from the same records the product counts against; provisioning is an operator action (`pnpm billing:grant`) and self-service checkout is post-launch scope. |
 | $AGX Economic Layer | PLANNED | The token is issued: Solana Token-2022 mint `8KQjhn6PfkWK58aFUrwuMo9yZEJpGMSbmFB1ZBXApump` (AEGIX, symbol AGX). No product reads or requires it. The network ledger is internal accounting only (`mode: "INTERNAL_ACCOUNTING"`, `tokenLive: false`): its units are not $AGX, and there is no staking, slashing, verification market, governance mechanism or tokenomics document. |
-| Multi-Chain | PLANNED | Finalized raw block ingestion supports Ethereum and Base, but EVM normalization and privacy analysis are not implemented. |
+| Multi-Chain | LIVE | Ethereum mainnet only: a continuous follower over a rolling window of about 2,600 finalized blocks, with receipts, ETH and ERC-20/ERC-721 transfers and wallet signals (no score). Needs the indexer container `aegix-netindex-eth` and its retention cron; see network-operations.md. Base is not indexed; EVM privacy analysis is not implemented. |
 
 ## Infrastructure and platform
 

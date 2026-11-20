@@ -22,7 +22,7 @@ Not part of this gate. Since this document was written, Wallet Context (D8)
 and Ask AEGIX (D9) shipped, and Market Intelligence (D10) shipped for BTC, ETH
 and SOL price and volume only. Narrative and cross-market intelligence, a
 wallet-domain anomaly/signal engine, the wider AI Copilot, reputation,
-multi-chain, a webhook consumer SDK, the `$AGX` economic layer, and a global indexer remain
+a webhook consumer SDK, the `$AGX` economic layer, and a global indexer remain
 future work. Product status is derived from `apps/web/src/lib/site.ts`.
 
 Billing (D11 V1) is complete with manual subscription provisioning:
