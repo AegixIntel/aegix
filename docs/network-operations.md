@@ -216,6 +216,27 @@ total                1.184 MB per block
 5 GB budget          about 4,300 blocks, roughly 14.4 hours of chain
 ```
 
+## EVM wallet signals
+
+`GET /v1/network/signals/:chain/:address` (and the developer equivalent), EVM
+chains only, reads the wallet's most recent 2,000 transfers in the indexed range
+and returns observations, never a score:
+
+- activity: incoming, outgoing and self transfers, native amount in and out,
+  distinct token contracts, and zero-amount token transfers received;
+- earliest funding: the earliest incoming native transfer in the range, which
+  is not necessarily the wallet's first;
+- the ten busiest counterparties, excluding the zero address, with their first
+  and last block;
+- look-alikes, the address-poisoning guard. A counterparty is genuine only when
+  the wallet signed a transaction that moved a non-zero amount to it. Any other
+  counterparty sharing a genuine one's first and last four hex characters is
+  listed, in either direction, because a token contract can emit a zero-amount
+  `Transfer` "from" the victim.
+
+Every signal is computed from rows `/transfers` also returns, so each one can be
+checked. The response says when the 2,000-transfer sample was cut short.
+
 ## Import reputation evidence
 
 Create an operator-controlled JSON policy, with actual Ed25519 public PEM keys:

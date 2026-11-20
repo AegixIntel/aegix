@@ -79,6 +79,11 @@ try {
   assert.equal((await get(`/v1/network/transfers/eip155:1/${evmWallet}?beforeHeight=1&beforePosition=0`)).statusCode, 400,
     "a transfer cursor needs its ordinal");
   assert.equal((await get(`/v1/network/transfers/eip155:1/${evmWallet}?beforeHeight=1&beforePosition=0&beforeOrdinal=-1`)).statusCode, 200);
+  const signals = await get(`/v1/network/signals/eip155:1/${evmWallet}`);
+  assert.equal(signals.statusCode, 200, signals.body);
+  assert.equal(signals.json().data.sample.transfers, 0);
+  assert.equal(signals.json().data.score, undefined, "signals carry no score");
+  assert.equal((await get(`/v1/network/signals/${chain}/${address}`)).statusCode, 400, "signals are EVM only");
   const report = await get(`/v1/network/reputation/${chain}/${address}`);
   assert.equal(report.json().data.status, "VALIDATED_EVIDENCE", report.body);
   assert.equal(report.json().data.score, null);
@@ -92,7 +97,7 @@ try {
   assert.equal((await get("/v1/developer/network/status", session)).statusCode, 401);
   const [usage] = await sql`select count(*)::int as count from developer_usage_events where user_id = ${userId} and operation = 'network.history'`;
   assert.equal(usage?.count, 1);
-  console.log(JSON.stringify({ status: "passed", migrations: migrations.length, checks: ["full API authentication", "wallet pagination", "invalid cursor", "chain isolation", "evm transfers route", "signed evidence import", "revocation", "ledger payout", "account isolation", "developer scope and metering"] }));
+  console.log(JSON.stringify({ status: "passed", migrations: migrations.length, checks: ["full API authentication", "wallet pagination", "invalid cursor", "chain isolation", "evm transfers route", "evm signals route", "signed evidence import", "revocation", "ledger payout", "account isolation", "developer scope and metering"] }));
 } finally {
   await app?.close();
   await sql.end();
