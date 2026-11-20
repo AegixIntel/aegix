@@ -115,7 +115,7 @@ successful admitted read, and existing usage records/rate limiting.
 | `GET /v1/me/aex` | Only the authenticated user's internal balance and recent journal entries |
 
 For developer equivalents, replace `/v1/network` with `/v1/developer/network`.
-The personal AEX route has no developer equivalent. Chain values are
+The personal accounting route has no developer equivalent. Chain values are
 `solana:mainnet`, `eip155:1` and `eip155:8453`; URL-encode path components.
 
 History accepts `limit` from 1 to 100, and `beforeHeight` + `beforePosition`
@@ -165,7 +165,7 @@ The latest 100 claims for the approved dataset are evaluated; `truncated=true`
 explicitly identifies a larger result set. Scores remain null until there is
 a calibrated, evaluated model. No synthetic labels are shipped as real data.
 
-## Internal $AEX accounting
+## Internal accounting ledger (not $AGX)
 
 Public users cannot provision or fund accounts. The operator transfer command
 uses a JSON file matching `AexTransfer`:

@@ -76,6 +76,6 @@ function registerEconomicRead(app: FastifyInstance, sql: Sql, config: AppConfig)
       from aex_transfers where debit_account = ${id} or credit_account = ${id}
       order by created_at desc, event_key desc limit 50`;
     return reply.send({ mode: "INTERNAL_ACCOUNTING", tokenLive: false, balanceAtomic: account?.balance ?? "0", events,
-      explanation: "Internal accounting units; not an on-chain $AEX balance. Token configuration is pending." });
+      explanation: "Internal accounting units; not an on-chain $AGX balance. Nothing moves between this ledger and the $AGX mint." });
   });
 }
