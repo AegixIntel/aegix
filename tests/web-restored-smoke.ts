@@ -46,12 +46,16 @@ async function main() {
     // list it replaced had Market Intelligence under NEXT while the navigation
     // called it LIVE, so that specific disagreement is asserted directly. The
     // match is anchored on the item boundary: a bare "Market Intelligence"
-    // would also match "Cross-Market Intelligence", which belongs under NEXT.
+    // would also match "Cross-Market Intelligence". Both have been LIVE since
+    // 8 October 2026, as has Multi-Chain since 20 November 2026, so none of
+    // them may appear under NEXT while each still appears on the page.
     const roadmapHtml = await fetch(`http://127.0.0.1:${port}/roadmap`, { signal: AbortSignal.timeout(10000) }).then((r) => r.text());
     const nextColumn = roadmapHtml.slice(roadmapHtml.indexOf(">NEXT<"), roadmapHtml.indexOf(">LATER<"));
     assert.ok(nextColumn.length > 0, "/roadmap renders a NEXT group before LATER");
-    assert.ok(!nextColumn.includes(">Market Intelligence"), "/roadmap does not file Market Intelligence under NEXT");
-    assert.ok(nextColumn.includes(">Cross-Market Intelligence"), "/roadmap does file Cross-Market Intelligence under NEXT");
+    for (const live of ["Market Intelligence", "Cross-Market Intelligence", "Multi-Chain"]) {
+      assert.ok(!nextColumn.includes(`>${live}`), `/roadmap does not file ${live} under NEXT`);
+      assert.ok(roadmapHtml.includes(`>${live}`), `/roadmap lists ${live}`);
+    }
     console.log("D8/D10/D11, landing copy and roadmap production UI route rendering: PASS");
   } finally {
     if (child.exitCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }

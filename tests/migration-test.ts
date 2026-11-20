@@ -58,7 +58,10 @@ async function main(): Promise<void> {
     const [fixture] = await sql<Array<{ id: string }>>`select id from profiles where id = ${fixtureId}`;
     assert.equal(fixture?.id, fixtureId, "existing fixture data survives idempotent migrations");
     const [count] = await sql<Array<{ count: string }>>`select count(*)::text as count from schema_migrations`;
-    assert.equal(Number(count?.count), 18, "exactly eighteen migrations are recorded");
+    // Every committed migration is recorded exactly once; the count follows the
+    // directory instead of a number that each new migration would have to edit.
+    const committed = (await readdir(path.resolve("packages/database/migrations"))).filter((file) => file.endsWith(".sql"));
+    assert.equal(Number(count?.count), committed.length, "every committed migration is recorded exactly once");
   } finally {
     await sql.end();
   }
