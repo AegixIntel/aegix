@@ -136,6 +136,13 @@ try {
   await assert.rejects(query.transfers("solana:mainnet", wallet, 10), /EVM chains only/);
   const recipientHistory = await query.history("eip155:1", evmTo, 10);
   assert.deepEqual(recipientHistory.transactions.map(t => t.tx_id), [okTx], "a token recipient sees the transaction in history");
+  const signals = await query.signals("eip155:1", evmFrom);
+  assert.deepEqual(signals.activity, { incoming: 1, outgoing: 2, self: 1, nativeIn: "0", nativeOut: "5", tokenContracts: 1, zeroAmountIncoming: 1 },
+    "signals read the wallet's transfers from both sides");
+  assert.deepEqual(signals.counterparties.map(c => [c.address, c.incoming, c.outgoing]), [[evmTo, 1, 1], [tokenAddress, 0, 1]]);
+  assert.deepEqual(signals.lookAlikes, []);
+  assert.equal(signals.sample.truncated, false);
+  await assert.rejects(query.signals("solana:mainnet", wallet), /EVM chains only/);
   const evmPrune = await pruneIndex(isolated, "eip155:1", { before: 22 });
   assert.equal(evmPrune.deletedTransfers, 4, "retention removes transfers with their block");
 

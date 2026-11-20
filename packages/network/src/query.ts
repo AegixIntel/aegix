@@ -2,6 +2,10 @@ import type postgres from "postgres";
 import { CHAINS, parseChain, walletIdentity, type NetworkChain } from "./chains.js";
 import { height } from "./indexer.js";
 import { persistProjection } from "./projection.js";
+import { walletSignals, type SignalTransfer } from "./evm-signals.js";
+
+/** Most recent transfers read per signals request; bounds the work per call. */
+export const SIGNAL_SAMPLE = 2_000;
 
 export interface HistoryCursor { height: number; position: number }
 /** Transfers order within a transaction by ordinal; the native amount is -1. */
@@ -108,6 +112,33 @@ export function createNetworkQuery(sql: postgres.Sql) {
           "Token transfers are ERC-20 and ERC-721 Transfer events. Any contract can emit one, so the token contract is not verified, and amounts are in the token's smallest unit.",
           "ERC-1155 and other token standards are not included.",
           "Zero-amount transfers and look-alike addresses are common in address poisoning; an incoming transfer does not show that the wallet chose to transact."] };
+    },
+    /**
+     * Counterparties, earliest funding and look-alike addresses, read from the
+     * wallet's most recent transfers in the indexed window. No score.
+     */
+    async signals(chain: NetworkChain, address: string) {
+      if (CHAINS[chain].family !== "evm") throw new Error("Signals are computed for EVM chains only");
+      const canonical = canonicalAddress(chain, address, 1);
+      const cap = SIGNAL_SAMPLE;
+      const side = (column: "sender" | "recipient") => sql`(select tx_id, ordinal, height, position, kind, token, sender,
+        recipient, amount_atomic from network_transfers where chain = ${chain} and ${sql(column)} = ${canonical}
+        order by height desc, position desc, ordinal desc limit ${cap + 1})`;
+      const rows = await sql<Array<Omit<SignalTransfer, "height"> & { height: string }>>`select x.tx_id, x.ordinal, x.height::text,
+        x.kind, x.token, x.sender, x.recipient, x.amount_atomic, t.sender as tx_sender
+        from (${side("sender")} union ${side("recipient")}) x
+        join network_transactions t on t.chain = ${chain} and t.tx_id = x.tx_id
+        order by x.height desc, x.position desc, x.ordinal desc limit ${cap + 1}`;
+      const truncated = rows.length > cap;
+      const sample = rows.slice(0, cap).map(row => ({ ...row, height: Number(row.height) }));
+      const { coverage, retention } = await coverageOf(chain);
+      return { wallet: walletIdentity(chain, address), coverage, ...walletSignals(canonical, sample, truncated),
+        limitations: ["Signals cover the indexed range only and describe observed transfers, not intent or ownership.", ...retention,
+          ...(truncated ? [`Only the most recent ${cap} transfers were read.`] : []),
+          "There is no risk score. Each signal can be checked against the listed transfers.",
+          "Earliest funding is the earliest incoming native transfer in the indexed range, not necessarily the wallet's first.",
+          "A look-alike shares its first and last four characters with an address this wallet sent value to in a transaction it signed. It is a reason to double-check an address before copying it, not proof of an attack.",
+          "Internal calls and ERC-1155 are not included."] };
     },
     async transaction(chain: NetworkChain, id: string) {
       parseChain(chain);

@@ -24,6 +24,14 @@ function describe(transfer: Transfer) {
   if (transfer.kind === "ERC721") return `NFT #${transfer.token_id} of ${short(transfer.token!)}`;
   return `${transfer.amount_atomic} units of ${short(transfer.token!)}`;
 }
+type Signals = {
+  sample: { transfers: number; truncated: boolean; fromHeight: number | null; toHeight: number | null };
+  activity: { incoming: number; outgoing: number; self: number; nativeIn: string; nativeOut: string; tokenContracts: number; zeroAmountIncoming: number };
+  earliestFunding: { sender: string; height: number; tx_id: string; amount_atomic: string } | null;
+  counterparties: Array<{ address: string; incoming: number; outgoing: number; nativeIn: string; nativeOut: string; firstHeight: number; lastHeight: number }>;
+  lookAlikes: Array<{ address: string; imitates: string; tx_id: string; height: number; direction: "IN" | "OUT"; zeroAmount: boolean }>;
+  limitations: string[];
+};
 type Reputation = { status: string; reason: string; accepted: Array<{ claim: { id: string; label: string; sourceUrl: string }; reviewers: string[] }> };
 type Economics = { balanceAtomic: string; explanation: string; events: Array<{ event_key: string; amount: string; direction: string; purpose: string }> };
 async function read<T>(path: string, envelope = true): Promise<T> {
@@ -47,6 +55,7 @@ export default function NetworkIntelligence() {
   const [reputation, setReputation] = useState<Reputation | null>(null);
   const [economics, setEconomics] = useState<Economics | null>(null);
   const [transfers, setTransfers] = useState<Transfers | null>(null);
+  const [signals, setSignals] = useState<Signals | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const generation = useRef(0);
@@ -56,7 +65,7 @@ export default function NetworkIntelligence() {
     const selected = more ? selection.current : { chain, address: address.trim() };
     const cursor = more ? history?.nextCursor : null;
     setLoading(true); setError("");
-    if (!more) { setHistory(null); setReputation(null); setEconomics(null); setTransfers(null); }
+    if (!more) { setHistory(null); setReputation(null); setEconomics(null); setTransfers(null); setSignals(null); }
     const path = `${encodeURIComponent(selected.chain)}/${encodeURIComponent(selected.address)}`;
     try {
       const next = await read<History>(`/v1/network/history/${path}?limit=25${cursor ? `&beforeHeight=${cursor.height}&beforePosition=${cursor.position}` : ""}`);
@@ -64,10 +73,12 @@ export default function NetworkIntelligence() {
       setHistory(previous => more && previous ? { ...next, transactions: [...previous.transactions, ...next.transactions] } : next);
       selection.current = selected;
       if (!more) {
-        const [rep, aex, moved] = await Promise.all([read<Reputation>(`/v1/network/reputation/${path}`), read<Economics>("/v1/me/aex", false),
-          selected.chain.startsWith("eip155:") ? read<Transfers>(`/v1/network/transfers/${path}?limit=25`) : Promise.resolve(null)]);
+        const evm = selected.chain.startsWith("eip155:");
+        const [rep, aex, moved, observed] = await Promise.all([read<Reputation>(`/v1/network/reputation/${path}`), read<Economics>("/v1/me/aex", false),
+          evm ? read<Transfers>(`/v1/network/transfers/${path}?limit=25`) : Promise.resolve(null),
+          evm ? read<Signals>(`/v1/network/signals/${path}`) : Promise.resolve(null)]);
         if (current !== generation.current) return;
-        setReputation(rep); setEconomics(aex); setTransfers(moved);
+        setReputation(rep); setEconomics(aex); setTransfers(moved); setSignals(observed);
       }
     } catch (failure) { if (current === generation.current) setError(failure instanceof Error ? failure.message : "Request failed"); }
     finally { if (current === generation.current) setLoading(false); }
@@ -105,6 +116,28 @@ export default function NetworkIntelligence() {
       </tbody></table></div> : <p>No activity was found in the indexed range. This does not establish that the wallet has never been used.</p>}
       <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{history.limitations.map(item => <li key={item}>{item}</li>)}</ul>
       {history.nextCursor && <button disabled={loading} onClick={() => void load(true)} className="rounded border border-ink/20 px-4 py-2">Load more</button>}
+    </section>}
+    {signals && <section className="space-y-4 rounded border border-ink/10 p-5">
+      <h2 className="text-xl">Wallet signals</h2>
+      <p className="text-sm text-muted-foreground">Read from {signals.sample.transfers} observed transfers{signals.sample.fromHeight !== null ? `, blocks ${signals.sample.fromHeight} to ${signals.sample.toHeight}` : ""}. No score is given.</p>
+      {signals.lookAlikes.length > 0 && <div role="alert" className="rounded border border-amber-600/40 bg-amber-50/40 p-4 text-sm">
+        <p className="font-medium text-amber-900">Look-alike addresses found. Check every character before copying an address from history.</p>
+        <ul className="mt-2 space-y-1">{signals.lookAlikes.map(l => <li key={`${l.tx_id}:${l.address}:${l.direction}`} className="break-all font-mono">
+          {l.address} imitates {l.imitates} · {l.direction === "IN" ? "sent to this wallet" : "shown as sent by this wallet"}{l.zeroAmount ? " · zero amount" : ""} · block {l.height}</li>)}</ul>
+      </div>}
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div><dt className="text-muted-foreground">Incoming</dt><dd>{signals.activity.incoming}</dd></div>
+        <div><dt className="text-muted-foreground">Outgoing</dt><dd>{signals.activity.outgoing}</dd></div>
+        <div><dt className="text-muted-foreground">ETH in / out</dt><dd>{nativeAmount(signals.activity.nativeIn)} / {nativeAmount(signals.activity.nativeOut)}</dd></div>
+        <div><dt className="text-muted-foreground">Zero-amount token transfers received</dt><dd>{signals.activity.zeroAmountIncoming}</dd></div>
+      </dl>
+      {signals.earliestFunding && <p className="text-sm">Earliest observed funding: {nativeAmount(signals.earliestFunding.amount_atomic)} from <span className="break-all font-mono">{signals.earliestFunding.sender}</span> at block {signals.earliestFunding.height}.</p>}
+      {signals.counterparties.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>
+        <th className="p-2">Counterparty</th><th className="p-2">In</th><th className="p-2">Out</th><th className="p-2">Blocks</th></tr></thead><tbody>
+        {signals.counterparties.map(c => <tr key={c.address} className="border-t border-ink/10"><td className="break-all p-2 font-mono">{c.address}</td>
+          <td className="p-2">{c.incoming}</td><td className="p-2">{c.outgoing}</td><td className="p-2">{c.firstHeight === c.lastHeight ? c.firstHeight : `${c.firstHeight}–${c.lastHeight}`}</td></tr>)}
+      </tbody></table></div>}
+      <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{signals.limitations.map(item => <li key={item}>{item}</li>)}</ul>
     </section>}
     {transfers && <section className="space-y-4 rounded border border-ink/10 p-5">
       <h2 className="text-xl">Observed transfers</h2>

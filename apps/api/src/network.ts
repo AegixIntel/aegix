@@ -23,7 +23,7 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
   // Same read service for session-based product users and metered developers.
   for (const developer of [false, true]) {
     const prefix = developer ? "/v1/developer/network" : "/v1/network";
-    for (const kind of ["status", "history", "transfers", "reputation"] as const) {
+    for (const kind of ["status", "history", "transfers", "signals", "reputation"] as const) {
       const url = kind === "status" ? `${prefix}/status` : `${prefix}/${kind}/:chain/:address`;
       app.get<{ Params: { chain: string; address: string }; Querystring: { limit?: number; beforeHeight?: number; beforePosition?: number; beforeOrdinal?: number } }>(url,
         { config: { rateLimit: { max: config.DEVELOPER_RATE_LIMIT_PER_MINUTE, timeWindow: "1 minute" } },
@@ -43,8 +43,8 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
           if (kind !== "status") {
             try { chain = parseChain(req.params.chain); walletIdentity(chain, req.params.address); }
             catch { return developerError(reply, "INVALID_REQUEST", "Invalid chain or address", 400, requestId); }
-            if (kind === "transfers" && CHAINS[chain!].family !== "evm") {
-              return developerError(reply, "INVALID_REQUEST", "Transfers are recorded for EVM chains only", 400, requestId);
+            if ((kind === "transfers" || kind === "signals") && CHAINS[chain!].family !== "evm") {
+              return developerError(reply, "INVALID_REQUEST", `${kind === "transfers" ? "Transfers are recorded" : "Signals are computed"} for EVM chains only`, 400, requestId);
             }
           }
           if (identity) {
@@ -59,6 +59,8 @@ export function registerNetwork(deps: Pick<DeveloperIntelligenceDeps, "app" | "s
               ? await query.transfers(chain!, req.params.address, req.query.limit ?? 50,
                 req.query.beforeHeight === undefined ? undefined
                   : { height: req.query.beforeHeight, position: req.query.beforePosition!, ordinal: req.query.beforeOrdinal! })
+              : kind === "signals"
+              ? await query.signals(chain!, req.params.address)
               : config.REPUTATION_POLICY_FILE
                 ? await createReputationStore(sql, await readReputationPolicy(config.REPUTATION_POLICY_FILE)).report(chain!, req.params.address)
                 : { wallet: walletIdentity(chain!, req.params.address), status: "NOT_CONFIGURED", score: null, riskBand: null,
