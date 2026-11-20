@@ -115,8 +115,9 @@ async function main(): Promise<void> {
       select to_regclass('public.billing_upgrade_requests') is not null as exists
     `;
     assert.equal(requests?.exists, true, "migration 0011 creates the upgrade request table");
-    assert.equal(Number(count?.count), 18, "D7 upgrade records migrations 0009-0018 exactly once");
-    console.log("18 migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks");
+    const committed = (await readdir(path.resolve("packages/database/migrations"))).filter((file) => file.endsWith(".sql"));
+    assert.equal(Number(count?.count), committed.length, "D7 upgrade records every later migration exactly once");
+    console.log(`${committed.length} migrations passed fresh, concurrent, idempotent, D7-upgrade, index, and data-preservation checks`);
   } finally {
     await upgraded.end();
   }
